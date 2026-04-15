@@ -4,11 +4,21 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/axe-go/axe/pkg/apperror"
 	"github.com/axe-go/axe/pkg/jwtauth"
 	"github.com/axe-go/axe/pkg/logger"
 )
+
+// Blocklist defines the contract for token revocation storage.
+// Implemented by *cache.Client. Pass nil to disable blocklist checks.
+// Both BlockToken (for logout) and IsTokenBlocked (for middleware check) are here
+// so a single *cache.Client satisfies all auth needs.
+type Blocklist interface {
+	BlockToken(ctx context.Context, jti string, ttl time.Duration) error
+	IsTokenBlocked(ctx context.Context, jti string) (bool, error)
+}
 
 // ── Context keys ──────────────────────────────────────────────────────────────
 
@@ -25,14 +35,15 @@ func ClaimsFromCtx(ctx context.Context) *jwtauth.Claims {
 	return v
 }
 
-// ── JWTAuth middleware ────────────────────────────────────────────────────────
-
 // JWTAuth validates the Bearer token from the Authorization header.
 // On success, injects *jwtauth.Claims into the request context.
-// Usage: r.Use(middleware.JWTAuth(jwtSvc))
-func JWTAuth(svc *jwtauth.Service) func(http.Handler) http.Handler {
+// blocklist may be nil — when set, revoked tokens (JTI in Redis) are rejected.
+//
+// Usage: r.Use(middleware.JWTAuth(jwtSvc, cacheClient))
+func JWTAuth(svc *jwtauth.Service, blocklist Blocklist) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromCtx(r.Context())
 			token := extractBearerToken(r)
 			if token == "" {
 				WriteError(w, apperror.ErrUnauthorized.WithMessage("missing authorization header"))
@@ -41,15 +52,28 @@ func JWTAuth(svc *jwtauth.Service) func(http.Handler) http.Handler {
 
 			claims, err := svc.Validate(token)
 			if err != nil {
-				log := logger.FromCtx(r.Context())
-				if err == jwtauth.ErrTokenExpired {
+				switch err {
+				case jwtauth.ErrTokenExpired:
 					log.Info("token expired", "ip", r.RemoteAddr)
 					WriteError(w, apperror.ErrUnauthorized.WithMessage("token expired"))
-				} else {
+				default:
 					log.Warn("invalid token", "ip", r.RemoteAddr)
 					WriteError(w, apperror.ErrUnauthorized.WithMessage("invalid token"))
 				}
 				return
+			}
+
+			// Blocklist check (token revocation via Redis JTI)
+			if blocklist != nil && claims.JTI() != "" {
+				blocked, blErr := blocklist.IsTokenBlocked(r.Context(), claims.JTI())
+				if blErr != nil {
+					log.Warn("blocklist check failed", "error", blErr)
+					// Fail-open: if Redis is down, allow request but log the issue
+				} else if blocked {
+					log.Info("token revoked", "jti", claims.JTI(), "user_id", claims.UserID)
+					WriteError(w, apperror.ErrUnauthorized.WithMessage("token revoked"))
+					return
+				}
 			}
 
 			ctx := context.WithValue(r.Context(), claimsKey, claims)

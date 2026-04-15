@@ -12,6 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// JTI returns the JWT ID (jti) claim from a Claims struct.
+// Used as blocklist key for token revocation.
+func (c *Claims) JTI() string {
+	return c.RegisteredClaims.ID
+}
+
+// RemainingTTL returns how long until the token expires.
+// Used to set the correct Redis TTL for the blocklist entry.
+func (c *Claims) RemainingTTL() time.Duration {
+	if c.ExpiresAt == nil {
+		return 0
+	}
+	ttl := time.Until(c.ExpiresAt.Time)
+	if ttl < 0 {
+		return 0
+	}
+	return ttl
+}
+
 // ── Claims ────────────────────────────────────────────────────────────────────
 
 // Claims extends jwt.RegisteredClaims with axe-specific fields.
@@ -60,6 +79,7 @@ func (s *Service) GenerateTokenPair(userID uuid.UUID, role string) (*TokenPair, 
 		UserID: userID.String(),
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(), // JTI — unique token identifier for revocation
 			Issuer:    s.issuer,
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -76,6 +96,7 @@ func (s *Service) GenerateTokenPair(userID uuid.UUID, role string) (*TokenPair, 
 		UserID: userID.String(),
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.New().String(), // JTI — separate ID for each refresh token
 			Issuer:    s.issuer,
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -123,6 +144,7 @@ func (s *Service) Validate(tokenStr string) (*Claims, error) {
 // ── Sentinel errors ───────────────────────────────────────────────────────────
 
 var (
-	ErrTokenExpired = errors.New("token expired")
-	ErrTokenInvalid = errors.New("token invalid")
+	ErrTokenExpired  = errors.New("token expired")
+	ErrTokenInvalid  = errors.New("token invalid")
+	ErrTokenRevoked  = errors.New("token revoked") // JTI found in blocklist
 )

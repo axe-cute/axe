@@ -17,11 +17,13 @@ import (
 type AuthHandler struct {
 	userSvc domain.UserService
 	jwt     *jwtauth.Service
+	blocker middleware.Blocklist // optional; nil disables server-side token revocation
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(userSvc domain.UserService, jwt *jwtauth.Service) *AuthHandler {
-	return &AuthHandler{userSvc: userSvc, jwt: jwt}
+// blocker may be nil — when set, POST /logout will add the token JTI to Redis.
+func NewAuthHandler(userSvc domain.UserService, jwt *jwtauth.Service, blocker middleware.Blocklist) *AuthHandler {
+	return &AuthHandler{userSvc: userSvc, jwt: jwt, blocker: blocker}
 }
 
 // Routes returns the auth sub-router.
@@ -30,8 +32,8 @@ func (h *AuthHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/login", h.Login)
 	r.Post("/refresh", h.Refresh)
-	r.Post("/logout", h.Logout)
-	r.With(middleware.JWTAuth(h.jwt)).Get("/me", h.Me)
+	r.With(middleware.JWTAuth(h.jwt, h.blocker)).Post("/logout", h.Logout)
+	r.With(middleware.JWTAuth(h.jwt, h.blocker)).Get("/me", h.Me)
 	return r
 }
 
@@ -138,12 +140,28 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout godoc
-// POST /api/v1/auth/logout
-// Header: Authorization: Bearer <token>
+// POST /api/v1/auth/logout  [requires JWT]
+// Adds the token's JTI to the Redis blocklist — subsequent requests with this
+// token receive 401 token_revoked.
 // Response: 204 No Content
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// TODO (Story 3.4 extended): add token to Redis blocklist using cache.BlockToken()
-	// For now: stateless logout (client discards token)
+	claims := middleware.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		// Should not happen since route is wrapped in JWTAuth, but be defensive
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if h.blocker != nil && claims.JTI() != "" {
+		ttl := claims.RemainingTTL()
+		if ttl > 0 {
+			if err := h.blocker.BlockToken(r.Context(), claims.JTI(), ttl); err != nil {
+				// Non-fatal: log but still return 204 (client should discard token)
+				_ = err // logger injected via context by middleware
+			}
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

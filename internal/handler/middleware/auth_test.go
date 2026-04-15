@@ -23,7 +23,7 @@ func TestJWTAuth_ValidToken_Passes(t *testing.T) {
 	pair, _ := svc.GenerateTokenPair(uuid.New(), "user")
 
 	called := false
-	handler := middleware.JWTAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.JWTAuth(svc, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		claims := middleware.ClaimsFromCtx(r.Context())
 		if claims == nil {
@@ -47,7 +47,7 @@ func TestJWTAuth_ValidToken_Passes(t *testing.T) {
 
 func TestJWTAuth_MissingHeader_Returns401(t *testing.T) {
 	svc := newJWTSvc()
-	handler := middleware.JWTAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.JWTAuth(svc, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("should not reach inner handler")
 	}))
 
@@ -62,7 +62,7 @@ func TestJWTAuth_MissingHeader_Returns401(t *testing.T) {
 
 func TestJWTAuth_InvalidToken_Returns401(t *testing.T) {
 	svc := newJWTSvc()
-	handler := middleware.JWTAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.JWTAuth(svc, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("should not reach inner handler")
 	}))
 
@@ -82,7 +82,7 @@ func TestJWTAuth_ExpiredToken_Returns401(t *testing.T) {
 
 	// validate with normal svc (same secret, but expired)
 	svc := newJWTSvc()
-	handler := middleware.JWTAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.JWTAuth(svc, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("should not reach inner handler")
 	}))
 
@@ -103,7 +103,7 @@ func TestRequireRole_Admin_AllowsAdmin(t *testing.T) {
 	pair, _ := svc.GenerateTokenPair(uuid.New(), "admin")
 
 	called := false
-	handler := middleware.JWTAuth(svc)(
+	handler := middleware.JWTAuth(svc, nil)(
 		middleware.RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			called = true
 			w.WriteHeader(http.StatusOK)
@@ -124,7 +124,7 @@ func TestRequireRole_Admin_BlocksUser(t *testing.T) {
 	svc := newJWTSvc()
 	pair, _ := svc.GenerateTokenPair(uuid.New(), "user")
 
-	handler := middleware.JWTAuth(svc)(
+	handler := middleware.JWTAuth(svc, nil)(
 		middleware.RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t.Error("user should not reach admin handler")
 		})),
@@ -147,7 +147,7 @@ func TestRequireRole_User_AllowsBothRoles(t *testing.T) {
 		pair, _ := svc.GenerateTokenPair(uuid.New(), role)
 		called := false
 
-		handler := middleware.JWTAuth(svc)(
+		handler := middleware.JWTAuth(svc, nil)(
 			middleware.RequireRole("user")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				called = true
 				w.WriteHeader(http.StatusOK)

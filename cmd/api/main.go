@@ -109,7 +109,7 @@ func main() {
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userSvc)
-	authHandler := handler.NewAuthHandler(userSvc, jwtSvc)
+	authHandler := handler.NewAuthHandler(userSvc, jwtSvc, cacheClient) // cacheClient is nil-safe
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -131,9 +131,9 @@ func main() {
 		// Public
 		r.Mount("/auth", authHandler.Routes())
 
-		// Protected (JWT required)
+		// Protected (JWT + blocklist check)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.JWTAuth(jwtSvc))
+			r.Use(middleware.JWTAuth(jwtSvc, cacheClient))
 			r.Mount("/users", userHandler.Routes())
 		})
 	})
