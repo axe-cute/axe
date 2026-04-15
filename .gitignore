@@ -1,0 +1,70 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/axe
+/bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+.DS_Store
+Thumbs.db
+
+# Ent generated code (re-generated via `go generate ./ent/...`)
+# Keep schema, exclude generated
+ent/client.go
+ent/ent.go
+ent/enttest/
+ent/hook/
+ent/migrate/
+ent/predicate/
+ent/runtime.go
+ent/user.go
+ent/user/
+ent/schema.go
+# But keep schema definitions:
+!ent/schema/
+
+# sqlc generated code
+internal/repository/db/
+
+# Wire generated
+wire_gen.go
+
+# Air (hot reload)
+tmp/
+.air.toml
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+
+# Build artifacts
+dist/

@@ -1,0 +1,170 @@
+{
+  "info": {
+    "name": "axe API — User Domain",
+    "description": "Reference collection for the axe Go framework User domain CRUD endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "user_id",  "value": "",                     "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/health",
+        "description": "Health check — always returns 200 if server is up"
+      }
+    },
+    {
+      "name": "Readiness",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/ready",
+        "description": "Readiness check — returns 200 only if DB is reachable"
+      }
+    },
+    {
+      "name": "Create User",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('user_id', json.id);",
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Has id', () => pm.expect(json.id).to.be.a('string'));",
+            "pm.test('No password_hash exposed', () => pm.expect(json.password_hash).to.be.undefined);"
+          ]
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/users",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"name\": \"Alice\",\n  \"password\": \"supersecret123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Get User",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test('Correct ID', () => pm.expect(json.id).to.eql(pm.collectionVariables.get('user_id')));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/users/{{user_id}}"
+      }
+    },
+    {
+      "name": "List Users",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test('Has data array', () => pm.expect(json.data).to.be.an('array'));",
+            "pm.test('Has total', () => pm.expect(json.total).to.be.a('number'));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/v1/users?limit=10&offset=0",
+          "query": [
+            { "key": "limit", "value": "10" },
+            { "key": "offset", "value": "0" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update User",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test('Name updated', () => pm.expect(json.name).to.eql('Alice Updated'));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "PUT",
+        "url": "{{base_url}}/api/v1/users/{{user_id}}",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Alice Updated\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Delete User",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "DELETE",
+        "url": "{{base_url}}/api/v1/users/{{user_id}}"
+      }
+    },
+    {
+      "name": "Create User — 400 Invalid Email",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "const json = pm.response.json();",
+            "pm.test('Error code INVALID_INPUT', () => pm.expect(json.code).to.eql('INVALID_INPUT'));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/users",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"not-an-email\",\n  \"name\": \"Bad\",\n  \"password\": \"secret123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Get User — 404 Not Found",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "const json = pm.response.json();",
+            "pm.test('Error code NOT_FOUND', () => pm.expect(json.code).to.eql('NOT_FOUND'));"
+          ]
+        }
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000000"
+      }
+    }
+  ]
+}
