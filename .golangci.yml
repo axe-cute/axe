@@ -1,0 +1,54 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - gocritic
+    - noctx          # HTTP requests without context
+    - bodyclose      # HTTP response body must be closed
+    - contextcheck   # Non-inherited context in function calls
+    - goconst        # Repeated string constants
+    - godot          # Comments end with period
+    - nilerr         # Returns nil with non-nil error
+    - revive         # More opinionated style checks
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/axe-go/axe
+
+  gocritic:
+    enabled-checks:
+      - appendCombine
+      - badLock
+      - builtinShadow
+      - commentedOutCode
+
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - "disableStutteringCheck"
+
+issues:
+  exclude-rules:
+    # Allow TODOs in non-test code
+    - source: "TODO"
+      linters: [godot]
+    # Allow test files to use t.Fatal freely
+    - path: "_test\\.go"
+      linters: [gocritic]
+    # Generated Ent code
+    - path: "ent/"
+      linters: [all]
+    # Generated cmd/axe code
+    - path: "cmd/axe/generate/templates.go"
+      linters: [all]
