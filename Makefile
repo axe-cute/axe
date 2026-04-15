@@ -5,7 +5,7 @@ SHELL := /bin/bash
 BINARY_NAME  := axe
 MAIN_PATH    := ./cmd/api
 BIN_DIR      := ./bin
-GO           := go
+GO           := $(shell which go 2>/dev/null || echo /usr/local/go/bin/go)
 GOFLAGS      :=
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
