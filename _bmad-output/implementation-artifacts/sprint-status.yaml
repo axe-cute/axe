@@ -1,9 +1,10 @@
 project: axe
 module: github.com/axe-cute/axe
-version: 2
+version: 3
+phase: 2
 
-current_sprint: 12
-active_story: null
+current_sprint: 13
+active_story: epic-5/story-5.1
 
 epics:
   - id: epic-1
@@ -84,6 +85,45 @@ epics:
         priority: P2
         notes: "--with-auth adds JWTAuth, --admin-only adds RequireRole(admin), json tags generated"
 
+  # ── Phase 2 ───────────────────────────────────────────────────────────────
+
+  - id: epic-5
+    title: "Multi-Database Support"
+    status: planned
+    stories:
+      - { id: story-5.1, title: "DB Adapter Interface",           status: planned, sprint: 13, priority: P0 }
+      - { id: story-5.2, title: "MySQL Adapter + Integration Test", status: planned, sprint: 13, priority: P0 }
+      - { id: story-5.3, title: "SQLite Adapter (Dev/Test)",      status: planned, sprint: 14, priority: P1 }
+      - { id: story-5.4, title: "Multi-DB CI Matrix",             status: planned, sprint: 14, priority: P1 }
+
+  - id: epic-6
+    title: "axe new — Project Scaffolding CLI"
+    status: planned
+    stories:
+      - { id: story-6.1, title: "axe new core command",          status: planned, sprint: 15, priority: P0 }
+      - { id: story-6.2, title: "Interactive Mode (wizard)",     status: planned, sprint: 15, priority: P1 }
+      - { id: story-6.3, title: "Template Versioning",           status: planned, sprint: 16, priority: P2 }
+      - { id: story-6.4, title: "axe new CI integration test",   status: planned, sprint: 16, priority: P1 }
+
+  - id: epic-7
+    title: "WebSocket Hub & Real-time Support"
+    status: planned
+    stories:
+      - { id: story-7.1, title: "WebSocket Hub Core",            status: planned, sprint: 17, priority: P1 }
+      - { id: story-7.2, title: "Redis Pub/Sub Multi-Instance",  status: planned, sprint: 17, priority: P1 }
+      - { id: story-7.3, title: "WS Authentication Middleware",  status: planned, sprint: 18, priority: P1 }
+      - { id: story-7.4, title: "axe generate --with-ws flag",   status: planned, sprint: 18, priority: P2 }
+
+  - id: epic-8
+    title: "Plugin System & Ecosystem"
+    status: planned
+    stories:
+      - { id: story-8.1, title: "Plugin Interface + App.Use()",  status: planned, sprint: 19, priority: P2 }
+      - { id: story-8.2, title: "axe-plugin-storage (S3/MinIO)", status: planned, sprint: 19, priority: P2 }
+      - { id: story-8.3, title: "axe-plugin-email (SendGrid)",   status: planned, sprint: 20, priority: P2 }
+      - { id: story-8.4, title: "Multi-Tenancy Foundation",      status: planned, sprint: 20, priority: P2 }
+      - { id: story-8.5, title: "Plugin Registry CLI",           status: planned, sprint: 21, priority: P3 }
+
 sprint_log:
   - sprint: 1
     goal: "Core infrastructure (apperror, txmanager, scaffold)"
@@ -146,3 +186,50 @@ sprint_log:
       - "Generated structs have json struct tags out-of-the-box"
       - "--with-auth: JWTAuth middleware in Routes(), WithJWTAuth() fluent builder"
       - "--admin-only: JWTAuth + RequireRole(admin) in Routes()"
+
+  # ── Phase 2 ──────────────────────────────────────────────────────────
+
+  - sprint: 13
+    goal: "Multi-DB: Adapter Interface + MySQL"
+    stories: [story-5.1, story-5.2]
+    status: planned
+
+  - sprint: 14
+    goal: "Multi-DB: SQLite + CI Matrix"
+    stories: [story-5.3, story-5.4]
+    status: planned
+
+  - sprint: 15
+    goal: "axe new: Core scaffolding + Interactive mode"
+    stories: [story-6.1, story-6.2]
+    status: planned
+
+  - sprint: 16
+    goal: "axe new: Template versioning + CI test"
+    stories: [story-6.3, story-6.4]
+    status: planned
+
+  - sprint: 17
+    goal: "WebSocket Hub + Redis pub/sub scale-out"
+    stories: [story-7.1, story-7.2]
+    status: planned
+
+  - sprint: 18
+    goal: "WebSocket middleware + generator flag"
+    stories: [story-7.3, story-7.4]
+    status: planned
+
+  - sprint: 19
+    goal: "Plugin Interface + axe-plugin-storage"
+    stories: [story-8.1, story-8.2]
+    status: planned
+
+  - sprint: 20
+    goal: "axe-plugin-email + Multi-tenancy foundation"
+    stories: [story-8.3, story-8.4]
+    status: planned
+
+  - sprint: 21
+    goal: "Plugin registry + ecosystem polish"
+    stories: [story-8.5]
+    status: planned
