@@ -125,3 +125,10 @@ func (c *Client) IsTokenBlocked(ctx context.Context, jti string) (bool, error) {
 func (c *Client) Ping(ctx context.Context) error {
 	return c.rdb.Ping(ctx).Err()
 }
+
+// Redis returns the underlying *redis.Client for packages that need direct
+// access (e.g. ratelimit with go-redis/redis_rate).
+// Prefer using the higher-level cache.Client methods when possible.
+func (c *Client) Redis() *redis.Client {
+	return c.rdb
+}

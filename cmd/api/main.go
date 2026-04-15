@@ -28,7 +28,9 @@ import (
 	"github.com/axe-go/axe/pkg/logger"
 	"github.com/axe-go/axe/pkg/metrics"
 	"github.com/axe-go/axe/pkg/outbox"
+	"github.com/axe-go/axe/pkg/ratelimit"
 	"github.com/axe-go/axe/pkg/worker"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -86,6 +88,13 @@ func main() {
 	// ── JWT service ───────────────────────────────────────────────────────────
 	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
 
+	// ── Rate Limiter (Redis sliding window) ───────────────────────────────────
+	var redisForRL *redis.Client
+	if cacheClient != nil {
+		redisForRL = cacheClient.Redis()
+	}
+	limiter := ratelimit.New(redisForRL)
+
 	// ── Background Worker (Asynq) ─────────────────────────────────────────────
 	workerSrv := worker.New(worker.Config{
 		RedisAddr:   cfg.RedisAddr(),
@@ -109,7 +118,8 @@ func main() {
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userSvc)
-	authHandler := handler.NewAuthHandler(userSvc, jwtSvc, cacheClient) // cacheClient is nil-safe
+	authHandler := handler.NewAuthHandler(userSvc, jwtSvc, cacheClient) // cacheClient implements TokenBlocker
+	docsHandler := handler.NewOpenAPIHandler()
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -121,15 +131,22 @@ func main() {
 	r.Use(metrics.Middleware)          // Prometheus instrumentation
 	r.Use(chimiddleware.Compress(5))
 
-	// System endpoints (no auth)
+	// System endpoints (no auth, no rate limit)
 	r.Get("/health", healthHandler)
 	r.Get("/ready", readyHandler(db, cacheClient))
 	r.Handle("/metrics", metrics.Handler()) // Prometheus scrape endpoint
 
+	// API docs (no auth)
+	r.Get("/openapi.yaml", docsHandler.Spec)
+	r.Get("/docs", docsHandler.SwaggerUI)
+	r.Get("/docs/redoc", docsHandler.Redoc)
+
 	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
-		// Public
-		r.Mount("/auth", authHandler.Routes())
+		r.Use(limiter.Global()) // 100 req/min per IP
+
+		// Public auth (strict rate limit: 10 req/min)
+		r.With(limiter.Strict()).Mount("/auth", authHandler.Routes())
 
 		// Protected (JWT + blocklist check)
 		r.Group(func(r chi.Router) {

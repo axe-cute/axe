@@ -115,6 +115,13 @@ var (
 		Message:    "unprocessable request",
 		HTTPStatus: http.StatusUnprocessableEntity,
 	}
+
+	// ErrTooManyRequests is returned when a client exceeds the rate limit.
+	ErrTooManyRequests = &AppError{
+		Code:       "TOO_MANY_REQUESTS",
+		Message:    "rate limit exceeded",
+		HTTPStatus: http.StatusTooManyRequests,
+	}
 )
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
