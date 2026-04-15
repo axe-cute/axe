@@ -1,0 +1,65 @@
+name: Integration Tests
+
+# Runs on every push/PR so the DB matrix is always validated.
+# Kept separate from ci.yml (lint/unit/build/docker) so the two pipelines
+# are independently cancel-able and their status checks are distinct.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  integration:
+    name: Integration (${{ matrix.db }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false   # don't cancel sibling jobs when one fails
+      matrix:
+        db: [postgres, mysql, sqlite]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # ── Postgres ──────────────────────────────────────────────────────────
+      # Testcontainers pulls the image itself — no service: block needed.
+      - name: Integration tests — Postgres
+        if: matrix.db == 'postgres'
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: |
+          go test \
+            -tags=integration \
+            ./tests/integration/ \
+            -v \
+            -timeout 300s
+
+      # ── MySQL ─────────────────────────────────────────────────────────────
+      - name: Integration tests — MySQL
+        if: matrix.db == 'mysql'
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: |
+          go test \
+            -tags=integration_mysql \
+            ./tests/integration/mysql/ \
+            -v \
+            -timeout 300s
+
+      # ── SQLite ────────────────────────────────────────────────────────────
+      # Pure in-memory — no Docker socket required at all.
+      - name: Integration tests — SQLite
+        if: matrix.db == 'sqlite'
+        run: |
+          go test \
+            -tags=integration_sqlite \
+            ./tests/integration/sqlite/ \
+            -v \
+            -timeout 120s

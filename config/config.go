@@ -27,6 +27,7 @@ type Config struct {
 	LogLevel    string `env:"LOG_LEVEL"    env-default:"info"`
 
 	// Database
+	DBDriver                    string `env:"DB_DRIVER"                          env-default:"postgres"`
 	DatabaseURL                string `env:"DATABASE_URL"                       env-required:"true"`
 	DatabaseMaxOpenConns       int    `env:"DATABASE_MAX_OPEN_CONNS"            env-default:"25"`
 	DatabaseMaxIdleConns       int    `env:"DATABASE_MAX_IDLE_CONNS"            env-default:"5"`
@@ -132,6 +133,11 @@ func validate(cfg *Config) error {
 
 	if cfg.JWTAccessTokenExpiryMinutes < 1 {
 		return fmt.Errorf("JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be >= 1")
+	}
+
+	validDrivers := map[string]bool{"postgres": true, "mysql": true, "sqlite3": true}
+	if !validDrivers[cfg.DBDriver] {
+		return fmt.Errorf("DB_DRIVER must be one of [postgres, mysql, sqlite3], got %q", cfg.DBDriver)
 	}
 
 	return nil

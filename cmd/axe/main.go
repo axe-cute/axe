@@ -2,6 +2,7 @@
 //
 // Usage:
 //
+//	axe new <project-name> [--db=postgres|mysql|sqlite] [--no-worker] [--no-cache]
 //	axe generate resource <Name> --fields="field:type,..." [--belongs-to=Entity]
 //	axe migrate create <name>
 //	axe migrate up / down / status
@@ -16,6 +17,7 @@ import (
 
 	"github.com/axe-cute/axe/cmd/axe/generate"
 	"github.com/axe-cute/axe/cmd/axe/migrate"
+	axenew "github.com/axe-cute/axe/cmd/axe/new"
 )
 
 var version = "0.1.0"
@@ -33,6 +35,7 @@ ship a full CRUD resource in under 10 minutes.`,
 
 	// Sub-commands
 	root.AddCommand(versionCmd())
+	root.AddCommand(axenew.Command())
 	root.AddCommand(generate.Command())
 	root.AddCommand(migrate.Command())
 

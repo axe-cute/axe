@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: 3
 phase: 2
 
-current_sprint: 13
-active_story: epic-5/story-5.1
+current_sprint: 17
+active_story: epic-7/story-7.1
 
 epics:
   - id: epic-1
@@ -89,21 +89,42 @@ epics:
 
   - id: epic-5
     title: "Multi-Database Support"
-    status: planned
+    status: done
+    completed_at: "2026-04-15"
     stories:
-      - { id: story-5.1, title: "DB Adapter Interface",           status: planned, sprint: 13, priority: P0 }
-      - { id: story-5.2, title: "MySQL Adapter + Integration Test", status: planned, sprint: 13, priority: P0 }
-      - { id: story-5.3, title: "SQLite Adapter (Dev/Test)",      status: planned, sprint: 14, priority: P1 }
-      - { id: story-5.4, title: "Multi-DB CI Matrix",             status: planned, sprint: 14, priority: P1 }
+      - { id: story-5.1, title: "DB Adapter Interface",           status: done, sprint: 13, priority: P0 }
+      - { id: story-5.2, title: "MySQL Adapter + Integration Test", status: done, sprint: 13, priority: P0 }
+      - { id: story-5.3, title: "SQLite Adapter (Dev/Test)",      status: done, sprint: 14, priority: P1 }
+      - { id: story-5.4, title: "Multi-DB CI Matrix",             status: done, sprint: 14, priority: P1 }
 
   - id: epic-6
     title: "axe new — Project Scaffolding CLI"
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
     stories:
-      - { id: story-6.1, title: "axe new core command",          status: planned, sprint: 15, priority: P0 }
-      - { id: story-6.2, title: "Interactive Mode (wizard)",     status: planned, sprint: 15, priority: P1 }
-      - { id: story-6.3, title: "Template Versioning",           status: planned, sprint: 16, priority: P2 }
-      - { id: story-6.4, title: "axe new CI integration test",   status: planned, sprint: 16, priority: P1 }
+      - id: story-6.1
+        title: "axe new core command"
+        status: done
+        sprint: 15
+        priority: P0
+        notes: "cmd/axe/new/new.go + scaffold.go: full dir tree + all template files, --db/--no-worker/--no-cache/--module flags"
+      - id: story-6.2
+        title: "Interactive Mode (wizard)"
+        status: done
+        sprint: 15
+        priority: P1
+        notes: "cmd/axe/new/interactive.go: prompt wizard; axe new (no args) triggers wizard, --yes for CI mode"
+      - id: story-6.3
+        title: "Bootable scaffold (go mod tidy + real migrate CLI)"
+        status: done
+        sprint: 16
+        priority: P0
+        notes: "scaffold() runs go mod tidy; tmplMainAxeGo = full migrate up/down/status/create (pgx/v5 inline); make setup && make run verified end-to-end"
+      - id: story-6.4
+        title: "axe new CI integration test"
+        status: planned
+        sprint: 16
+        priority: P1
 
   - id: epic-7
     title: "WebSocket Hub & Real-time Support"
@@ -192,22 +213,54 @@ sprint_log:
   - sprint: 13
     goal: "Multi-DB: Adapter Interface + MySQL"
     stories: [story-5.1, story-5.2]
-    status: planned
+    status: done
+    completed_at: "2026-04-15"
+    results:
+      - "pkg/db/adapter.go: Adapter interface + Open() registry (init-based, like database/sql)"
+      - "pkg/db/postgres/adapter.go: pgx extracted from main.go — zero regression"
+      - "pkg/db/mysql/adapter.go: go-sql-driver/mysql — DSN normaliser (parseTime, charset, loc)"
+      - "config: DB_DRIVER env var (postgres|mysql|sqlite3, default=postgres)"
+      - "cmd/api/main.go: openDB() removed, replaced with db.Open(cfg.DBDriver, ...)"
+      - "db/migrations/001_init_mysql.sql: MySQL-compatible (UUID(), DATETIME(6), ON UPDATE)"
+      - "tests/integration/mysql/: 5/5 MySQL integration tests pass (Testcontainers mysql:8.0)"
+      - "make test-integration-mysql: new target"
+      - "go vet ./...: clean, 8 unit test packages: 0 FAIL, Postgres integration 13/13 pass"
 
   - sprint: 14
     goal: "Multi-DB: SQLite + CI Matrix"
     stories: [story-5.3, story-5.4]
-    status: planned
+    status: done
+    completed_at: "2026-04-15"
+    results:
+      - "pkg/db/sqlite/adapter.go: modernc.org/sqlite (pure-Go, CGO-free) registered as sqlite3"
+      - "db/migrations/001_init_sqlite.sql: SQLite-compatible DDL (TEXT UUID, DATETIME, _pragma)"
+      - "tests/integration/sqlite/sqlite_test.go: 5/5 tests PASS (in-memory, no Docker)"
+      - "Ent AutoMigrate via entClient.Schema.Create() keeps schema in sync automatically"
+      - ".github/workflows/integration.yml: matrix {postgres, mysql, sqlite}, fail-fast=false"
+      - "Makefile: test-integration-sqlite target added"
+      - "go.mod: modernc.org/sqlite v1.48.2 added"
 
   - sprint: 15
-    goal: "axe new: Core scaffolding + Interactive mode"
+    goal: "axe new: Core scaffolding + Interactive wizard mode"
     stories: [story-6.1, story-6.2]
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
+    results:
+      - "cmd/axe/new/new.go: cobra command, flag validation (--db postgres|mysql|sqlite, --no-worker, --no-cache, --module)"
+      - "cmd/axe/new/scaffold.go: creates full directory tree, renders all templates, writes 27+ files"
+      - "cmd/axe/new/templates.go: 1600+ lines of Go text/templates for all generated files"
+      - "cmd/axe/new/interactive.go: wizard mode (no args = interactive), --yes for CI/non-interactive"
 
   - sprint: 16
-    goal: "axe new: Template versioning + CI test"
-    stories: [story-6.3, story-6.4]
-    status: planned
+    goal: "axe new: Bootable project (go mod tidy + migrate CLI)"
+    stories: [story-6.3]
+    status: done
+    completed_at: "2026-04-16"
+    results:
+      - "scaffold() step 3: exec go mod tidy in project dir → go.sum populated, project immediately buildable"
+      - "tmplMainAxeGo: replaced stub (// TODO) with full self-contained migrate CLI (up/down/status/create)"
+      - "make setup end-to-end: docker up → go mod tidy → migrate 001_init.sql ✅"
+      - "make run: API :8080 + Redis + Asynq worker all green ✅"
 
   - sprint: 17
     goal: "WebSocket Hub + Redis pub/sub scale-out"

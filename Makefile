@@ -46,8 +46,16 @@ test-coverage: ## Run tests with coverage report
 	@echo "✅ Coverage report: coverage.html"
 
 .PHONY: test-integration
-test-integration: ## Run integration tests (requires Docker)
+test-integration: ## Run Postgres integration tests (requires Docker)
 	$(GO) test ./... -tags=integration -timeout 300s
+
+.PHONY: test-integration-mysql
+test-integration-mysql: ## Run MySQL integration tests (requires Docker)
+	$(GO) test -tags=integration_mysql ./tests/integration/mysql/ -v -timeout 300s
+
+.PHONY: test-integration-sqlite
+test-integration-sqlite: ## Run SQLite integration tests (no Docker needed)
+	$(GO) test -tags=integration_sqlite ./tests/integration/sqlite/ -v -timeout 120s
 
 # ─── Code Quality ─────────────────────────────────────────────────────────────
 .PHONY: lint

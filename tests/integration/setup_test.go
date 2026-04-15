@@ -273,6 +273,16 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		filename := e.Name()
 
+		// Skip MySQL-specific migration files (handled by MySQL integration tests)
+		if len(filename) > 10 && filename[len(filename)-10:] == "_mysql.sql" {
+			continue
+		}
+
+		// Skip SQLite-specific migration files (handled by SQLite integration tests)
+		if len(filename) > 11 && filename[len(filename)-11:] == "_sqlite.sql" {
+			continue
+		}
+
 		// Check if already applied
 		var count int
 		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE filename = $1`, filename).Scan(&count)
