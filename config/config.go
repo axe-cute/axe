@@ -11,6 +11,8 @@ package config
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -91,7 +93,28 @@ func (c *Config) IsDevelopment() bool {
 	return c.Environment == "development"
 }
 
-// validate applies business rules beyond cleanenv's built-in validation.
+// AccessTokenTTL returns the access token expiry as a time.Duration.
+func (c *Config) AccessTokenTTL() time.Duration {
+	return time.Duration(c.JWTAccessTokenExpiryMinutes) * time.Minute
+}
+
+// RefreshTokenTTL returns the refresh token expiry as a time.Duration.
+func (c *Config) RefreshTokenTTL() time.Duration {
+	return time.Duration(c.JWTRefreshTokenExpiryDays) * 24 * time.Hour
+}
+
+// RedisAddr extracts host:port from REDIS_URL (strips redis:// scheme).
+// e.g. "redis://localhost:6379/0" → "localhost:6379"
+func (c *Config) RedisAddr() string {
+	u := c.RedisURL
+	u = strings.TrimPrefix(u, "redis://")
+	u = strings.TrimPrefix(u, "rediss://")
+	if idx := strings.LastIndex(u, "/"); idx != -1 {
+		u = u[:idx] // strip /db number
+	}
+	return u
+}
+
 func validate(cfg *Config) error {
 	if cfg.ServerPort < 1 || cfg.ServerPort > 65535 {
 		return fmt.Errorf("SERVER_PORT must be between 1 and 65535, got %d", cfg.ServerPort)

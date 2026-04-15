@@ -15,7 +15,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver as database/sql
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	ent "github.com/axe-go/axe/ent"
 	"github.com/axe-go/axe/config"
@@ -23,6 +23,8 @@ import (
 	"github.com/axe-go/axe/internal/handler/middleware"
 	"github.com/axe-go/axe/internal/repository"
 	"github.com/axe-go/axe/internal/service"
+	"github.com/axe-go/axe/pkg/cache"
+	"github.com/axe-go/axe/pkg/jwtauth"
 	"github.com/axe-go/axe/pkg/logger"
 )
 
@@ -40,12 +42,9 @@ func main() {
 	// ── Logger ────────────────────────────────────────────────────────────────
 	log := logger.New(cfg.Environment)
 	slog.SetDefault(log)
-	log.Info("axe starting",
-		"port", cfg.ServerPort,
-		"env", cfg.Environment,
-	)
+	log.Info("axe starting", "port", cfg.ServerPort, "env", cfg.Environment)
 
-	// ── Database — shared *sql.DB pool ───────────────────────────────────────
+	// ── Database ──────────────────────────────────────────────────────────────
 	db, err := openDB(cfg)
 	if err != nil {
 		log.Error("database connection failed", "error", err)
@@ -53,12 +52,10 @@ func main() {
 	}
 	defer db.Close()
 
-	// ── Ent client — wraps the shared pool ───────────────────────────────────
 	drv := entsql.OpenDB(dialect.Postgres, db)
 	entClient := ent.NewClient(ent.Driver(drv))
 	defer entClient.Close()
 
-	// ── Auto-migrate (dev) — replace with Atlas in production ────────────────
 	if cfg.IsDevelopment() {
 		if err := entClient.Schema.Create(context.Background()); err != nil {
 			log.Error("ent schema migration failed", "error", err)
@@ -66,46 +63,54 @@ func main() {
 		}
 	}
 
-	// ── Composition Root — wire all layers ───────────────────────────────────
+	// ── Redis cache ───────────────────────────────────────────────────────────
+	cacheClient, err := cache.New(cache.Config{
+		Addr:   cfg.RedisAddr(),
+		Prefix: "axe:" + cfg.Environment + ":",
+	})
+	if err != nil {
+		// Non-fatal in development: warn and continue without cache
+		if cfg.IsProduction() {
+			log.Error("redis connection failed", "error", err)
+			os.Exit(1)
+		}
+		log.Warn("redis unavailable — cache disabled", "error", err)
+		cacheClient = nil
+	} else {
+		defer cacheClient.Close()
+		log.Info("redis connected", "addr", cfg.RedisAddr())
+	}
+
+	// ── JWT service ───────────────────────────────────────────────────────────
+	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+
+	// ── Composition Root ──────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userSvc)
+	authHandler := handler.NewAuthHandler(userSvc, jwtSvc)
+	_ = cacheClient // available for future handlers (e.g. rate limiter, session)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
-
-	// Global middleware stack (order matters)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(chimiddleware.Compress(5))
 
-	// System endpoints
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		middleware.WriteJSON(w, http.StatusOK, map[string]string{
-			"status":  "ok",
-			"service": "axe",
-		})
-	})
+	// System
+	r.Get("/health", healthHandler)
+	r.Get("/ready", readyHandler(db, cacheClient))
 
-	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
-		if err := db.PingContext(r.Context()); err != nil {
-			middleware.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"status": "error",
-				"db":     err.Error(),
-			})
-			return
-		}
-		middleware.WriteJSON(w, http.StatusOK, map[string]string{
-			"status": "ok",
-			"db":     "ok",
-		})
-	})
-
-	// API v1
+	// API v1 — public
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Mount("/users", userHandler.Routes())
-		// TODO (Story 1.9+): mount additional domain handlers here
+		r.Mount("/auth", authHandler.Routes())
+
+		// Protected: require valid JWT
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.JWTAuth(jwtSvc))
+			r.Mount("/users", userHandler.Routes())
+		})
 	})
 
 	// ── HTTP Server ───────────────────────────────────────────────────────────
@@ -129,7 +134,7 @@ func main() {
 	}()
 
 	<-quit
-	log.Info("shutdown signal received, draining connections...")
+	log.Info("shutdown signal received")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -138,27 +143,56 @@ func main() {
 		log.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}
-
 	log.Info("server stopped cleanly")
 }
 
-// openDB opens and configures a *sql.DB connection pool using the pgx driver.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	middleware.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "axe"})
+}
+
+func readyHandler(db *sql.DB, cache *cache.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]string{"status": "ok"}
+
+		if err := db.PingContext(r.Context()); err != nil {
+			resp["db"] = "error: " + err.Error()
+			resp["status"] = "degraded"
+		} else {
+			resp["db"] = "ok"
+		}
+
+		if cache != nil {
+			if err := cache.Ping(r.Context()); err != nil {
+				resp["cache"] = "error: " + err.Error()
+				resp["status"] = "degraded"
+			} else {
+				resp["cache"] = "ok"
+			}
+		} else {
+			resp["cache"] = "disabled"
+		}
+
+		status := http.StatusOK
+		if resp["status"] == "degraded" {
+			status = http.StatusServiceUnavailable
+		}
+		middleware.WriteJSON(w, status, resp)
+	}
+}
+
 func openDB(cfg *config.Config) (*sql.DB, error) {
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-
 	db.SetMaxOpenConns(cfg.DatabaseMaxOpenConns)
 	db.SetMaxIdleConns(cfg.DatabaseMaxIdleConns)
 	db.SetConnMaxLifetime(time.Duration(cfg.DatabaseConnMaxLifetimeMins) * time.Minute)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
-
 	return db, nil
 }
