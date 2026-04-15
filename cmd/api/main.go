@@ -26,6 +26,9 @@ import (
 	"github.com/axe-go/axe/pkg/cache"
 	"github.com/axe-go/axe/pkg/jwtauth"
 	"github.com/axe-go/axe/pkg/logger"
+	"github.com/axe-go/axe/pkg/metrics"
+	"github.com/axe-go/axe/pkg/outbox"
+	"github.com/axe-go/axe/pkg/worker"
 )
 
 func main() {
@@ -69,7 +72,6 @@ func main() {
 		Prefix: "axe:" + cfg.Environment + ":",
 	})
 	if err != nil {
-		// Non-fatal in development: warn and continue without cache
 		if cfg.IsProduction() {
 			log.Error("redis connection failed", "error", err)
 			os.Exit(1)
@@ -84,29 +86,52 @@ func main() {
 	// ── JWT service ───────────────────────────────────────────────────────────
 	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
 
+	// ── Background Worker (Asynq) ─────────────────────────────────────────────
+	workerSrv := worker.New(worker.Config{
+		RedisAddr:   cfg.RedisAddr(),
+		Concurrency: cfg.AsynqConcurrency,
+		Queues: map[string]int{
+			cfg.AsynqQueueCritical: 6,
+			cfg.AsynqQueueDefault:  3,
+			"low":                  1,
+		},
+	}, log)
+	workerSrv.Register(worker.TypeSendWelcomeEmail, worker.NewWelcomeEmailHandler(log))
+	workerSrv.Register(worker.TypeProcessOutboxEvent, worker.NewOutboxEventHandler(log))
+
+	// ── Outbox Poller ─────────────────────────────────────────────────────────
+	outboxPoller := outbox.New(db, cfg.RedisAddr(), outbox.Config{
+		Interval:  5 * time.Second,
+		BatchSize: 50,
+	}, log)
+
 	// ── Composition Root ──────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userSvc)
 	authHandler := handler.NewAuthHandler(userSvc, jwtSvc)
-	_ = cacheClient // available for future handlers (e.g. rate limiter, session)
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
+
+	// Global middleware stack
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
+	r.Use(metrics.Middleware)          // Prometheus instrumentation
 	r.Use(chimiddleware.Compress(5))
 
-	// System
+	// System endpoints (no auth)
 	r.Get("/health", healthHandler)
 	r.Get("/ready", readyHandler(db, cacheClient))
+	r.Handle("/metrics", metrics.Handler()) // Prometheus scrape endpoint
 
-	// API v1 — public
+	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
+		// Public
 		r.Mount("/auth", authHandler.Routes())
 
-		// Protected: require valid JWT
+		// Protected (JWT required)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTAuth(jwtSvc))
 			r.Mount("/users", userHandler.Routes())
@@ -122,8 +147,12 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// ── Graceful shutdown ─────────────────────────────────────────────────────
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start background services
+	ctx, cancelBg := context.WithCancel(context.Background())
 
 	go func() {
 		log.Info("server listening", "addr", srv.Addr)
@@ -133,24 +162,47 @@ func main() {
 		}
 	}()
 
-	<-quit
-	log.Info("shutdown signal received")
+	go func() {
+		if err := workerSrv.Start(); err != nil {
+			log.Warn("worker server error (may be expected if no Redis)", "error", err)
+		}
+	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go outboxPoller.Start(ctx)
+
+	log.Info("all services started",
+		"http", fmt.Sprintf(":%d", cfg.ServerPort),
+		"metrics", fmt.Sprintf(":%d/metrics", cfg.ServerPort),
+		"worker", "asynq",
+	)
+
+	<-quit
+	log.Info("shutdown signal received — draining...")
+
+	cancelBg() // stop outbox poller
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	workerSrv.Shutdown()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}
 	log.Info("server stopped cleanly")
 }
 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	middleware.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "axe"})
+	middleware.WriteJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "axe",
+	})
 }
 
-func readyHandler(db *sql.DB, cache *cache.Client) http.HandlerFunc {
+func readyHandler(db *sql.DB, cacheClient *cache.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{"status": "ok"}
 
@@ -161,8 +213,8 @@ func readyHandler(db *sql.DB, cache *cache.Client) http.HandlerFunc {
 			resp["db"] = "ok"
 		}
 
-		if cache != nil {
-			if err := cache.Ping(r.Context()); err != nil {
+		if cacheClient != nil {
+			if err := cacheClient.Ping(r.Context()); err != nil {
 				resp["cache"] = "error: " + err.Error()
 				resp["status"] = "degraded"
 			} else {
@@ -180,6 +232,8 @@ func readyHandler(db *sql.DB, cache *cache.Client) http.HandlerFunc {
 	}
 }
 
+// ── DB helpers ────────────────────────────────────────────────────────────────
+
 func openDB(cfg *config.Config) (*sql.DB, error) {
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
@@ -191,6 +245,7 @@ func openDB(cfg *config.Config) (*sql.DB, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
