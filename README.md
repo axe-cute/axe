@@ -22,7 +22,7 @@
 
 ```bash
 # Clone
-git clone https://github.com/axe-go/axe && cd axe
+git clone https://github.com/axe-cute/axe && cd axe
 
 # One-command setup (copies .env, starts Docker, migrates, seeds)
 make setup

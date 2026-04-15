@@ -17,7 +17,7 @@
 - [ ] `cmd/axe/main.go`: CLI entry point dùng cobra
 - [ ] `axe --version` in version
 - [ ] `axe help` liệt kê commands
-- [ ] `go install github.com/axe-go/axe/cmd/axe@latest` hoạt động
+- [ ] `go install github.com/axe-cute/axe/cmd/axe@latest` hoạt động
 
 ---
 

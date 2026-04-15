@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/internal/service"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/internal/service"
 )
 
 type mockPostRepo struct{}

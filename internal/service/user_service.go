@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/pkg/apperror"
-	"github.com/axe-go/axe/pkg/logger"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/pkg/apperror"
+	"github.com/axe-cute/axe/pkg/logger"
 )
 
 // UserService implements domain.UserService.

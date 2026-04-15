@@ -11,9 +11,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/internal/handler"
-	"github.com/axe-go/axe/pkg/apperror"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/internal/handler"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 // ── Mock Service ─────────────────────────────────────────────────────────────

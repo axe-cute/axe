@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/axe-go/axe/config"
+	"github.com/axe-cute/axe/config"
 )
 
 // setEnv sets multiple env vars and returns a cleanup function.

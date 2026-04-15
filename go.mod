@@ -1,4 +1,4 @@
-module github.com/axe-go/axe
+module github.com/axe-cute/axe
 
 go 1.25.0
 

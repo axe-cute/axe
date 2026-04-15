@@ -16,7 +16,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"github.com/axe-go/axe/pkg/worker"
+	"github.com/axe-cute/axe/pkg/worker"
 )
 
 // Poller reads unprocessed outbox_events and dispatches them as Asynq tasks.

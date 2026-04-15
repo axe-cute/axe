@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/internal/service"
-	"github.com/axe-go/axe/pkg/apperror"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/internal/service"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 // ── Mock Repository ────────────────────────────────────────────────────────────

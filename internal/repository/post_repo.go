@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	ent "github.com/axe-go/axe/ent"
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/pkg/apperror"
+	ent "github.com/axe-cute/axe/ent"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 // PostRepo implements domain.PostRepository using Ent.

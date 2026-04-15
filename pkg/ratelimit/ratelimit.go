@@ -18,8 +18,8 @@ import (
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/axe-go/axe/internal/handler/middleware"
-	"github.com/axe-go/axe/pkg/apperror"
+	"github.com/axe-cute/axe/internal/handler/middleware"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 // Limiter wraps redis_rate.Limiter with pre-configured limits.

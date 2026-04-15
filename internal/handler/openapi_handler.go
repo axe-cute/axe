@@ -11,7 +11,7 @@ package handler
 import (
 	"net/http"
 
-	axedocs "github.com/axe-go/axe/docs"
+	axedocs "github.com/axe-cute/axe/docs"
 )
 
 // OpenAPIHandler serves API documentation.

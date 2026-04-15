@@ -294,12 +294,12 @@ func toSnake(s string) string {
 func readModuleName() string {
 	data, err := os.ReadFile("go.mod")
 	if err != nil {
-		return "github.com/axe-go/axe"
+		return "github.com/axe-cute/axe"
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "module ") {
 			return strings.TrimSpace(strings.TrimPrefix(line, "module "))
 		}
 	}
-	return "github.com/axe-go/axe"
+	return "github.com/axe-cute/axe"
 }

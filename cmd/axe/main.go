@@ -14,8 +14,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/axe-go/axe/cmd/axe/generate"
-	"github.com/axe-go/axe/cmd/axe/migrate"
+	"github.com/axe-cute/axe/cmd/axe/generate"
+	"github.com/axe-cute/axe/cmd/axe/migrate"
 )
 
 var version = "0.1.0"

@@ -1,9 +1,9 @@
 project: axe
-module: github.com/axe-go/axe
+module: github.com/axe-cute/axe
 version: 2
 
-current_sprint: 10
-active_story: epic-4/story-4.1
+current_sprint: 12
+active_story: null
 
 epics:
   - id: epic-1
@@ -27,80 +27,62 @@ epics:
     status: done
     completed_at: "2026-04-15"
     stories:
-      - { id: story-2.1, title: "axe CLI Binary Setup",                   status: done, sprint: 5 }
-      - { id: story-2.2, title: "axe generate resource command",           status: done, sprint: 5 }
+      - { id: story-2.1, title: "axe CLI Binary Setup",                    status: done, sprint: 5 }
+      - { id: story-2.2, title: "axe generate resource command",            status: done, sprint: 5 }
       - { id: story-2.3, title: "axe migrate up/down/status (real runner)", status: done, sprint: 6 }
-      - { id: story-2.4, title: "ADR docs + Postman collection",           status: done, sprint: 6 }
+      - { id: story-2.4, title: "ADR docs + Postman collection",            status: done, sprint: 6 }
 
   - id: epic-3
     title: "Production Hardening"
     status: done
     completed_at: "2026-04-15"
     stories:
-      - { id: story-3.1, title: "Observability — Structured Logging",       status: done, sprint: 7 }
-      - { id: story-3.2, title: "Observability — Prometheus Metrics",       status: done, sprint: 7 }
-      - { id: story-3.3, title: "Redis Cache Layer (pkg/cache)",            status: done, sprint: 8 }
+      - { id: story-3.1, title: "Observability — Structured Logging",        status: done, sprint: 7 }
+      - { id: story-3.2, title: "Observability — Prometheus Metrics",        status: done, sprint: 7 }
+      - { id: story-3.3, title: "Redis Cache Layer (pkg/cache)",             status: done, sprint: 8 }
       - { id: story-3.4, title: "JWT Auth + RBAC (pkg/jwtauth + middleware)", status: done, sprint: 8 }
-      - { id: story-3.5, title: "Background Jobs — Asynq + Outbox Poller", status: done, sprint: 9 }
+      - { id: story-3.5, title: "Background Jobs — Asynq + Outbox Poller",  status: done, sprint: 9 }
       - { id: story-3.6, title: "Docker Multi-stage + GitHub Actions CI/CD", status: done, sprint: 9 }
 
   - id: epic-4
     title: "Quality & API Polish"
-    status: in_progress
+    status: done
+    completed_at: "2026-04-15"
     stories:
       - id: story-4.1
         title: "Integration Tests — Testcontainers (real DB)"
-        status: in_progress
+        status: done
         sprint: 10
         priority: P0
-        acceptance_criteria:
-          - "go test ./... -tags=integration passes with real PostgreSQL"
-          - "TestCreateUser_Integration: POST /users → verify in DB"
-          - "TestLogin_Integration: login → get token → GET /auth/me"
-          - "TestMigrate_Integration: all migrations apply cleanly"
+        notes: "13/13 tests pass — auth + user CRUD against real Postgres"
 
       - id: story-4.2
         title: "JWT Logout — JTI + Redis Blocklist"
-        status: todo
+        status: done
         sprint: 10
         priority: P0
-        acceptance_criteria:
-          - "POST /auth/logout with valid JWT → token JTI added to Redis"
-          - "Subsequent requests with same token → 401 token_revoked"
-          - "JTI blocklist key expires when token expires (no leak)"
-          - "Unit tests: blocked/unblocked token scenarios"
+        notes: "JTI in Claims, BlockToken/IsTokenBlocked, POST /auth/logout revokes token with TTL"
 
       - id: story-4.3
         title: "Rate Limiting Middleware"
-        status: todo
+        status: done
         sprint: 11
         priority: P1
-        acceptance_criteria:
-          - "Global: 100 req/min per IP"
-          - "Auth routes: 10 req/min per IP (anti-brute-force)"
-          - "429 Too Many Requests with Retry-After header"
-          - "Backed by Redis sliding window"
+        notes: "pkg/ratelimit: Global 100/min, Strict 10/min auth, X-RateLimit-* headers, 429 ErrTooManyRequests"
 
       - id: story-4.4
         title: "OpenAPI 3.1 Spec + Swagger UI"
-        status: todo
+        status: done
         sprint: 11
         priority: P1
-        acceptance_criteria:
-          - "GET /docs → Swagger UI served"
-          - "GET /openapi.yaml → machine-readable spec"
-          - "All endpoints documented with request/response schemas"
-          - "Bearer auth scheme defined"
+        notes: "docs/openapi.yaml embedded at compile time, GET /docs Swagger UI, GET /docs/redoc ReDoc"
 
       - id: story-4.5
         title: "axe generate resource — Struct Tags + --with-auth flag"
-        status: todo
+        status: done
         sprint: 12
         priority: P2
-        acceptance_criteria:
-          - "Generated Go structs have json struct tags"
-          - "--with-auth auto-adds JWTAuth middleware to routes"
-          - "--admin-only wraps routes with RequireRole(admin)"
+        notes: "--with-auth adds JWTAuth, --admin-only adds RequireRole(admin), json tags generated"
 
 sprint_log:
   - sprint: 1
@@ -140,14 +122,27 @@ sprint_log:
     stories: [story-3.5, story-3.6]
     status: done
   - sprint: 10
-    goal: "Integration tests + JWT Logout (JTI blocklist)"
+    goal: "Integration tests (Testcontainers) + JWT Logout (JTI blocklist)"
     stories: [story-4.1, story-4.2]
-    status: in_progress
+    status: done
+    completed_at: "2026-04-15"
+    results:
+      - "13/13 integration tests pass (Postgres container)"
+      - "POST /auth/logout revokes JTI in Redis with TTL"
   - sprint: 11
-    goal: "Rate limiting + OpenAPI spec"
+    goal: "Rate limiting + OpenAPI 3.1 spec + Swagger UI"
     stories: [story-4.3, story-4.4]
-    status: todo
+    status: done
+    completed_at: "2026-04-15"
+    results:
+      - "pkg/ratelimit: 100/min global, 10/min auth, Retry-After header"
+      - "GET /docs Swagger UI, GET /docs/redoc ReDoc, GET /openapi.yaml raw spec"
   - sprint: 12
-    goal: "axe generate resource polish"
+    goal: "axe generate resource polish (JSON tags + auth flags)"
     stories: [story-4.5]
-    status: todo
+    status: done
+    completed_at: "2026-04-15"
+    results:
+      - "Generated structs have json struct tags out-of-the-box"
+      - "--with-auth: JWTAuth middleware in Routes(), WithJWTAuth() fluent builder"
+      - "--admin-only: JWTAuth + RequireRole(admin) in Routes()"

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/axe-go/axe/pkg/logger"
+	"github.com/axe-cute/axe/pkg/logger"
 )
 
 func TestFromCtx_Default(t *testing.T) {

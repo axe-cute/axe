@@ -13,7 +13,7 @@
 **Goal**: Tạo folder structure, go.mod, và skeleton files.
 
 **Acceptance Criteria**:
-- [ ] `go.mod` với module `github.com/axe-go/axe`, Go 1.22
+- [ ] `go.mod` với module `github.com/axe-cute/axe`, Go 1.22
 - [ ] Folder structure đúng theo architecture.md
 - [ ] `.env.example` với tất cả config keys
 - [ ] `.gitignore` đúng cho Go project

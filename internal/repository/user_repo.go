@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	ent "github.com/axe-go/axe/ent"
-	entuser "github.com/axe-go/axe/ent/user"
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/pkg/apperror"
+	ent "github.com/axe-cute/axe/ent"
+	entuser "github.com/axe-cute/axe/ent/user"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 // UserRepo implements domain.UserRepository using Ent for writes and

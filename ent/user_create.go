@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/axe-go/axe/ent/user"
+	"github.com/axe-cute/axe/ent/user"
 	"github.com/google/uuid"
 )
 

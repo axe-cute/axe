@@ -34,7 +34,7 @@
 | Test containers | testcontainers-go | latest |
 | Code generation | Wire (DI) | latest |
 
-**Go module**: `github.com/axe-go/axe`
+**Go module**: `github.com/axe-cute/axe`
 
 ---
 

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/axe-go/axe/pkg/apperror"
+	"github.com/axe-cute/axe/pkg/apperror"
 )
 
 func TestAppError_Error(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/axe-go/axe/pkg/apperror"
-	"github.com/axe-go/axe/pkg/jwtauth"
-	"github.com/axe-go/axe/pkg/logger"
+	"github.com/axe-cute/axe/pkg/apperror"
+	"github.com/axe-cute/axe/pkg/jwtauth"
+	"github.com/axe-cute/axe/pkg/logger"
 )
 
 // Blocklist defines the contract for token revocation storage.

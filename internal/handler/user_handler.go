@@ -8,10 +8,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/axe-go/axe/internal/domain"
-	"github.com/axe-go/axe/internal/handler/middleware"
-	"github.com/axe-go/axe/pkg/apperror"
-	"github.com/axe-go/axe/pkg/logger"
+	"github.com/axe-cute/axe/internal/domain"
+	"github.com/axe-cute/axe/internal/handler/middleware"
+	"github.com/axe-cute/axe/pkg/apperror"
+	"github.com/axe-cute/axe/pkg/logger"
 )
 
 // UserHandler handles HTTP requests for the User domain.

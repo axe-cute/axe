@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/axe-go/axe/internal/handler/middleware"
-	"github.com/axe-go/axe/pkg/jwtauth"
+	"github.com/axe-cute/axe/internal/handler/middleware"
+	"github.com/axe-cute/axe/pkg/jwtauth"
 )
 
 func newJWTSvc() *jwtauth.Service {

@@ -26,12 +26,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/axe-go/axe/ent"
-	"github.com/axe-go/axe/internal/handler"
-	"github.com/axe-go/axe/internal/handler/middleware"
-	"github.com/axe-go/axe/internal/repository"
-	"github.com/axe-go/axe/internal/service"
-	"github.com/axe-go/axe/pkg/jwtauth"
+	"github.com/axe-cute/axe/ent"
+	"github.com/axe-cute/axe/internal/handler"
+	"github.com/axe-cute/axe/internal/handler/middleware"
+	"github.com/axe-cute/axe/internal/repository"
+	"github.com/axe-cute/axe/internal/service"
+	"github.com/axe-cute/axe/pkg/jwtauth"
 )
 
 // ── Suite ─────────────────────────────────────────────────────────────────────

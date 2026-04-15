@@ -11,8 +11,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/axe-go/axe/ent/predicate"
-	"github.com/axe-go/axe/ent/user"
+	"github.com/axe-cute/axe/ent/predicate"
+	"github.com/axe-cute/axe/ent/user"
 	"github.com/google/uuid"
 )
 
