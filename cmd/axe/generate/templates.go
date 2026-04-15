@@ -62,7 +62,7 @@ type Create{{.Name}}Input struct {
 // Update{{.Name}}Input holds optional fields for partial update.
 type Update{{.Name}}Input struct {
 {{- range .Fields}}
-	{{title .Name}} *{{.Type}}
+	{{title .Name}} *{{.Type}} {{bt}}json:"{{.NameSnake}},omitempty"{{bt}}
 {{- end}}
 }
 `
@@ -82,22 +82,48 @@ import (
 	"{{.Module}}/internal/domain"
 	"{{.Module}}/internal/handler/middleware"
 	"{{.Module}}/pkg/apperror"
+{{- if .WithAuth}}
+	"{{.Module}}/pkg/jwtauth"
+{{- end}}
 )
 
 // {{.Name}}Handler handles HTTP requests for the {{.Name}} domain.
 type {{.Name}}Handler struct {
 	svc domain.{{.Name}}Service
+{{- if .WithAuth}}
+	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	blocklist middleware.Blocklist
+{{- end}}
 }
 
 // New{{.Name}}Handler creates a new {{.Name}}Handler.
 func New{{.Name}}Handler(svc domain.{{.Name}}Service) *{{.Name}}Handler {
 	return &{{.Name}}Handler{svc: svc}
 }
+{{if .WithAuth}}
+// WithJWTAuth sets the JWT service and optional blocklist for route protection.
+// Call before registering routes:
+//
+//	h := handler.New{{.Name}}Handler(svc).WithJWTAuth(jwtSvc, cacheClient)
+func (h *{{.Name}}Handler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklist) *{{.Name}}Handler {
+	h.jwtSvc = svc
+	h.blocklist = bl
+	return h
+}
+{{end}}
 
 // Routes returns a Chi router with all {{.NameLower}} endpoints.
 // Register in main.go: r.Mount("/api/v1/{{.NamePlural}}", {{.NameLower}}Handler.Routes())
 func (h *{{.Name}}Handler) Routes() chi.Router {
 	r := chi.NewRouter()
+{{- if .WithAuth}}
+	// Authentication required for all {{.NameLower}} routes
+	r.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+{{- end}}
+{{- if .AdminOnly}}
+	// Admin-only access
+	r.Use(middleware.RequireRole("admin"))
+{{- end}}
 	r.Post("/", h.Create{{.Name}})
 	r.Get("/", h.List{{.Name}}s)
 	r.Get("/{id}", h.Get{{.Name}})
@@ -107,22 +133,20 @@ func (h *{{.Name}}Handler) Routes() chi.Router {
 }
 
 // create{{.Name}}Request is the POST request body.
-// TODO: add json struct tags after generation.
 type create{{.Name}}Request struct {
 {{- range .Fields}}
-	{{title .Name}} {{.Type}}
+	{{title .Name}} {{.Type}} {{bt}}json:"{{.NameSnake}}"{{bt}}
 {{- end}}
 }
 
 // {{.NameLower}}Response is the API response shape.
-// TODO: add json struct tags after generation.
 type {{.NameLower}}Response struct {
-	ID        string
+	ID        string {{bt}}json:"id"{{bt}}
 {{- range .Fields}}
-	{{title .Name}} {{.Type}}
+	{{title .Name}} {{.Type}} {{bt}}json:"{{.NameSnake}}"{{bt}}
 {{- end}}
-	CreatedAt string
-	UpdatedAt string
+	CreatedAt string {{bt}}json:"created_at"{{bt}}
+	UpdatedAt string {{bt}}json:"updated_at"{{bt}}
 }
 
 func to{{.Name}}Response(e *domain.{{.Name}}) *{{.NameLower}}Response {

@@ -98,9 +98,11 @@ type ResourceData struct {
 	BelongsTo  string // optional, e.g. "User" → adds UserID field
 	Module     string // go module path
 	Date       string
+	WithAuth   bool   // --with-auth: wrap routes with JWTAuth middleware
+	AdminOnly  bool   // --admin-only: further restrict to admin role only
 }
 
-func newResourceData(name string, fields []Field, belongsTo string) ResourceData {
+func newResourceData(name string, fields []Field, belongsTo string, withAuth, adminOnly bool) ResourceData {
 	module := readModuleName()
 	plural := name + "s"
 	if strings.HasSuffix(strings.ToLower(name), "s") {
@@ -115,6 +117,8 @@ func newResourceData(name string, fields []Field, belongsTo string) ResourceData
 		BelongsTo:  belongsTo,
 		Module:     module,
 		Date:       time.Now().Format("2006-01-02"),
+		WithAuth:   withAuth || adminOnly, // --admin-only implies --with-auth
+		AdminOnly:  adminOnly,
 	}
 }
 
@@ -123,12 +127,16 @@ func newResourceData(name string, fields []Field, belongsTo string) ResourceData
 func resourceCmd() *cobra.Command {
 	var fieldsFlag string
 	var belongsTo string
+	var withAuth bool
+	var adminOnly bool
 
 	cmd := &cobra.Command{
 		Use:   "resource <Name>",
 		Short: "Generate a full CRUD resource (domain + handler + service + repo + schema + SQL)",
 		Example: `  axe generate resource Post --fields="title:string,body:text,published:bool"
-  axe generate resource Comment --fields="body:text,score:int" --belongs-to=Post`,
+  axe generate resource Comment --fields="body:text,score:int" --belongs-to=Post
+  axe generate resource Order --fields="amount:float" --with-auth
+  axe generate resource Config --fields="key:string,value:text" --admin-only`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -142,13 +150,15 @@ func resourceCmd() *cobra.Command {
 				return err
 			}
 
-			data := newResourceData(name, fields, belongsTo)
+			data := newResourceData(name, fields, belongsTo, withAuth, adminOnly)
 			return generateResource(data)
 		},
 	}
 
 	cmd.Flags().StringVar(&fieldsFlag, "fields", "", `Field definitions: "name:type,..." (types: string, text, int, float, bool, uuid, time)`)
 	cmd.Flags().StringVar(&belongsTo, "belongs-to", "", "Parent entity name for foreign key relationship")
+	cmd.Flags().BoolVar(&withAuth, "with-auth", false, "Wrap all routes with JWTAuth middleware")
+	cmd.Flags().BoolVar(&adminOnly, "admin-only", false, "Restrict all routes to admin role (implies --with-auth)")
 	return cmd
 }
 
@@ -177,19 +187,38 @@ func generateResource(data ResourceData) error {
 		generated = append(generated, f.path)
 	}
 
+	authNote := ""
+	if data.WithAuth && data.AdminOnly {
+		authNote = " // ⚡ admin-only routes — WrappedWithJWTAuth + RequireRole(\"admin\")"
+	} else if data.WithAuth {
+		authNote = " // ⚡ protected routes — wrapped with JWTAuth middleware"
+	}
+
+	mountLine := fmt.Sprintf(`       %sHandler := handler.New%sHandler(%sSvc)
+       r.Mount("/api/v1/%s", %sHandler.Routes())%s`,
+		data.NameLower, data.Name, data.NameLower, data.NamePlural, data.NameLower, authNote)
+
 	fmt.Printf("\n✅ Generated %d files for resource %q:\n", len(generated), data.Name)
 	for _, g := range generated {
-		fmt.Printf("   ✦ %s\n", g)
+		fmt.Printf("   ❖ %s\n", g)
 	}
+
+	authFlag := ""
+	if data.AdminOnly {
+		authFlag = " --admin-only"
+	} else if data.WithAuth {
+		authFlag = " --with-auth"
+	}
+	_ = authFlag
+
 	fmt.Printf(`
 Next steps:
   1. Register route in cmd/api/main.go:
-       %sHandler := handler.New%sHandler(%sSvc)
-       r.Mount("/api/v1/%s", %sHandler.Routes())
+%s
   2. Run: go generate ./ent/...
   3. Run: make migrate-up
   4. Run: make test
-`, data.NameLower, data.Name, data.NameLower, data.NamePlural, data.NameLower)
+`, mountLine)
 
 	return nil
 }
@@ -210,6 +239,7 @@ func writeTemplate(path, tmplStr string, data ResourceData) error {
 		"lower": strings.ToLower,
 		"title": toTitle,
 		"snake": toSnake,
+		"bt":    bt, // backtick — templates can't contain literal backticks in raw strings
 	}).Parse(tmplStr)
 	if err != nil {
 		return fmt.Errorf("parse template: %w", err)
