@@ -321,6 +321,9 @@ sprint_log:
       - "Prometheus: axe_storage_upload_bytes_total, axe_storage_upload_errors_total, axe_storage_operations_total"
       - "config.go: STORAGE_BACKEND (local|juicefs), STORAGE_MOUNT_PATH, STORAGE_MAX_FILE_SIZE, STORAGE_URL_PREFIX"
       - "cmd/api/main.go: pluginApp.Use(storage.New(...)) + pluginApp.Start() + pluginApp.Shutdown()"
+      - "fix: chi {key:.*} only matches single path segment — switched to /* wildcard + extractKey() helper"
+      - "handler.go: removed chi.URLParam dependency, key extracted from URL path by stripping prefix"
+      - "README.md: full rewrite with all 17 features, 22 make commands, WebSocket/Storage/Plugin docs"
       - "25/25 tests PASS (-race): 12 plugin + 13 storage; go vet clean; go build clean; make test 0 FAIL"
 
   - sprint: 20

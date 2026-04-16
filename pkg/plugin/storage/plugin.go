@@ -47,8 +47,9 @@ func (p *Plugin) Register(_ context.Context, app *plugin.App) error {
 
 	app.Router.Route(p.cfg.URLPrefix, func(r chi.Router) {
 		r.Post("/", h.handleUpload)
-		r.Get("/{key:.*}", h.handleServe)
-		r.Delete("/{key:.*}", h.handleDelete)
+		// Use /* catch-all so keys with slashes (2026/04/16/uuid.ext) are matched.
+		r.Get("/*", h.handleServe)
+		r.Delete("/*", h.handleDelete)
 	})
 
 	p.log.Info("storage plugin registered",

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -96,7 +95,7 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 // handleServe handles GET /upload/{key} — serve file content.
 func (h *handler) handleServe(w http.ResponseWriter, r *http.Request) {
-	key := chi.URLParam(r, "key")
+	key := h.extractKey(r)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing file key")
 		return
@@ -129,7 +128,7 @@ func (h *handler) handleServe(w http.ResponseWriter, r *http.Request) {
 
 // handleDelete handles DELETE /upload/{key} — delete a file.
 func (h *handler) handleDelete(w http.ResponseWriter, r *http.Request) {
-	key := chi.URLParam(r, "key")
+	key := h.extractKey(r)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing file key")
 		return
@@ -177,4 +176,17 @@ func appendJSON(dst []byte, v any) []byte {
 	default:
 		return fmt.Appendf(dst, `{"error":"unknown type"}`)
 	}
+}
+
+// extractKey derives the storage key from the request URL by stripping the
+// configured URL prefix. This works with chi's /* catch-all pattern, which
+// is necessary because keys contain slashes (e.g. "2026/04/16/uuid.ext").
+func (h *handler) extractKey(r *http.Request) string {
+	prefix := h.cfg.URLPrefix + "/"
+	key := strings.TrimPrefix(r.URL.Path, prefix)
+	if key == r.URL.Path {
+		// Prefix didn't match — shouldn't happen if routing is correct
+		return ""
+	}
+	return key
 }
