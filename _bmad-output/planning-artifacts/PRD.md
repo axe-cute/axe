@@ -1,8 +1,9 @@
 # PRD — axe Go Web Framework
 
 **Status**: Approved  
-**Version**: 1.0  
-**Date**: 2026-04-15
+**Version**: 2.0  
+**Date**: 2026-04-16  
+**Changelog**: v2.0 — cập nhật Phase 2 (Epic 4-8), fix workflow, cập nhật Non-Goals
 
 ---
 
@@ -17,26 +18,30 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 **axe** cung cấp một nền tảng Go backend "không ma thuật" (no runtime magic) với:
 - Kiến trúc Clean Architecture baked-in, compiler-enforced
 - CLI generator tạo CRUD endpoint production-grade trong < 10 phút
+- `axe new` scaffold project hoàn chỉnh trong < 5 phút
 - Production-grade từ ngày đầu: transaction safety, observability, error handling
 
 ---
 
 ## Goals
 
-1. **Dev mới ship feature trong 1 ngày đầu** (clone → run → PR)
+1. **Dev mới ship feature trong 1 ngày đầu** (`axe new` → `make run` → PR)
 2. **CRUD endpoint đầy đủ trong < 10 phút** với `axe generate resource`
 3. **Zero runtime magic** — mọi behavior đều traceable tại compile-time
 4. **Full test suite chạy < 30 giây**
 5. **Production-ready từ Phase 1**: transaction, structured logging, error taxonomy
+6. **Multi-database support**: PostgreSQL, MySQL, SQLite (pluggable adapter interface)
+7. **Real-time ready**: WebSocket hub với room management, Redis pub/sub scale-out
+8. **Plugin ecosystem**: extend framework không cần fork core
 
 ---
 
 ## Non-Goals
 
 - Không build full-stack (chỉ backend API)
-- Không support database khác ngoài PostgreSQL (v1)
 - Không có admin UI riêng (dùng Asynqmon cho jobs)
 - Không distributed tracing phức tạp ở Phase 1
+- Không schema-per-tenant multi-tenancy ở v1.0 (chỉ tenant middleware)
 
 ---
 
@@ -54,26 +59,34 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 
 | Metric | Target |
 |---|---|
+| Tạo project mới (`axe new`) | ≤ 5 phút |
 | Tạo CRUD endpoint đầy đủ | ≤ 10 phút |
 | Run full test suite | ≤ 30 giây |
 | Hiểu 1 handler (linear read) | ≤ 5 phút |
 | Onboarding (new dev) | ≤ 1 ngày |
-| `make run` từ clone | ≤ 2 phút |
 
 ---
 
 ## Epics
 
-- **Epic 1**: Foundation — Hello World production-grade (4-6 tuần)
-- **Epic 2**: Developer Experience — axe CLI generator (3-4 tuần)
-- **Epic 3**: Production Hardening — observability, auth, cache, jobs (3-4 tuần)
+- **Epic 1**: Foundation — Hello World production-grade (Sprint 1–4) ✅
+- **Epic 2**: Developer Experience — axe CLI generator (Sprint 5–6) ✅
+- **Epic 3**: Production Hardening — observability, auth, cache, jobs (Sprint 7–9) ✅
+- **Epic 4**: Quality & API Polish — integration tests, rate limit, OpenAPI (Sprint 10–12) ✅
+- **Epic 5**: Multi-Database Support — PostgreSQL + MySQL + SQLite (Sprint 13–14) ✅
+- **Epic 6**: `axe new` — Project Scaffolding CLI (Sprint 15–16) ✅
+- **Epic 7**: WebSocket Hub — real-time support (Sprint 17–18) ✅
+- **Epic 8**: Plugin System & Ecosystem (Sprint 19–21) 🔄 In Progress
 
 ---
 
 ## Success Metrics
 
-- [ ] `make run` hoạt động sau `git clone` (< 2 phút)
-- [ ] User domain CRUD đầy đủ làm reference implementation
-- [ ] `axe generate resource Post` tạo đủ 10 files
+- [x] `axe new blog && cd blog && make setup && make run` hoạt động (< 5 phút)
+- [x] User domain CRUD đầy đủ làm reference implementation
+- [x] `axe generate resource Post` tạo đủ 10 files
 - [ ] Test coverage ≥ 80% cho handler + service layers
-- [ ] Zero forbidden imports trong internal/domain/
+- [x] Zero forbidden imports trong internal/domain/
+- [x] Multi-DB: PostgreSQL + MySQL + SQLite integration tests pass
+- [x] WebSocket hub hoạt động với Redis pub/sub
+- [x] Plugin system: `app.Use(plugin)` lifecycle hoạt động

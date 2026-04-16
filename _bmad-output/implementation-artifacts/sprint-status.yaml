@@ -327,11 +327,19 @@ sprint_log:
       - "25/25 tests PASS (-race): 12 plugin + 13 storage; go vet clean; go build clean; make test 0 FAIL"
 
   - sprint: 20
-    goal: "axe-plugin-email + Multi-tenancy foundation"
-    stories: [story-8.3, story-8.4]
+    goal: "Email Plugin + axe new CI test"
+    stories: [story-8.3, story-6.4]
     status: planned
+    notes: "Story 6.4 carried over from Sprint 16 (was skipped)"
 
   - sprint: 21
-    goal: "Plugin registry + ecosystem polish"
+    goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
+    stories: [story-8.4]
+    status: planned
+    notes: "Reduced scope: no schema-per-tenant (deferred to v2.0)"
+
+  - sprint: 22
+    goal: "Plugin discovery CLI + ADR cleanup + v1.0 polish"
     stories: [story-8.5]
     status: planned
+

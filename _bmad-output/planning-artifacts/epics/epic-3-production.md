@@ -1,9 +1,11 @@
 # Epic 3: Production Hardening
 
-**Status**: `todo`  
+**Status**: ✅ Done (Sprint 7–9)  
 **Goal**: Ready để deploy real workload  
 **Depends on**: Epic 1 + Epic 2 complete  
-**Estimated**: 3-4 tuần
+**Completed**: 2026-04-15  
+
+> ⚠️ Source of truth cho status: `sprint-status.yaml`
 
 ---
 

@@ -18,14 +18,14 @@
 **Goal**: `pkg/ws` package với Hub, Client, Room abstractions.
 
 **Acceptance Criteria**:
-- [ ] `pkg/ws/hub.go` — Hub quản lý connections, broadcast, rooms
-- [ ] `pkg/ws/client.go` — Client wraps `gorilla/websocket` connection
-- [ ] `pkg/ws/room.go` — Room = named group của clients
-- [ ] Hub.Broadcast(roomID, message) → tất cả clients trong room nhận message
-- [ ] Hub.Join(clientID, roomID) / Hub.Leave(clientID, roomID)
-- [ ] Hub.Presence(roomID) → list online users trong room
-- [ ] Graceful shutdown: drain pending messages trước khi close
-- [ ] Metrics: `ws_active_connections`, `ws_messages_total`
+- [x] `pkg/ws/hub.go` — Hub quản lý connections, broadcast, rooms
+- [x] `pkg/ws/client.go` — Client wraps `nhooyr.io/websocket` connection
+- [x] `pkg/ws/room.go` — Room = named group của clients
+- [x] Hub.Broadcast(roomID, message) → tất cả clients trong room nhận message
+- [x] Hub.Join(clientID, roomID) / Hub.Leave(clientID, roomID)
+- [x] Hub.Presence(roomID) → list online users trong room
+- [x] Graceful shutdown: drain pending messages trước khi close
+- [x] Metrics: `ws_active_connections`, `ws_messages_total`
 
 **API**:
 ```go
@@ -49,11 +49,11 @@ func (h *ChatHandler) Connect(w http.ResponseWriter, r *http.Request) {
 **Goal**: Scale WebSocket across multiple instances bằng Redis Pub/Sub.
 
 **Acceptance Criteria**:
-- [ ] `pkg/ws/redis_adapter.go` — Redis pub/sub backend cho Hub
-- [ ] Khi instance A broadcast → instance B cũng nhận và forward tới clients
-- [ ] `HUB_ADAPTER=redis` | `memory` (default) config
-- [ ] Integration test: 2 hubs connected qua Redis → cross-broadcast works
-- [ ] Graceful unsubscribe khi shutdown
+- [x] `pkg/ws/redis_adapter.go` — Redis pub/sub backend cho Hub
+- [x] Khi instance A broadcast → instance B cũng nhận và forward tới clients
+- [x] `HUB_ADAPTER=redis` | `memory` (default) config
+- [x] Integration test: 2 hubs connected qua Redis → cross-broadcast works
+- [x] Graceful unsubscribe khi shutdown
 
 ### Story 7.3 — WebSocket Middleware
 **Sprint**: 18 | **Priority**: P1
@@ -90,10 +90,10 @@ pkg/ws/
   metrics.go       ← Prometheus counters/gauges
 ```
 
-**Dependencies**: `github.com/gorilla/websocket`
+**Dependencies**: `nhooyr.io/websocket` (ADR-008: actively maintained, lighter than gorilla)
 
 ---
 
 ## Risks
-- gorilla/websocket không còn actively maintained → evaluate `nhooyr/websocket` (nhẹ hơn)
+- ~~gorilla/websocket không còn actively maintained~~ → Resolved: switched to `nhooyr.io/websocket`
 - Redis pub/sub thêm latency → document expected latency SLA

@@ -1,9 +1,11 @@
 # Epic 2: Developer Experience
 
-**Status**: `todo`  
+**Status**: ✅ Done (Sprint 5–6)  
 **Goal**: Dev mới có thể tạo feature trong 1 ngày  
 **Depends on**: Epic 1 complete  
-**Estimated**: 3-4 tuần
+**Completed**: 2026-04-15  
+
+> ⚠️ Source of truth cho status: `sprint-status.yaml`
 
 ---
 

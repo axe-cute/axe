@@ -4,9 +4,11 @@
 
 **Business Value**: Tăng addressable market — nhiều teams dùng MySQL (legacy), SQLite (testing/embedded).
 
-**Status**: `planned`
-
+**Status**: ✅ Done (Sprint 13–14)  
+**Completed**: 2026-04-15  
 **Priority**: P0
+
+> ⚠️ Source of truth cho status: `sprint-status.yaml`
 
 ---
 
@@ -43,7 +45,7 @@
 **Goal**: SQLite cho testing và embedded use cases (không cần Docker).
 
 **Acceptance Criteria**:
-- [ ] `pkg/db/sqlite/adapter.go` với `mattn/go-sqlite3`
+- [x] `pkg/db/sqlite/adapter.go` với `modernc.org/sqlite` (pure Go, CGO-free)
 - [ ] `make test` có thể chạy với `DB_DRIVER=sqlite` (không cần Postgres)
 - [ ] Testcontainers fallback: nếu Docker không available → SQLite
 - [ ] `axe generate resource` tạo SQLite-compatible migrations
@@ -72,7 +74,7 @@ pkg/db/
   mysql/
     adapter.go        ← go-sql-driver/mysql
   sqlite/
-    adapter.go        ← mattn/go-sqlite3 (dev/test only)
+    adapter.go        ← modernc.org/sqlite (pure Go, dev/test only)
 
 config/
   config.go           ← + DBDriver string

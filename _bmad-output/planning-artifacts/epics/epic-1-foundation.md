@@ -1,8 +1,10 @@
 # Epic 1: Foundation
 
-**Status**: In Progress  
+**Status**: ✅ Done (Sprint 1–4)  
 **Goal**: "Hello World" production-grade hoạt động end-to-end  
-**Estimated**: 4-6 tuần  
+**Completed**: 2026-04-15  
+
+> ⚠️ Source of truth cho status: `sprint-status.yaml`  
 
 ---
 

@@ -1,7 +1,7 @@
 # Architecture — axe Go Web Framework
 
 **Status**: Accepted  
-**Date**: 2026-04-15  
+**Date**: 2026-04-16 (v2 — Phase 2 updates)  
 **Supersedes**: `docs/architecture_contract.md` + `docs/data_consistency.md`
 
 ---
@@ -23,8 +23,11 @@
 - *Rejected*: GORM (runtime reflection, magic), sqlx (manual scanning)
 
 ### Database
-- **PostgreSQL** (pgx v5 driver) — production-grade, jsonb, advisory locks
-- **Redis** (go-redis v9) — cache + pubsub
+- **Pluggable adapter interface** (`pkg/db/adapter.go`)
+- **PostgreSQL** (pgx v5) — production default, jsonb, advisory locks
+- **MySQL** (go-sql-driver/mysql) — legacy system support
+- **SQLite** (modernc.org/sqlite, pure Go, CGO-free) — dev/test, no Docker needed
+- **Redis** (go-redis v9) — cache + pubsub + rate limiter + WS adapter
 
 ### Config
 - **Cleanenv** — cloud-native, env-var only, struct binding, validation
@@ -40,8 +43,9 @@
 - **Prometheus** — metrics endpoint `/metrics`
 
 ### DI & Codegen
-- **Wire** — compile-time DI, no runtime reflect
-- **go generate** orchestrates: Ent codegen + sqlc generate + Wire
+- **Manual wiring** trong `cmd/api/main.go` — explicit, traceable, no codegen overhead
+- **go generate** orchestrates: Ent codegen + sqlc generate
+- *Rejected*: Wire (overhead chưa justified ở scale hiện tại, manual wiring đủ explicit)
 
 ### Testing
 - **testify** — assertions + mocking
@@ -262,5 +266,10 @@ Coverage target: ≥ 80% cho handler + service.
 | ADR-001 | Chi over Gin/Echo | 2026-04-15 |
 | ADR-002 | Cleanenv over Viper | 2026-04-15 |
 | ADR-003 | Ent (writes) + sqlc (reads) shared pool | 2026-04-15 |
-| ADR-004 | Wire for DI (compile-time) | 2026-04-15 |
+| ADR-004 | Manual wiring over Wire (explicit DI, no codegen overhead) | 2026-04-16 |
 | ADR-005 | Outbox pattern for side effects | 2026-04-15 |
+| ADR-006 | Pluggable DB adapter interface (PostgreSQL + MySQL + SQLite) | 2026-04-15 |
+| ADR-007 | modernc.org/sqlite over mattn/go-sqlite3 (CGO-free, aligns with No-CGO rule) | 2026-04-15 |
+| ADR-008 | nhooyr.io/websocket over gorilla/websocket (actively maintained, lighter) | 2026-04-16 |
+| ADR-009 | Plugins in monorepo (pkg/plugin/*) — ship fast, split later when needed | 2026-04-16 |
+| ADR-010 | FSStore POSIX over S3 SDK — zero external deps, works with JuiceFS | 2026-04-16 |

@@ -1,7 +1,9 @@
 # Epic 4: Quality & API Polish
 
-**Status**: In Progress  
-**Sprint**: 10–12  
+**Status**: ✅ Done (Sprint 10–12)  
+**Completed**: 2026-04-15  
+
+> ⚠️ Source of truth cho status: `sprint-status.yaml`  
 **Goal**: Nâng chất lượng codebase từ "functional" lên "production-certifiable" — integration tests thực sự, API security hoàn chỉnh, developer tooling đầy đủ.
 
 ---

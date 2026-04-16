@@ -40,16 +40,19 @@
 
 ---
 
-## Quick Start (< 2 minutes)
+## Quick Start — New Project (< 5 minutes)
 
 **Prerequisites**: Go 1.22+, Docker
 
 ```bash
-# Clone
-git clone https://github.com/axe-cute/axe && cd axe
+# Install the CLI
+go install github.com/axe-cute/axe/cmd/axe@latest
+
+# Scaffold a new project
+axe new blog-api --module=github.com/you/blog-api
 
 # One-command setup (copies .env, starts Postgres + Redis, migrates, seeds)
-make setup
+cd blog-api && make setup
 
 # Run (hot-reload with air if installed)
 make run
@@ -62,19 +65,30 @@ curl http://localhost:8080/health
 # {"status":"ok","service":"axe"}
 ```
 
-### Scaffold a New Project
+### More scaffolding options
 
 ```bash
-# Build the CLI
-go build -o bin/axe ./cmd/axe
+# MySQL backend
+axe new shop --db=mysql --module=github.com/acme/shop
 
-# Create a new project (postgres, with worker + cache)
-./bin/axe new blog-api --module=github.com/acme/blog-api
+# Lightweight (SQLite, no worker, no cache — no Docker needed)
+axe new lite --db=sqlite --no-worker --no-cache --yes
 
-# Or lightweight (sqlite, no worker, no cache)
-./bin/axe new lite --db=sqlite --no-worker --no-cache --yes
+# Interactive wizard (prompts for all options)
+axe new
+```
 
-cd blog-api && make setup && make run
+---
+
+## Contributing — Framework Development
+
+```bash
+# Clone the framework repo
+git clone https://github.com/axe-cute/axe && cd axe
+
+# Setup and run
+make setup && make run
+# → http://localhost:8080
 ```
 
 ---
