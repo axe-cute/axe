@@ -496,6 +496,22 @@ func tmplMainAPIGo(data TemplateData) string {
 	// axe:wire:import
 `
 
+	// Add database driver import based on selected DB.
+	switch data.DB {
+	case "postgres", "":
+		imports += `
+	_ "github.com/jackc/pgx/v5/stdlib" // registers "pgx" driver for database/sql
+`
+	case "mysql":
+		imports += `
+	_ "github.com/go-sql-driver/mysql" // registers "mysql" driver for database/sql
+`
+	case "sqlite":
+		imports += `
+	_ "github.com/mattn/go-sqlite3" // registers "sqlite3" driver for database/sql
+`
+	}
+
 	cacheInit := ""
 	if data.WithCache {
 		cacheInit = `
@@ -556,6 +572,18 @@ func tmplMainAPIGo(data TemplateData) string {
 `
 	}
 
+	// Map database choice to sql.Open driver name and ent dialect.
+	sqlDriverName := "pgx"  // default for postgres
+	entDialect := "postgres"
+	switch data.DB {
+	case "mysql":
+		sqlDriverName = "mysql"
+		entDialect = "mysql"
+	case "sqlite":
+		sqlDriverName = "sqlite3"
+		entDialect = "sqlite3"
+	}
+
 	return fmt.Sprintf(`package main
 
 import (
@@ -581,7 +609,7 @@ func main() {
 	_ = log
 
 	// ── Database ─────────────────────────────────────────────────────────────
-	sqlDB, err := sql.Open(cfg.DBDriver, cfg.DatabaseURL)
+	sqlDB, err := sql.Open("%s", cfg.DatabaseURL)
 	if err != nil {
 		log.Error("database connection failed", "error", err)
 		os.Exit(1)
@@ -590,10 +618,10 @@ func main() {
 	sqlDB.SetMaxOpenConns(cfg.DatabaseMaxOpenConns)
 	sqlDB.SetMaxIdleConns(cfg.DatabaseMaxIdleConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.DatabaseConnMaxLifetimeMins) * time.Minute)
-	log.Info("database connected", "driver", cfg.DBDriver)
+	log.Info("database connected")
 
 	// ── Ent ORM client ──────────────────────────────────────────────────────
-	drv := entsql.OpenDB(cfg.DBDriver, sqlDB)
+	drv := entsql.OpenDB("%s", sqlDB)
 	entClient := ent.NewClient(ent.Driver(drv))
 	defer entClient.Close()
 
@@ -713,7 +741,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	_ = enc.Encode(v)
 }
-`, imports, data.Name, cacheInit, workerInit, workerStart, workerStop)
+`, imports, data.Name, cacheInit, workerInit, sqlDriverName, entDialect, workerStart, workerStop)
 }
 
 
