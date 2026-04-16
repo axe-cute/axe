@@ -35,6 +35,7 @@ import (
 	"github.com/axe-cute/axe/pkg/worker"
 	"github.com/axe-cute/axe/pkg/ws"
 	"github.com/redis/go-redis/v9"
+	// axe:wire:import
 )
 
 func main() {
@@ -144,6 +145,8 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	authHandler := handler.NewAuthHandler(userSvc, jwtSvc, cacheClient) // cacheClient implements TokenBlocker
 	docsHandler := handler.NewOpenAPIHandler()
+	// axe:wire:repo
+	// axe:wire:handler
 
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -176,6 +179,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTAuth(jwtSvc, cacheClient))
 			r.Mount("/users", userHandler.Routes())
+			// axe:wire:route
 		})
 	})
 
@@ -197,6 +201,7 @@ func main() {
 			_ = wsHub.Broadcast(r.Context(), "lobby", msg)
 		})
 	})
+	// axe:wire:ws-route
 
 	// ── Plugin System ────────────────────────────────────────────────────────
 	pluginApp := plugin.NewApp(plugin.AppConfig{

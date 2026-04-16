@@ -595,14 +595,15 @@ func main() {
 	restRouter.Use(metrics.Middleware)
 	restRouter.Use(chimiddleware.Compress(5))
 
+	// axe:wire:repo
+	// axe:wire:handler
+
 	restRouter.Get("/health", healthHandler)
 	restRouter.Handle("/metrics", metrics.Handler())
 
-	// TODO: Mount your REST handlers here after running: axe generate resource <Name>
-	// Example:
-	//   postSvc  := service.NewPostService(postRepo)
-	//   postHandler := handler.NewPostHandler(postSvc)
-	//   restRouter.Mount("/api/v1/posts", postHandler.Routes())
+	restRouter.Route("/api/v1", func(r chi.Router) {
+		// axe:wire:route
+	})
 
 	// ── WebSocket router (bare chi — NO response-wrapping middleware) ──────────
 	// Wrapping middleware (Logger, Compress, Recoverer) all break http.Hijacker.
@@ -610,10 +611,7 @@ func main() {
 	wsRouter := chi.NewRouter()
 	wsRouter.Use(chimiddleware.RequestID) // safe: does not wrap ResponseWriter
 
-	// TODO: Mount your WebSocket handlers here after running: axe generate resource <Name> --with-ws
-	// Example:
-	//   postWSHandler := handler.NewPostWSHandler(wsHub, wsTracker)
-	//   wsRouter.Mount("/ws/posts", postWSHandler.Routes())
+	// axe:wire:ws-route
 
 	// ── Top-level mux: routes /ws/* to wsRouter, everything else to restRouter ─
 	mux := http.NewServeMux()

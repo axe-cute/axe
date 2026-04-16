@@ -266,56 +266,43 @@ func generateResource(data ResourceData) error {
 		}
 	}
 
-	authNote := ""
-	if data.WithAuth && data.AdminOnly {
-		authNote = " // ⚡ admin-only routes — WrappedWithJWTAuth + RequireRole(\"admin\")"
-	} else if data.WithAuth {
-		authNote = " // ⚡ protected routes — wrapped with JWTAuth middleware"
-	}
-
-	mountLine := fmt.Sprintf(`       %sHandler := handler.New%sHandler(%sSvc)
-       r.Mount("/api/v1/%s", %sHandler.Routes())%s`,
-		data.NameLower, data.Name, data.NameLower, data.NamePlural, data.NameLower, authNote)
-
 	fmt.Printf("\n✅ Generated %d files for resource %q:\n", len(generated), data.Name)
 	for _, g := range generated {
 		fmt.Printf("   ❖ %s\n", g)
 	}
 
-	authFlag := ""
-	if data.AdminOnly {
-		authFlag = " --admin-only"
-	} else if data.WithAuth {
-		authFlag = " --with-auth"
+	// ── Auto-wire main.go ───────────────────────────────────────────────────
+	if err := wireMainGo(data); err != nil {
+		fmt.Printf("   ⚠️  Auto-wire failed: %v\n", err)
 	}
-	_ = authFlag
 
-	nextSteps := `
-Next steps:
-  1. Register route in cmd/api/main.go:
-%s
-  2. Run: go generate ./ent/...
-  3. Run: make migrate-up
-  4. Run: make test
-`
-	if data.WithWS {
-		nextSteps = `
-Next steps:
-  1. Register REST route in cmd/api/main.go:
-%s
-  2. Register WebSocket handler (needs *ws.Hub):
-       %sWSHandler := handler.New%sWSHandler(wsHub)
-       r.Mount("/ws/%s", %sWSHandler.Routes())
-  3. Run: go generate ./ent/...
-  4. Run: make migrate-up
-  5. Run: make test
-`
-		nextSteps = fmt.Sprintf(nextSteps, mountLine,
-			data.NameLower, data.Name, data.NamePlural, data.NameLower)
+	// ── Post-generate steps ─────────────────────────────────────────────────
+	goBin := goCommand()
+
+	fmt.Println("\n   ⏳ Running go generate ./ent/...")
+	genCmd := exec.Command(goBin, "generate", "./ent/...") //nolint:gosec
+	genCmd.Stdout = os.Stdout
+	genCmd.Stderr = os.Stderr
+	if err := genCmd.Run(); err != nil {
+		fmt.Printf("   ⚠️  go generate failed: %v\n", err)
+		fmt.Println("      Run `go generate ./ent/...` manually.")
 	} else {
-		nextSteps = fmt.Sprintf(nextSteps, mountLine)
+		fmt.Println("   ✓ Ent codegen complete")
 	}
-	fmt.Print(nextSteps)
+
+	fmt.Println("   ⏳ Running go mod tidy...")
+	tidyCmd := exec.Command(goBin, "mod", "tidy") //nolint:gosec
+	tidyCmd.Stdout = os.Stdout
+	tidyCmd.Stderr = os.Stderr
+	if err := tidyCmd.Run(); err != nil {
+		fmt.Printf("   ⚠️  go mod tidy failed: %v\n", err)
+	} else {
+		fmt.Println("   ✓ go.mod and go.sum updated")
+	}
+
+	fmt.Println("\n📋 Remaining manual step:")
+	fmt.Println("   make migrate-up    # apply the new migration (requires running database)")
+	fmt.Println("   make test          # run all tests")
 
 	return nil
 }
@@ -399,4 +386,127 @@ func readModuleName() string {
 		}
 	}
 	return "github.com/axe-cute/axe"
+}
+
+// goCommand returns the path to the Go binary.
+func goCommand() string {
+	if p, err := exec.LookPath("go"); err == nil {
+		return p
+	}
+	return "/usr/local/go/bin/go"
+}
+
+// ── Auto-wire main.go ─────────────────────────────────────────────────────────
+
+// wireMainGo reads cmd/api/main.go, finds marker comments (// axe:wire:*),
+// and injects wiring code for the generated resource. Idempotent — if the
+// handler is already wired, it skips. If markers are missing (old project),
+// it falls back gracefully without crashing.
+func wireMainGo(data ResourceData) error {
+	const mainPath = "cmd/api/main.go"
+
+	content, err := os.ReadFile(mainPath)
+	if err != nil {
+		fmt.Printf("   ℹ️  %s not found — skipping auto-wire\n", mainPath)
+		return nil
+	}
+
+	source := string(content)
+
+	// Idempotency: if this resource is already wired, skip.
+	handlerCheck := fmt.Sprintf("New%sHandler(", data.Name)
+	if strings.Contains(source, handlerCheck) {
+		fmt.Printf("\n   ℹ️  %s already wired in %s — skipping auto-wire\n", data.Name, mainPath)
+		return nil
+	}
+
+	// Verify markers exist.
+	requiredMarkers := []string{"// axe:wire:repo", "// axe:wire:handler", "// axe:wire:route"}
+	for _, m := range requiredMarkers {
+		if !strings.Contains(source, m) {
+			fmt.Printf("   ⚠️  Marker %q not found in %s — skipping auto-wire\n", m, mainPath)
+			printManualWiring(data)
+			return nil
+		}
+	}
+
+	lines := strings.Split(source, "\n")
+	var result []string
+
+	type injection struct {
+		lineNum int
+		code    string
+	}
+	var injections []injection
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Extract leading whitespace to match the project's indentation style.
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+
+		switch trimmed {
+		case "// axe:wire:repo":
+			repoLine := fmt.Sprintf("%s%sRepo := repository.New%sRepo(entClient)", indent, data.NameLower, data.Name)
+			svcLine := fmt.Sprintf("%s%sSvc := service.New%sService(%sRepo)", indent, data.NameLower, data.Name, data.NameLower)
+			result = append(result, repoLine, svcLine)
+			injections = append(injections,
+				injection{len(result) - 1, repoLine},
+				injection{len(result), svcLine},
+			)
+
+		case "// axe:wire:handler":
+			handlerLine := fmt.Sprintf("%s%sHandler := handler.New%sHandler(%sSvc)", indent, data.NameLower, data.Name, data.NameLower)
+			result = append(result, handlerLine)
+			injections = append(injections, injection{len(result), handlerLine})
+
+		case "// axe:wire:route":
+			routeLine := fmt.Sprintf("%sr.Mount(\"/api/v1/%s\", %sHandler.Routes())", indent, data.NamePlural, data.NameLower)
+			result = append(result, routeLine)
+			injections = append(injections, injection{len(result), routeLine})
+
+		case "// axe:wire:ws-route":
+			if data.WithWS {
+				wsHandlerLine := fmt.Sprintf("%s%sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)", indent, data.NameLower, data.Name)
+				wsMountLine := fmt.Sprintf("%sr.With(ws.WSAuth(jwtSvc, cacheClient, wsTracker, ws.WithMaxConnsPerUser(5))).Mount(\"/ws/%s\", %sWSHandler.Routes())", indent, data.NamePlural, data.NameLower)
+				result = append(result, wsHandlerLine, wsMountLine)
+				injections = append(injections,
+					injection{len(result) - 1, wsHandlerLine},
+					injection{len(result), wsMountLine},
+				)
+			}
+		}
+
+		result = append(result, line)
+	}
+
+	if len(injections) == 0 {
+		return nil
+	}
+
+	// Write modified file.
+	newContent := strings.Join(result, "\n")
+	if err := os.WriteFile(mainPath, []byte(newContent), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", mainPath, err)
+	}
+
+	fmt.Printf("\n   🔧 Auto-wired %s:\n", mainPath)
+	for _, inj := range injections {
+		fmt.Printf("      L%-4d + %s\n", inj.lineNum, strings.TrimSpace(inj.code))
+	}
+
+	return nil
+}
+
+// printManualWiring prints fallback manual wiring instructions when markers
+// are not found in main.go (e.g. older projects created before auto-wire).
+func printManualWiring(data ResourceData) {
+	fmt.Println("\n   Manual wiring required in cmd/api/main.go:")
+	fmt.Printf("      %sRepo := repository.New%sRepo(entClient)\n", data.NameLower, data.Name)
+	fmt.Printf("      %sSvc := service.New%sService(%sRepo)\n", data.NameLower, data.Name, data.NameLower)
+	fmt.Printf("      %sHandler := handler.New%sHandler(%sSvc)\n", data.NameLower, data.Name, data.NameLower)
+	fmt.Printf("      r.Mount(\"/api/v1/%s\", %sHandler.Routes())\n", data.NamePlural, data.NameLower)
+	if data.WithWS {
+		fmt.Printf("      %sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)\n", data.NameLower, data.Name)
+		fmt.Printf("      r.With(ws.WSAuth(...)).Mount(\"/ws/%s\", %sWSHandler.Routes())\n", data.NamePlural, data.NameLower)
+	}
 }
