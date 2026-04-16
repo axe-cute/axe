@@ -47,6 +47,12 @@ type Config struct {
 	AsynqQueueDefault   string `env:"ASYNQ_QUEUE_DEFAULT"   env-default:"default"`
 	AsynqQueueCritical  string `env:"ASYNQ_QUEUE_CRITICAL"  env-default:"critical"`
 
+	// WebSocket Hub
+	// HubAdapter selects the pub/sub backend for multi-instance WebSocket broadcasting.
+	// "memory" (default) is suitable for single-instance deployments.
+	// "redis" enables cross-instance broadcast via Redis Pub/Sub.
+	HubAdapter string `env:"HUB_ADAPTER" env-default:"memory"`
+
 	// Observability (optional)
 	OTELEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""`
 	OTELServiceName string `env:"OTEL_SERVICE_NAME"           env-default:"axe"`
@@ -138,6 +144,11 @@ func validate(cfg *Config) error {
 	validDrivers := map[string]bool{"postgres": true, "mysql": true, "sqlite3": true}
 	if !validDrivers[cfg.DBDriver] {
 		return fmt.Errorf("DB_DRIVER must be one of [postgres, mysql, sqlite3], got %q", cfg.DBDriver)
+	}
+
+	validHubAdapters := map[string]bool{"memory": true, "redis": true}
+	if !validHubAdapters[cfg.HubAdapter] {
+		return fmt.Errorf("HUB_ADAPTER must be one of [memory, redis], got %q", cfg.HubAdapter)
 	}
 
 	return nil

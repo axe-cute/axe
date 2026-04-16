@@ -4,7 +4,7 @@
 
 **Business Value**: Real-time features (chat, notifications, live dashboard) là requirement phổ biến. Hiện tại axe không có, user phải tự implement từ đầu.
 
-**Status**: `planned`
+**Status**: `in-progress` (Stories 7.1–7.4 implemented ✅)
 
 **Priority**: P1
 
@@ -61,10 +61,10 @@ func (h *ChatHandler) Connect(w http.ResponseWriter, r *http.Request) {
 **Goal**: Authentication + Rate limiting cho WebSocket connections.
 
 **Acceptance Criteria**:
-- [ ] WS connections yêu cầu JWT token (query param hoặc header)
-- [ ] Rate limit: max 5 connections per user
-- [ ] `ws_connect_rejected_total` Prometheus counter
-- [ ] Chi middleware: `r.Get("/ws", hub.Middleware(jwtSvc), chatHandler.Connect)`
+- [x] WS connections yêu cầu JWT token (query param hoặc header)
+- [x] Rate limit: max 5 connections per user
+- [x] `ws_connect_rejected_total` Prometheus counter
+- [x] Chi middleware: `r.Get("/ws", hub.Middleware(jwtSvc), chatHandler.Connect)`
 
 ### Story 7.4 — `axe generate resource --with-ws` Flag
 **Sprint**: 18 | **Priority**: P2
@@ -72,9 +72,9 @@ func (h *ChatHandler) Connect(w http.ResponseWriter, r *http.Request) {
 **Goal**: Generator tự động tạo WebSocket handler cùng REST handler.
 
 **Acceptance Criteria**:
-- [ ] `axe generate resource Chat --with-ws` → thêm `ChatWSHandler`
-- [ ] Generated handler có `Connect`, `Disconnect`, `OnMessage` stubs
-- [ ] Route registration comment bao gồm WebSocket endpoint
+- [x] `axe generate resource Chat --with-ws` → thêm `ChatWSHandler`
+- [x] Generated handler có `Connect`, `Disconnect`, `OnMessage` stubs
+- [x] Route registration comment bao gồm WebSocket endpoint
 
 ---
 

@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 # ─── Variables ────────────────────────────────────────────────────────────────
 BINARY_NAME  := axe
-MAIN_PATH    := ./cmd/api
+MAIN_PATH    := ./cmd/axe
 BIN_DIR      := ./bin
 GO           := $(shell which go 2>/dev/null || echo /usr/local/go/bin/go)
 GOFLAGS      :=
@@ -56,6 +56,14 @@ test-integration-mysql: ## Run MySQL integration tests (requires Docker)
 .PHONY: test-integration-sqlite
 test-integration-sqlite: ## Run SQLite integration tests (no Docker needed)
 	$(GO) test -tags=integration_sqlite ./tests/integration/sqlite/ -v -timeout 120s
+
+.PHONY: test-ws
+test-ws: ## Run WebSocket hub unit tests
+	$(GO) test ./tests/ws/... -v -run "TestHub" -timeout 30s
+
+.PHONY: test-ws-integration
+test-ws-integration: ## Run WebSocket Redis integration tests (requires Docker)
+	$(GO) test -tags=integration ./tests/ws/... -v -run "TestRedis" -timeout 60s
 
 # ─── Code Quality ─────────────────────────────────────────────────────────────
 .PHONY: lint

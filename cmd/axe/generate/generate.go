@@ -5,6 +5,7 @@ package generate
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
 	"time"
@@ -100,9 +101,10 @@ type ResourceData struct {
 	Date       string
 	WithAuth   bool   // --with-auth: wrap routes with JWTAuth middleware
 	AdminOnly  bool   // --admin-only: further restrict to admin role only
+	WithWS     bool   // --with-ws: add a WebSocket room endpoint
 }
 
-func newResourceData(name string, fields []Field, belongsTo string, withAuth, adminOnly bool) ResourceData {
+func newResourceData(name string, fields []Field, belongsTo string, withAuth, adminOnly, withWS bool) ResourceData {
 	module := readModuleName()
 	plural := name + "s"
 	if strings.HasSuffix(strings.ToLower(name), "s") {
@@ -119,6 +121,7 @@ func newResourceData(name string, fields []Field, belongsTo string, withAuth, ad
 		Date:       time.Now().Format("2006-01-02"),
 		WithAuth:   withAuth || adminOnly, // --admin-only implies --with-auth
 		AdminOnly:  adminOnly,
+		WithWS:     withWS,
 	}
 }
 
@@ -129,6 +132,7 @@ func resourceCmd() *cobra.Command {
 	var belongsTo string
 	var withAuth bool
 	var adminOnly bool
+	var withWS bool
 
 	cmd := &cobra.Command{
 		Use:   "resource <Name>",
@@ -150,7 +154,7 @@ func resourceCmd() *cobra.Command {
 				return err
 			}
 
-			data := newResourceData(name, fields, belongsTo, withAuth, adminOnly)
+			data := newResourceData(name, fields, belongsTo, withAuth, adminOnly, withWS)
 			return generateResource(data)
 		},
 	}
@@ -159,7 +163,68 @@ func resourceCmd() *cobra.Command {
 	cmd.Flags().StringVar(&belongsTo, "belongs-to", "", "Parent entity name for foreign key relationship")
 	cmd.Flags().BoolVar(&withAuth, "with-auth", false, "Wrap all routes with JWTAuth middleware")
 	cmd.Flags().BoolVar(&adminOnly, "admin-only", false, "Restrict all routes to admin role (implies --with-auth)")
+	cmd.Flags().BoolVar(&withWS, "with-ws", false, "Generate a WebSocket room handler (requires pkg/ws.Hub)")
 	return cmd
+}
+
+// scaffoldWSPackage writes all pkg/ws/ files into the current project and
+// ensures nhooyr.io/websocket is present in go.mod. Safe to call multiple
+// times — existing files are skipped.
+func scaffoldWSPackage(data ResourceData) error {
+	if err := os.MkdirAll("pkg/ws", 0o755); err != nil {
+		return fmt.Errorf("create pkg/ws dir: %w", err)
+	}
+
+	wsFiles := []struct {
+		path    string
+		tmplStr string
+	}{
+		{"pkg/ws/adapter.go", wsPkgAdapterTmpl},
+		{"pkg/ws/metrics.go", wsPkgMetricsTmpl},
+		{"pkg/ws/room.go", wsPkgRoomTmpl},
+		{"pkg/ws/client.go", wsPkgClientTmpl},
+		{"pkg/ws/hub.go", wsPkgHubTmpl},
+		{"pkg/ws/auth.go", wsPkgAuthTmpl},
+		{"pkg/ws/redis_adapter.go", wsPkgRedisAdapterTmpl},
+	}
+
+	for _, f := range wsFiles {
+		if _, err := os.Stat(f.path); err == nil {
+			// Already exists — skip to allow idempotent re-runs.
+			continue
+		}
+		if err := writeTemplate(f.path, f.tmplStr, data); err != nil {
+			return fmt.Errorf("scaffold pkg/ws: %w", err)
+		}
+		fmt.Printf("   ❖ %s\n", f.path)
+	}
+
+	// Ensure nhooyr.io/websocket is in go.mod.
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		// Fallback to well-known location on macOS/Linux.
+		goBin = "/usr/local/go/bin/go"
+	}
+
+	fmt.Println("\n   ⏳ Running go get nhooyr.io/websocket...")
+	getCmd := exec.Command(goBin, "get", "nhooyr.io/websocket") //nolint:gosec
+	getCmd.Stdout = os.Stdout
+	getCmd.Stderr = os.Stderr
+	if err := getCmd.Run(); err != nil {
+		fmt.Printf("   ⚠️  go get nhooyr.io/websocket failed: %v\n", err)
+		fmt.Println("      Run `go get nhooyr.io/websocket` manually inside the project.")
+	} else {
+		fmt.Println("   ⏳ Running go mod tidy...")
+		tidyCmd := exec.Command(goBin, "mod", "tidy") //nolint:gosec
+		tidyCmd.Stdout = os.Stdout
+		tidyCmd.Stderr = os.Stderr
+		if err := tidyCmd.Run(); err != nil {
+			fmt.Printf("   ⚠️  go mod tidy failed: %v\n", err)
+		} else {
+			fmt.Println("   ✓ go.mod and go.sum updated")
+		}
+	}
+	return nil
 }
 
 // generateResource writes all files for a new resource.
@@ -178,6 +243,12 @@ func generateResource(data ResourceData) error {
 		{fmt.Sprintf("db/queries/%s.sql", data.NameSnake), sqlQueryTmpl},
 		{migrationPath(data.NamePlural), migrationTmpl},
 	}
+	if data.WithWS {
+		files = append(files, struct {
+			path    string
+			tmplStr string
+		}{fmt.Sprintf("internal/handler/%s_ws_handler.go", data.NameSnake), wsHandlerTmpl})
+	}
 
 	generated := []string{}
 	for _, f := range files {
@@ -185,6 +256,14 @@ func generateResource(data ResourceData) error {
 			return fmt.Errorf("generate %s: %w", f.path, err)
 		}
 		generated = append(generated, f.path)
+	}
+
+	// Scaffold pkg/ws package if requested (idempotent).
+	if data.WithWS {
+		fmt.Println("\n   📦 Scaffolding pkg/ws/ (WebSocket hub + auth middleware)...")
+		if err := scaffoldWSPackage(data); err != nil {
+			fmt.Printf("   ⚠️  pkg/ws scaffold error: %v\n", err)
+		}
 	}
 
 	authNote := ""
@@ -211,14 +290,32 @@ func generateResource(data ResourceData) error {
 	}
 	_ = authFlag
 
-	fmt.Printf(`
+	nextSteps := `
 Next steps:
   1. Register route in cmd/api/main.go:
 %s
   2. Run: go generate ./ent/...
   3. Run: make migrate-up
   4. Run: make test
-`, mountLine)
+`
+	if data.WithWS {
+		nextSteps = `
+Next steps:
+  1. Register REST route in cmd/api/main.go:
+%s
+  2. Register WebSocket handler (needs *ws.Hub):
+       %sWSHandler := handler.New%sWSHandler(wsHub)
+       r.Mount("/ws/%s", %sWSHandler.Routes())
+  3. Run: go generate ./ent/...
+  4. Run: make migrate-up
+  5. Run: make test
+`
+		nextSteps = fmt.Sprintf(nextSteps, mountLine,
+			data.NameLower, data.Name, data.NamePlural, data.NameLower)
+	} else {
+		nextSteps = fmt.Sprintf(nextSteps, mountLine)
+	}
+	fmt.Print(nextSteps)
 
 	return nil
 }

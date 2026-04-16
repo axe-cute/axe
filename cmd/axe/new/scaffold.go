@@ -116,9 +116,26 @@ func scaffold(name, target string, opts Options) error {
 		generated++
 	}
 
+	// Write cmd/axe/main.go directly — bypasses renderAndWrite's template
+	// re-processing, because this file already contains {{.Name}} markers
+	// inside embedded Go template const strings.
+	axeMainPath := filepath.Join(target, "cmd/axe/main.go")
+	if err := os.MkdirAll(filepath.Dir(axeMainPath), 0o755); err != nil {
+		return fmt.Errorf("create cmd/axe: %w", err)
+	}
+	if err := os.WriteFile(axeMainPath, []byte(tmplMainAxeGo(data)), 0o644); err != nil {
+		return fmt.Errorf("write cmd/axe/main.go: %w", err)
+	}
+	fmt.Println("   ✓ cmd/axe/main.go")
+	generated++
+
 	// ── 3. Resolve dependencies (populate go.sum) ──────────────────────────────
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		goBin = "/usr/local/go/bin/go"
+	}
 	fmt.Println("\n   ⏳ Running go mod tidy...")
-	cmd := exec.Command("go", "mod", "tidy")
+	cmd := exec.Command(goBin, "mod", "tidy") //nolint:gosec
 	cmd.Dir = target
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -168,8 +185,8 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		// cmd/api
 		{"cmd/api/main.go", tmplMainAPIGo(data)},
 
-		// cmd/axe (the project's own CLI for migrate/generate)
-		{"cmd/axe/main.go", tmplMainAxeGo},
+		// cmd/axe (pre-rendered separately in scaffold() to avoid double-processing)
+		// {"cmd/axe/main.go", tmplMainAxeGo(data)},  ← written directly via os.WriteFile
 
 		// Pkg stubs — apperror
 		{"pkg/apperror/apperror.go", tmplApperror},
@@ -186,9 +203,14 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		// JWT stub
 		{"pkg/jwtauth/jwtauth.go", tmplJwtauth},
 
-		// Internal stubs
-		{"internal/domain/.gitkeep", ""},
-		{"internal/handler/middleware/.gitkeep", ""},
+		// Internal — domain shared types (Pagination, etc.)
+		{"internal/domain/pagination.go", tmplDomainPagination},
+
+		// Internal — middleware package (WriteError, WriteJSON, JWTAuth, RequireRole)
+		{"internal/handler/middleware/middleware.go", tmplMiddleware},
+		{"internal/handler/middleware/auth.go", tmplMiddlewareAuth},
+
+		// Empty stubs for directories that are filled in by `axe generate resource`
 		{"internal/repository/.gitkeep", ""},
 		{"internal/service/.gitkeep", ""},
 		{"ent/schema/.gitkeep", ""},

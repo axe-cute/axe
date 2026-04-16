@@ -1,8 +1,10 @@
 package new
 
 import (
+	_ "embed"
 	"fmt"
 	"strings"
+	"text/template"
 )
 
 
@@ -471,7 +473,8 @@ func tmplMainAPIGo(data TemplateData) string {
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"{{.Module}}/config"
-	"{{.Module}}/pkg/logger"`
+	"{{.Module}}/pkg/logger"
+	"{{.Module}}/pkg/ws"`
 
 	if data.WithCache {
 		imports += `
@@ -575,37 +578,64 @@ func main() {
 	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
 	_ = jwtSvc
 
-	// ── Router ────────────────────────────────────────────────────────────────
-	r := chi.NewRouter()
-	r.Use(chimiddleware.Recoverer)
-	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.Logger)
-	r.Use(metrics.Middleware)
-	r.Use(chimiddleware.Compress(5))
+	// ── WebSocket Hub ─────────────────────────────────────────────────────────
+	// Shared across all WebSocket handlers. Start the event loop before the server.
+	wsHub := ws.NewHub(ws.WithLogger(log))
+	wsTracker := ws.NewUserConnTracker()
+	_ = wsTracker
 
-	r.Get("/health", healthHandler)
-	r.Handle("/metrics", metrics.Handler())
+	// ── REST router (chi with full middleware stack) ───────────────────────────
+	// NOTE: chimiddleware.Compress wraps http.ResponseWriter and strips
+	// http.Hijacker, which nhooyr.io/websocket requires for the WS upgrade.
+	// Keep Compress ONLY on the REST router; never add it to the WS router.
+	restRouter := chi.NewRouter()
+	restRouter.Use(chimiddleware.Recoverer)
+	restRouter.Use(chimiddleware.RequestID)
+	restRouter.Use(chimiddleware.Logger)
+	restRouter.Use(metrics.Middleware)
+	restRouter.Use(chimiddleware.Compress(5))
 
-	// TODO: Mount your resource handlers here.
-	// Example after running: axe generate resource Post --fields="title:string,body:text"
+	restRouter.Get("/health", healthHandler)
+	restRouter.Handle("/metrics", metrics.Handler())
+
+	// TODO: Mount your REST handlers here after running: axe generate resource <Name>
+	// Example:
+	//   postSvc  := service.NewPostService(postRepo)
 	//   postHandler := handler.NewPostHandler(postSvc)
-	//   r.Mount("/api/v1/posts", postHandler.Routes())
+	//   restRouter.Mount("/api/v1/posts", postHandler.Routes())
+
+	// ── WebSocket router (bare chi — NO response-wrapping middleware) ──────────
+	// Wrapping middleware (Logger, Compress, Recoverer) all break http.Hijacker.
+	// Only add non-wrapping middleware here (e.g. ws.WSAuth).
+	wsRouter := chi.NewRouter()
+	wsRouter.Use(chimiddleware.RequestID) // safe: does not wrap ResponseWriter
+
+	// TODO: Mount your WebSocket handlers here after running: axe generate resource <Name> --with-ws
+	// Example:
+	//   postWSHandler := handler.NewPostWSHandler(wsHub, wsTracker)
+	//   wsRouter.Mount("/ws/posts", postWSHandler.Routes())
+
+	// ── Top-level mux: routes /ws/* to wsRouter, everything else to restRouter ─
+	mux := http.NewServeMux()
+	mux.Handle("/ws/", wsRouter)
+	mux.Handle("/", restRouter)
 
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%%d", cfg.ServerPort),
-		Handler:      r,
+		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		WriteTimeout: 0,  // MUST be 0 to support WebSocket connections
+		IdleTimeout:  120 * time.Second,
 	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	ctx, cancelBg := context.WithCancel(context.Background())
-	_ = ctx
-	_ = cancelBg
+	bgCtx, cancelBg := context.WithCancel(context.Background())
+
+	// Start Hub event loop
+	go wsHub.Run(bgCtx)
 %s
 	go func() {
 		log.Info("server listening", "addr", srv.Addr)
@@ -619,6 +649,7 @@ func main() {
 	log.Info("shutdown signal received — draining...")
 
 	cancelBg()
+	wsHub.Shutdown()
 %s
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -646,7 +677,6 @@ func readyHandler(sqlDB *sql.DB) http.HandlerFunc {
 		} else {
 			resp["db"] = "ok"
 		}
-		// TODO: add cache readiness check if using Redis.
 
 		status := http.StatusOK
 		if resp["status"] == "degraded" {
@@ -664,6 +694,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 `, imports, data.Name, cacheInit, workerInit, workerStart, workerStop)
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Static templates (identical for all projects)
@@ -788,330 +819,42 @@ clean: ## Remove build artifacts
 	@echo "✅ Cleaned"
 `
 
-const tmplMainAxeGo = `// {{.Name}} CLI — Developer tooling.
-//
-// Usage:
-//
-//	go run ./cmd/axe migrate up / down / status / create <name>
-//	go run ./cmd/axe version
-package main
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"time"
+//go:embed tmpl/cmd_axe_main.go.tmpl
+var cmdAxeMainTmpl string
 
-	"github.com/jackc/pgx/v5"
-	"github.com/spf13/cobra"
-)
-
-var version = "0.1.0"
-
-const migrationsDir = "db/migrations"
-
-func main() {
-	root := &cobra.Command{
-		Use:           "axe",
-		Short:         "{{.Name}} CLI — database tooling",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-	}
-
-	root.AddCommand(versionCmd(), migrateCmd())
-
-	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
-	}
-}
-
-func versionCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print CLI version",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("{{.Name}} cli version %s\n", version)
+// tmplMainAxeGo renders the cmd/axe/main.go for the generated project using
+// the embedded template file (tmpl/cmd_axe_main.go.tmpl).
+// Custom delimiters [[ ]] are used so inner {{ }} Go template markers in the
+// const resource template strings are NOT processed by the outer engine.
+func tmplMainAxeGo(data TemplateData) string {
+	funcMap := template.FuncMap{
+		"lower": strings.ToLower,
+		"title": func(s string) string {
+			if s == "" { return s }
+			return strings.ToUpper(s[:1]) + s[1:]
 		},
-	}
-}
-
-// ── migrate ──────────────────────────────────────────────────────────────────
-
-func migrateCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "migrate",
-		Short: "Database migration commands",
-	}
-	cmd.AddCommand(migrateCreateCmd(), migrateUpCmd(), migrateDownCmd(), migrateStatusCmd())
-	return cmd
-}
-
-func migrateCreateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "create <name>",
-		Short: "Create a new timestamped migration file",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			name := strings.ToLower(strings.ReplaceAll(args[0], " ", "_"))
-			ts := time.Now().Format("20060102150405")
-			filename := fmt.Sprintf("%s_%s.sql", ts, name)
-			path := filepath.Join(migrationsDir, filename)
-			content := fmt.Sprintf(
-				"-- Migration: %s\n-- Description: %s\n-- Created: %s\n\n-- +migrate Up\n\n\n-- +migrate Down\n\n",
-				filename, name, time.Now().Format("2006-01-02"),
-			)
-			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-				return fmt.Errorf("create migration: %w", err)
+		"snake": func(s string) string {
+			var b strings.Builder
+			for i, r := range s {
+				if r >= 'A' && r <= 'Z' && i > 0 { b.WriteByte('_') }
+				if r >= 'A' && r <= 'Z' { b.WriteByte(byte(r + 32)) } else { b.WriteRune(r) }
 			}
-			fmt.Printf("✅ Created migration: %s\n", path)
-			return nil
+			return b.String()
 		},
+		"bt": func() string { return "`" },
 	}
+	t := template.Must(template.New("cmd_axe_main").
+		Funcs(funcMap).
+		Delims("[[", "]]").
+		Parse(cmdAxeMainTmpl))
+	var buf strings.Builder
+	if err := t.Execute(&buf, data); err != nil {
+		panic("tmplMainAxeGo: " + err.Error())
+	}
+	return buf.String()
 }
 
-func migrateUpCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "up",
-		Short: "Apply all pending migrations",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			conn, err := openDB(ctx)
-			if err != nil {
-				return err
-			}
-			defer conn.Close(ctx)
-
-			if err := ensureMigrationsTable(ctx, conn); err != nil {
-				return err
-			}
-			files, err := pendingMigrations(ctx, conn)
-			if err != nil {
-				return err
-			}
-			if len(files) == 0 {
-				fmt.Println("✅ No pending migrations.")
-				return nil
-			}
-			for _, f := range files {
-				if err := applyMigration(ctx, conn, f); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}
-}
-
-func migrateDownCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "down",
-		Short: "Remove the last applied migration record (does not reverse SQL)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			conn, err := openDB(ctx)
-			if err != nil {
-				return err
-			}
-			defer conn.Close(ctx)
-
-			if err := ensureMigrationsTable(ctx, conn); err != nil {
-				return err
-			}
-			var last string
-			err = conn.QueryRow(ctx,
-				` + "`" + `SELECT filename FROM schema_migrations ORDER BY applied_at DESC LIMIT 1` + "`" + `,
-			).Scan(&last)
-			if err == pgx.ErrNoRows {
-				fmt.Println("⚠️  No applied migrations to roll back.")
-				return nil
-			}
-			if err != nil {
-				return fmt.Errorf("query last migration: %w", err)
-			}
-			_, err = conn.Exec(ctx,
-				` + "`" + `DELETE FROM schema_migrations WHERE filename = $1` + "`" + `, last,
-			)
-			if err != nil {
-				return fmt.Errorf("remove migration record: %w", err)
-			}
-			fmt.Printf("↩️  Removed migration record: %s\n", last)
-			fmt.Println("   SQL was NOT reversed. Write a new migration or run manually.")
-			return nil
-		},
-	}
-}
-
-func migrateStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show migration status",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			conn, err := openDB(ctx)
-			if err != nil {
-				return err
-			}
-			defer conn.Close(ctx)
-
-			if err := ensureMigrationsTable(ctx, conn); err != nil {
-				return err
-			}
-			applied, err := appliedMigrations(ctx, conn)
-			if err != nil {
-				return err
-			}
-			files, err := sqlFiles()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("%-55s  %s\n", "MIGRATION", "STATUS")
-			fmt.Println(strings.Repeat("─", 70))
-			for _, f := range files {
-				status := "pending"
-				if _, ok := applied[f]; ok {
-					status = "applied"
-				}
-				fmt.Printf("%-55s  %s\n", f, status)
-			}
-			return nil
-		},
-	}
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-func openDB(ctx context.Context) (*pgx.Conn, error) {
-	loadDotEnv(".env")
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_URL is not set (check your .env file)")
-	}
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		return nil, fmt.Errorf("connect to database: %w", err)
-	}
-	return conn, nil
-}
-
-func loadDotEnv(path string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-		if idx := strings.Index(v, " #"); idx != -1 {
-			v = strings.TrimSpace(v[:idx])
-		}
-		if os.Getenv(k) == "" {
-			_ = os.Setenv(k, v)
-		}
-	}
-}
-
-func ensureMigrationsTable(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, ` + "`" + `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			filename   TEXT        PRIMARY KEY,
-			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	` + "`" + `)
-	if err != nil {
-		return fmt.Errorf("ensure schema_migrations table: %w", err)
-	}
-	return nil
-}
-
-func appliedMigrations(ctx context.Context, conn *pgx.Conn) (map[string]struct{}, error) {
-	rows, err := conn.Query(ctx, ` + "`" + `SELECT filename FROM schema_migrations` + "`" + `)
-	if err != nil {
-		return nil, fmt.Errorf("query applied migrations: %w", err)
-	}
-	defer rows.Close()
-	applied := make(map[string]struct{})
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		applied[name] = struct{}{}
-	}
-	return applied, rows.Err()
-}
-
-func sqlFiles() ([]string, error) {
-	entries, err := os.ReadDir(migrationsDir)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", migrationsDir, err)
-	}
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
-			files = append(files, e.Name())
-		}
-	}
-	sort.Strings(files)
-	return files, nil
-}
-
-func pendingMigrations(ctx context.Context, conn *pgx.Conn) ([]string, error) {
-	applied, err := appliedMigrations(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
-	all, err := sqlFiles()
-	if err != nil {
-		return nil, err
-	}
-	var pending []string
-	for _, f := range all {
-		if _, ok := applied[f]; !ok {
-			pending = append(pending, f)
-		}
-	}
-	return pending, nil
-}
-
-func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error {
-	path := filepath.Join(migrationsDir, filename)
-	sql, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read migration %s: %w", filename, err)
-	}
-	fmt.Printf("→ Applying %s ... ", filename)
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-	if _, err := tx.Exec(ctx, string(sql)); err != nil {
-		return fmt.Errorf("\n  ❌ migration %s failed: %w", filename, err)
-	}
-	if _, err := tx.Exec(ctx,
-		` + "`" + `INSERT INTO schema_migrations (filename) VALUES ($1)` + "`" + `, filename,
-	); err != nil {
-		return fmt.Errorf("record migration %s: %w", filename, err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit migration %s: %w", filename, err)
-	}
-	fmt.Println("✅")
-	return nil
-}
-`
 
 const tmplConfigGo = `// Package config loads application configuration from environment variables.
 package config
@@ -1252,7 +995,7 @@ paths:
 // Package stubs — minimal but compilable
 // ─────────────────────────────────────────────────────────────────────────────
 
-const tmplApperror = `// Package apperror defines domain-level error types for {{.Name}}.
+const tmplApperror = `// Package apperror defines domain-level error types and sentinel errors.
 package apperror
 
 import (
@@ -1263,70 +1006,103 @@ import (
 
 // AppError is a structured application error with an HTTP status code.
 type AppError struct {
-	Code    int
-	Message string
-	Err     error
+	HTTPStatus int
+	Code       string
+	Message    string
+	Cause      error
 }
 
 func (e *AppError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Err)
+	if e.Cause != nil {
+		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
 	}
 	return e.Message
 }
 
-func (e *AppError) Unwrap() error { return e.Err }
+func (e *AppError) Unwrap() error { return e.Cause }
 
-// Common constructors.
-func NotFound(resource string) *AppError {
-	return &AppError{Code: http.StatusNotFound, Message: resource + " not found"}
+// WithMessage returns a copy of the error with a new message.
+func (e *AppError) WithMessage(msg string) *AppError {
+	clone := *e
+	clone.Message = msg
+	return &clone
 }
 
-func BadRequest(msg string) *AppError {
-	return &AppError{Code: http.StatusBadRequest, Message: msg}
+// WithCause returns a copy of the error with a wrapped cause.
+func (e *AppError) WithCause(err error) *AppError {
+	clone := *e
+	clone.Cause = err
+	return &clone
 }
 
-func Unauthorized(msg string) *AppError {
-	return &AppError{Code: http.StatusUnauthorized, Message: msg}
-}
+// Sentinel errors — use these in handlers and services.
+var (
+	ErrNotFound     = &AppError{HTTPStatus: http.StatusNotFound, Code: "NOT_FOUND", Message: "resource not found"}
+	ErrInvalidInput = &AppError{HTTPStatus: http.StatusBadRequest, Code: "INVALID_INPUT", Message: "invalid input"}
+	ErrUnauthorized = &AppError{HTTPStatus: http.StatusUnauthorized, Code: "UNAUTHORIZED", Message: "unauthorized"}
+	ErrForbidden    = &AppError{HTTPStatus: http.StatusForbidden, Code: "FORBIDDEN", Message: "forbidden"}
+	ErrConflict     = &AppError{HTTPStatus: http.StatusConflict, Code: "CONFLICT", Message: "conflict"}
+	ErrInternal     = &AppError{HTTPStatus: http.StatusInternalServerError, Code: "INTERNAL_ERROR", Message: "internal server error"}
+)
 
-func Forbidden(msg string) *AppError {
-	return &AppError{Code: http.StatusForbidden, Message: msg}
-}
-
-func Internal(err error) *AppError {
-	return &AppError{Code: http.StatusInternalServerError, Message: "internal server error", Err: err}
-}
-
-// IsNotFound returns true if err is a 404 AppError.
+// IsNotFound reports whether err is a 404 AppError.
 func IsNotFound(err error) bool {
 	var ae *AppError
-	return errors.As(err, &ae) && ae.Code == http.StatusNotFound
+	return errors.As(err, &ae) && ae.HTTPStatus == http.StatusNotFound
 }
 `
 
-const tmplLogger = `// Package logger provides a structured slog-based logger for {{.Name}}.
+const tmplLogger = `// Package logger provides a context-aware structured slog logger.
 package logger
 
 import (
+	"context"
 	"log/slog"
 	"os"
 )
 
-// New returns a structured *slog.Logger configured for the given environment.
-// In production it uses JSON format; otherwise human-readable text.
+type contextKey string
+
+const (
+	loggerKey    contextKey = "logger"
+	requestIDKey contextKey = "request_id"
+)
+
+// New returns a *slog.Logger for the given environment (production=JSON, else text).
 func New(env string) *slog.Logger {
-	var handler slog.Handler
-
 	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
-
+	var h slog.Handler
 	if env == "production" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		h = slog.NewJSONHandler(os.Stdout, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		h = slog.NewTextHandler(os.Stdout, opts)
 	}
+	return slog.New(h)
+}
 
-	return slog.New(handler)
+// WithLogger stores a logger in ctx.
+func WithLogger(ctx context.Context, l *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey, l)
+}
+
+// FromCtx retrieves the logger from ctx, falling back to slog.Default().
+func FromCtx(ctx context.Context) *slog.Logger {
+	if l, ok := ctx.Value(loggerKey).(*slog.Logger); ok && l != nil {
+		return l
+	}
+	return slog.Default()
+}
+
+// WithRequestID stores a request ID and adds it to the logger in ctx.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	l := FromCtx(ctx).With("request_id", id)
+	ctx = context.WithValue(ctx, requestIDKey, id)
+	return WithLogger(ctx, l)
+}
+
+// WithFields returns a ctx with additional slog attributes attached to the logger.
+func WithFields(ctx context.Context, args ...any) context.Context {
+	return WithLogger(ctx, FromCtx(ctx).With(args...))
 }
 `
 
@@ -1428,28 +1204,41 @@ func (m *Manager) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 }
 `
 
-const tmplJwtauth = `// Package jwtauth provides JWT creation and validation for {{.Name}}.
+const tmplJwtauth = `// Package jwtauth provides JWT token generation and validation.
 package jwtauth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
-// Service handles JWT operations.
+// Claims extends jwt.RegisteredClaims with application-specific fields.
+type Claims struct {
+	UserID string ` + "`" + `json:"uid"` + "`" + `
+	Role   string ` + "`" + `json:"role"` + "`" + `
+	jwt.RegisteredClaims
+}
+
+// JTI returns the JWT ID claim (used as blocklist key for revocation).
+func (c *Claims) JTI() string { return c.RegisteredClaims.ID }
+
+// RemainingTTL returns how long until the token expires.
+func (c *Claims) RemainingTTL() time.Duration {
+	if c.ExpiresAt == nil { return 0 }
+	if ttl := time.Until(c.ExpiresAt.Time); ttl > 0 { return ttl }
+	return 0
+}
+
+// Service handles token generation and validation.
 type Service struct {
 	secret     []byte
 	accessTTL  time.Duration
 	refreshTTL time.Duration
-}
-
-// Claims represents JWT claim payload.
-type Claims struct {
-	UserID string ` + "`" + `json:"sub"` + "`" + `
-	Role   string ` + "`" + `json:"role"` + "`" + `
-	jwt.RegisteredClaims
+	issuer     string
 }
 
 // New creates a new JWT Service.
@@ -1458,29 +1247,45 @@ func New(secret string, accessTTL, refreshTTL time.Duration) *Service {
 		secret:     []byte(secret),
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
+		issuer:     "axe",
 	}
 }
 
-// SignAccess signs a new access token for the given user.
-func (s *Service) SignAccess(userID, role string) (string, error) {
-	claims := Claims{
-		UserID: userID,
-		Role:   role,
+// TokenPair holds access and refresh tokens.
+type TokenPair struct {
+	AccessToken  string ` + "`" + `json:"access_token"` + "`" + `
+	RefreshToken string ` + "`" + `json:"refresh_token"` + "`" + `
+	ExpiresIn    int64  ` + "`" + `json:"expires_in"` + "`" + `
+}
+
+// GenerateTokenPair mints a fresh access + refresh token pair.
+func (s *Service) GenerateTokenPair(userID uuid.UUID, role string) (*TokenPair, error) {
+	now := time.Now()
+	accessClaims := Claims{
+		UserID: userID.String(), Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessTTL)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID: uuid.New().String(), Issuer: s.issuer, Subject: userID.String(),
+			IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTTL)),
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(s.secret)
-	if err != nil {
-		return "", fmt.Errorf("sign access token: %w", err)
+	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(s.secret)
+	if err != nil { return nil, fmt.Errorf("jwtauth: sign access: %w", err) }
+
+	refreshClaims := Claims{
+		UserID: userID.String(), Role: role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID: uuid.New().String(), Issuer: s.issuer, Subject: userID.String(),
+			IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshTTL)),
+		},
 	}
-	return signed, nil
+	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(s.secret)
+	if err != nil { return nil, fmt.Errorf("jwtauth: sign refresh: %w", err) }
+
+	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(s.accessTTL.Seconds())}, nil
 }
 
-// Verify parses and validates a JWT token string.
-func (s *Service) Verify(tokenStr string) (*Claims, error) {
+// Validate parses and validates a token string, returning its Claims.
+func (s *Service) Validate(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -1488,14 +1293,19 @@ func (s *Service) Verify(tokenStr string) (*Claims, error) {
 		return s.secret, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("verify token: %w", err)
+		if errors.Is(err, jwt.ErrTokenExpired) { return nil, ErrTokenExpired }
+		return nil, ErrTokenInvalid
 	}
 	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid token")
-	}
+	if !ok || !token.Valid { return nil, ErrTokenInvalid }
 	return claims, nil
 }
+
+var (
+	ErrTokenExpired = errors.New("token expired")
+	ErrTokenInvalid = errors.New("token invalid")
+	ErrTokenRevoked = errors.New("token revoked")
+)
 `
 
 const tmplCache = `// Package cache provides a Redis-backed cache client for {{.Name}}.
@@ -1691,3 +1501,247 @@ func renderInlineTemplate(t string, data TemplateData) string {
 	)
 	return r.Replace(t)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// internal/domain/pagination.go
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tmplDomainPagination = `package domain
+
+import "errors"
+
+// Pagination holds offset-based pagination parameters.
+type Pagination struct {
+	Limit  int
+	Offset int
+}
+
+// DefaultPagination returns sensible defaults (20 items, offset 0).
+func DefaultPagination() Pagination { return Pagination{Limit: 20, Offset: 0} }
+
+// Validate checks that pagination values are within allowed bounds.
+func (p Pagination) Validate() error {
+	if p.Limit < 1 || p.Limit > 100 {
+		return errors.New("limit must be between 1 and 100")
+	}
+	if p.Offset < 0 {
+		return errors.New("offset must be non-negative")
+	}
+	return nil
+}
+`
+
+// ─────────────────────────────────────────────────────────────────────────────
+// internal/handler/middleware/middleware.go
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tmplMiddleware = `// Package middleware provides HTTP middleware (WriteError, WriteJSON, Logger).
+package middleware
+
+import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"runtime/debug"
+	"time"
+
+	"{{.Module}}/pkg/apperror"
+	"{{.Module}}/pkg/logger"
+	"github.com/google/uuid"
+)
+
+func RequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			id = uuid.New().String()
+		}
+		w.Header().Set("X-Request-ID", id)
+		next.ServeHTTP(w, r.WithContext(logger.WithRequestID(r.Context(), id)))
+	})
+}
+
+type rw struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func wrap(w http.ResponseWriter) *rw { return &rw{ResponseWriter: w} }
+func (r *rw) Status() int {
+	if r.status == 0 {
+		return 200
+	}
+	return r.status
+}
+func (r *rw) WriteHeader(code int) {
+	if !r.wroteHeader {
+		r.status = code
+		r.wroteHeader = true
+		r.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		wrapped := wrap(w)
+		defer func() {
+			logger.FromCtx(r.Context()).Info("request",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.Int("status", wrapped.Status()),
+				slog.Duration("latency", time.Since(start)),
+			)
+		}()
+		next.ServeHTTP(wrapped, r)
+	})
+}
+
+func Recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.FromCtx(r.Context()).Error("panic",
+					slog.Any("panic", rec),
+					slog.String("stack", string(debug.Stack())),
+				)
+				writeError(w, apperror.ErrInternal)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+type errorResponse struct {
+	Code    string ` + "`" + `json:"code"` + "`" + `
+	Message string ` + "`" + `json:"message"` + "`" + `
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	var appErr *apperror.AppError
+	if errors.As(err, &appErr) {
+		writeError(w, appErr)
+		return
+	}
+	writeError(w, apperror.ErrInternal)
+}
+
+func writeError(w http.ResponseWriter, appErr *apperror.AppError) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(appErr.HTTPStatus)
+	_ = json.NewEncoder(w).Encode(errorResponse{Code: appErr.Code, Message: appErr.Message})
+}
+
+func WriteJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+`
+
+// ─────────────────────────────────────────────────────────────────────────────
+// internal/handler/middleware/auth.go
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tmplMiddlewareAuth = `package middleware
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"{{.Module}}/pkg/apperror"
+	"{{.Module}}/pkg/jwtauth"
+	"{{.Module}}/pkg/logger"
+)
+
+type Blocklist interface {
+	BlockToken(ctx context.Context, jti string, ttl time.Duration) error
+	IsTokenBlocked(ctx context.Context, jti string) (bool, error)
+}
+
+type contextKey string
+
+const claimsKey contextKey = "jwt_claims"
+
+func ClaimsFromCtx(ctx context.Context) *jwtauth.Claims {
+	v, _ := ctx.Value(claimsKey).(*jwtauth.Claims)
+	return v
+}
+
+func JWTAuth(svc *jwtauth.Service, blocklist Blocklist) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromCtx(r.Context())
+			token := extractBearerToken(r)
+			if token == "" {
+				WriteError(w, apperror.ErrUnauthorized.WithMessage("missing authorization header"))
+				return
+			}
+			claims, err := svc.Validate(token)
+			if err != nil {
+				if err == jwtauth.ErrTokenExpired {
+					log.Info("token expired", "ip", r.RemoteAddr)
+					WriteError(w, apperror.ErrUnauthorized.WithMessage("token expired"))
+				} else {
+					log.Warn("invalid token", "ip", r.RemoteAddr)
+					WriteError(w, apperror.ErrUnauthorized.WithMessage("invalid token"))
+				}
+				return
+			}
+			if blocklist != nil && claims.JTI() != "" {
+				if blocked, err := blocklist.IsTokenBlocked(r.Context(), claims.JTI()); err == nil && blocked {
+					WriteError(w, apperror.ErrUnauthorized.WithMessage("token revoked"))
+					return
+				}
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), claimsKey, claims)))
+		})
+	}
+}
+
+func RequireRole(role string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := ClaimsFromCtx(r.Context())
+			if claims == nil {
+				WriteError(w, apperror.ErrUnauthorized.WithMessage("authentication required"))
+				return
+			}
+			if !hasRole(claims.Role, role) {
+				WriteError(w, apperror.ErrForbidden.WithMessage("insufficient permissions"))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type LoginResponse struct {
+	*jwtauth.TokenPair
+	UserID string ` + "`" + `json:"user_id"` + "`" + `
+	Role   string ` + "`" + `json:"role"` + "`" + `
+}
+
+func extractBearerToken(r *http.Request) string {
+	h := r.Header.Get("Authorization")
+	if h == "" {
+		return ""
+	}
+	parts := strings.SplitN(h, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return ""
+	}
+	return strings.TrimSpace(parts[1])
+}
+
+func hasRole(userRole, required string) bool {
+	if required == "admin" {
+		return userRole == "admin"
+	}
+	return userRole == "user" || userRole == "admin"
+}
+`

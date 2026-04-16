@@ -11,7 +11,8 @@ import (
 // It is only triggered when no project name argument is given and --yes is not set.
 func runInteractive(opts *Options) error {
 	fmt.Println("🪓  axe new — interactive project wizard")
-	fmt.Println("   Press Ctrl+C to cancel at any time.\n")
+	fmt.Println("   Press Ctrl+C to cancel at any time.")
+	fmt.Println()
 
 	// ── Name ──────────────────────────────────────────────────────────────────
 	var name string

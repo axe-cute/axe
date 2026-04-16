@@ -31,6 +31,7 @@ import (
 	"github.com/axe-cute/axe/pkg/outbox"
 	"github.com/axe-cute/axe/pkg/ratelimit"
 	"github.com/axe-cute/axe/pkg/worker"
+	"github.com/axe-cute/axe/pkg/ws"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -121,6 +122,20 @@ func main() {
 		BatchSize: 50,
 	}, log)
 
+	// ── WebSocket Hub ─────────────────────────────────────────────────────────────
+	var wsAdapter ws.Adapter = ws.MemoryAdapter{}
+	if cfg.HubAdapter == "redis" && cacheClient != nil {
+		wsAdapter = ws.NewRedisAdapter(cacheClient.Redis(), ws.WithRedisLogger(log))
+		log.Info("ws: using Redis adapter", "addr", cfg.RedisAddr())
+	} else {
+		log.Info("ws: using in-memory adapter (single-instance)")
+	}
+	wsHub := ws.NewHub(
+		ws.WithAdapter(wsAdapter),
+		ws.WithLogger(log),
+	)
+	wsTracker := ws.NewUserConnTracker()
+
 	// ── Composition Root ──────────────────────────────────────────────────────
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
@@ -162,6 +177,25 @@ func main() {
 		})
 	})
 
+	// ── WebSocket endpoint ────────────────────────────────────────────────────
+	// GET /ws — auth-protected, max 5 conns/user.
+	// Token accepted via:
+	//   Authorization: Bearer <jwt>   (header)
+	//   ?token=<jwt>                  (query param — browser WS clients)
+	r.With(
+		ws.WSAuth(jwtSvc, cacheClient, wsTracker, ws.WithMaxConnsPerUser(5)),
+	).Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		client, err := wsHub.UpgradeAuthenticated(w, r, wsTracker)
+		if err != nil {
+			log.Warn("ws: upgrade failed", "error", err)
+			return
+		}
+		wsHub.Join(client, "lobby")
+		client.OnMessage(func(msg []byte) {
+			_ = wsHub.Broadcast(r.Context(), "lobby", msg)
+		})
+	})
+
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.ServerPort),
@@ -177,6 +211,8 @@ func main() {
 
 	// Start background services
 	ctx, cancelBg := context.WithCancel(context.Background())
+
+	go wsHub.Run(ctx)
 
 	go func() {
 		log.Info("server listening", "addr", srv.Addr)
@@ -195,15 +231,18 @@ func main() {
 	go outboxPoller.Start(ctx)
 
 	log.Info("all services started",
-		"http", fmt.Sprintf(":%d", cfg.ServerPort),
+		"http",    fmt.Sprintf(":%d", cfg.ServerPort),
 		"metrics", fmt.Sprintf(":%d/metrics", cfg.ServerPort),
-		"worker", "asynq",
+		"worker",  "asynq",
+		"ws",      fmt.Sprintf(":%d/ws", cfg.ServerPort),
 	)
 
 	<-quit
 	log.Info("shutdown signal received — draining...")
 
-	cancelBg() // stop outbox poller
+	cancelBg() // stop outbox poller + ws hub
+
+	wsHub.Shutdown()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

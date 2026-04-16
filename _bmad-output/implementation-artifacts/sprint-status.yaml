@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: 3
 phase: 2
 
-current_sprint: 17
-active_story: epic-7/story-7.1
+current_sprint: 19
+active_story: epic-8/story-8.1
 
 epics:
   - id: epic-1
@@ -128,12 +128,13 @@ epics:
 
   - id: epic-7
     title: "WebSocket Hub & Real-time Support"
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
     stories:
-      - { id: story-7.1, title: "WebSocket Hub Core",            status: planned, sprint: 17, priority: P1 }
-      - { id: story-7.2, title: "Redis Pub/Sub Multi-Instance",  status: planned, sprint: 17, priority: P1 }
-      - { id: story-7.3, title: "WS Authentication Middleware",  status: planned, sprint: 18, priority: P1 }
-      - { id: story-7.4, title: "axe generate --with-ws flag",   status: planned, sprint: 18, priority: P2 }
+      - { id: story-7.1, title: "WebSocket Hub Core",            status: done, sprint: 17, priority: P1 }
+      - { id: story-7.2, title: "Redis Pub/Sub Multi-Instance",  status: done, sprint: 17, priority: P1 }
+      - { id: story-7.3, title: "WS Authentication Middleware",  status: done, sprint: 18, priority: P1 }
+      - { id: story-7.4, title: "axe generate --with-ws flag",   status: done, sprint: 18, priority: P2 }
 
   - id: epic-8
     title: "Plugin System & Ecosystem"
@@ -265,12 +266,37 @@ sprint_log:
   - sprint: 17
     goal: "WebSocket Hub + Redis pub/sub scale-out"
     stories: [story-7.1, story-7.2]
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
+    results:
+      - "pkg/ws/hub.go: Hub — connection registry, event loop, goroutine-safe Broadcast/Join/Leave/Presence/Shutdown"
+      - "pkg/ws/client.go: Client — nhooyr.io/websocket wrapper, readPump + writePump goroutines, non-blocking send buffer (256)"
+      - "pkg/ws/room.go: Room — named group of clients, thread-safe Add/Remove/broadcast/Presence"
+      - "pkg/ws/adapter.go: Adapter interface + MemoryAdapter (no-op, single-instance)"
+      - "pkg/ws/redis_adapter.go: RedisAdapter — Pub/Sub cross-instance broadcast; graceful Unsubscribe on Close"
+      - "pkg/ws/metrics.go: axe_ws_active_connections, axe_ws_messages_total{direction}, axe_ws_rooms_active, axe_ws_connect_rejected_total"
+      - "cmd/api/main.go: GET /ws lobby echo endpoint; HUB_ADAPTER=memory|redis config; hub.Run(ctx) goroutine; hub.Shutdown() on SIGTERM"
+      - "config/config.go: HUB_ADAPTER env var (memory|redis, validated)"
+      - "tests/ws/hub_test.go: 7/7 unit tests PASS (ClientCount, Broadcast, Presence, GracefulShutdown, Leave, EmptyRoom, MultiRoom)"
+      - "tests/ws/redis_adapter_test.go: integration tests (build tag: integration) — CrossBroadcast + Unsubscribe"
+      - "Makefile: test-ws + test-ws-integration targets added"
+      - "go vet ./...: clean; go build ./...: clean"
 
   - sprint: 18
     goal: "WebSocket middleware + generator flag"
     stories: [story-7.3, story-7.4]
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
+    results:
+      - "pkg/ws/auth.go: WSAuth middleware — JWT via Authorization header OR ?token= query param"
+      - "pkg/ws/auth.go: UserConnTracker (sync.Map + atomic CAS) — Acquire/Release, default max 5 conns/user → HTTP 429"
+      - "pkg/ws/hub.go: UpgradeAuthenticated() — reads userID from ctx, tracker.Release on readPump exit"
+      - "pkg/ws/client.go: Client.UserID field for authenticated identity tracking"
+      - "cmd/api/main.go: /ws endpoint now guarded by WSAuth + UpgradeAuthenticated (wsTracker shared)"
+      - "tests/ws/auth_test.go: 8 tests PASS (no token 401, invalid 401, header OK, query OK, header>query, max 429, release→allow, concurrent race)"
+      - "cmd/axe/generate/generate.go: --with-ws flag added; WithWS bool in ResourceData"
+      - "cmd/axe/generate/templates.go: wsHandlerTmpl → {name}_ws_handler.go with hub+tracker deps, Routes(), Connect()"
+      - "go vet ./...: clean; go build ./...: clean; 15/15 ws tests PASS (-race)"
 
   - sprint: 19
     goal: "Plugin Interface + axe-plugin-storage"
