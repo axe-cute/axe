@@ -489,7 +489,12 @@ func tmplMainAPIGo(data TemplateData) string {
 	}
 	imports += `
 	"{{.Module}}/pkg/jwtauth"
-	"{{.Module}}/pkg/metrics"`
+	"{{.Module}}/pkg/metrics"
+
+	entsql "entgo.io/ent/dialect/sql"
+	ent "{{.Module}}/ent"
+	// axe:wire:import
+`
 
 	cacheInit := ""
 	if data.WithCache {
@@ -574,6 +579,23 @@ func main() {
 	log.Info("%s starting", "port", cfg.ServerPort, "env", cfg.Environment)
 %s%s
 	_ = log
+
+	// ── Database ─────────────────────────────────────────────────────────────
+	sqlDB, err := sql.Open(cfg.DBDriver, cfg.DatabaseURL)
+	if err != nil {
+		log.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+	sqlDB.SetMaxOpenConns(cfg.DatabaseMaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.DatabaseMaxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(cfg.DatabaseConnMaxLifetimeMins) * time.Minute)
+	log.Info("database connected", "driver", cfg.DBDriver)
+
+	// ── Ent ORM client ──────────────────────────────────────────────────────
+	drv := entsql.OpenDB(cfg.DBDriver, sqlDB)
+	entClient := ent.NewClient(ent.Driver(drv))
+	defer entClient.Close()
 
 	// ── JWT service ───────────────────────────────────────────────────────────
 	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())

@@ -445,6 +445,20 @@ func wireMainGo(data ResourceData) error {
 		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 
 		switch trimmed {
+		case "// axe:wire:import":
+			// Inject handler/service/repository imports on first resource only.
+			if !strings.Contains(source, fmt.Sprintf("%q", data.Module+"/internal/handler")) {
+				imp1 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/handler")
+				imp2 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/repository")
+				imp3 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/service")
+				result = append(result, imp1, imp2, imp3)
+				injections = append(injections,
+					injection{len(result) - 2, imp1},
+					injection{len(result) - 1, imp2},
+					injection{len(result), imp3},
+				)
+			}
+
 		case "// axe:wire:repo":
 			repoLine := fmt.Sprintf("%s%sRepo := repository.New%sRepo(entClient)", indent, data.NameLower, data.Name)
 			svcLine := fmt.Sprintf("%s%sSvc := service.New%sService(%sRepo)", indent, data.NameLower, data.Name, data.NameLower)
