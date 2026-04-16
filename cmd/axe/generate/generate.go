@@ -75,7 +75,7 @@ func buildField(name, typ string) (Field, error) {
 	case "int", "integer", "int64":
 		return Field{camel, snake, "int64", "BIGINT", "field.Int64", "0", snake}, nil
 	case "float", "float64", "decimal":
-		return Field{camel, snake, "float64", "DECIMAL(18,2)", "field.Float64", "0", snake}, nil
+		return Field{camel, snake, "float64", "DECIMAL(18,2)", "field.Float", "0", snake}, nil
 	case "bool", "boolean":
 		return Field{camel, snake, "bool", "BOOLEAN", "field.Bool", "false", snake}, nil
 	case "uuid":
