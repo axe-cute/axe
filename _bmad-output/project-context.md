@@ -13,7 +13,7 @@
 - CLI generator (`axe generate resource`) tạo CRUD endpoint < 10 phút
 - Production-grade từ ngày đầu: transactions, observability, error handling
 
-**Status**: Phase 1 (Foundation) — đang build
+**Status**: Phase 2 (Plugin Ecosystem) — Sprint 20
 
 ---
 
@@ -32,7 +32,11 @@
 | Tracing | OpenTelemetry | latest |
 | Cache | Redis (go-redis) | v9 |
 | Test containers | testcontainers-go | latest |
-| Code generation | Wire (DI) | latest |
+| Code generation | go generate (Ent + sqlc) | latest |
+| Database driver | pgx (PostgreSQL) | v5 |
+| Database driver | go-sql-driver (MySQL) | latest |
+| Database driver | modernc.org/sqlite (CGO-free) | latest |
+| WebSocket | nhooyr.io/websocket | latest |
 
 **Go module**: `github.com/axe-cute/axe`
 

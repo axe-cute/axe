@@ -20,11 +20,11 @@
 **Goal**: Thiết kế `db.Adapter` interface tách biệt driver-specific code.
 
 **Acceptance Criteria**:
-- [ ] `pkg/db/adapter.go` — interface `Adapter` với `Open()`, `Ping()`, `Close()`, `DSN()`
-- [ ] `pkg/db/postgres/adapter.go` — extract current pgx logic vào adapter
-- [ ] `config.go` — thêm `DB_DRIVER` env var (`postgres` | `mysql` | `sqlite`)
-- [ ] Existing PostgreSQL behavior **không thay đổi** (zero regression)
-- [ ] Unit tests cho adapter interface
+- [x] `pkg/db/adapter.go` — interface `Adapter` với `Open()`, `Ping()`, `Close()`, `DSN()`
+- [x] `pkg/db/postgres/adapter.go` — extract current pgx logic vào adapter
+- [x] `config.go` — thêm `DB_DRIVER` env var (`postgres` | `mysql` | `sqlite`)
+- [x] Existing PostgreSQL behavior **không thay đổi** (zero regression)
+- [x] Unit tests cho adapter interface
 
 ### Story 5.2 — MySQL Adapter
 **Sprint**: 13 | **Priority**: P0
@@ -32,12 +32,12 @@
 **Goal**: Hỗ trợ MySQL 8.x với `go-sql-driver/mysql`.
 
 **Acceptance Criteria**:
-- [ ] `pkg/db/mysql/adapter.go` với connection pool config
-- [ ] Ent driver routing dựa trên `DB_DRIVER`
-- [ ] `axe generate resource` sinh Ent schema hỗ trợ MySQL types
-- [ ] Migration runner hoạt động với MySQL (thay `gen_random_uuid()` → `UUID()`)
-- [ ] Integration test với `testcontainers-go/modules/mysql`
-- [ ] README: MySQL quick start section
+- [x] `pkg/db/mysql/adapter.go` với connection pool config
+- [x] Ent driver routing dựa trên `DB_DRIVER`
+- [x] `axe generate resource` sinh Ent schema hỗ trợ MySQL types
+- [x] Migration runner hoạt động với MySQL (thay `gen_random_uuid()` → `UUID()`)
+- [x] Integration test với `testcontainers-go/modules/mysql`
+- [x] README: MySQL quick start section
 
 ### Story 5.3 — SQLite Adapter (Test/Dev)
 **Sprint**: 14 | **Priority**: P1
@@ -46,10 +46,10 @@
 
 **Acceptance Criteria**:
 - [x] `pkg/db/sqlite/adapter.go` với `modernc.org/sqlite` (pure Go, CGO-free)
-- [ ] `make test` có thể chạy với `DB_DRIVER=sqlite` (không cần Postgres)
-- [ ] Testcontainers fallback: nếu Docker không available → SQLite
-- [ ] `axe generate resource` tạo SQLite-compatible migrations
-- [ ] **Không** hỗ trợ SQLite trong production (warn log nếu detect production env)
+- [x] `make test` có thể chạy với `DB_DRIVER=sqlite` (không cần Postgres)
+- [x] Testcontainers fallback: nếu Docker không available → SQLite
+- [x] `axe generate resource` tạo SQLite-compatible migrations
+- [x] **Không** hỗ trợ SQLite trong production (warn log nếu detect production env)
 
 ### Story 5.4 — Multi-DB Integration Tests
 **Sprint**: 14 | **Priority**: P1
@@ -57,10 +57,10 @@
 **Goal**: CI matrix chạy integration tests trên cả 3 databases.
 
 **Acceptance Criteria**:
-- [ ] GitHub Actions matrix: `{postgres, mysql}` × integration tests
-- [ ] SQLite unit tests (không cần containers)
-- [ ] `make test-integration-mysql` target
-- [ ] Test isolation: mỗi test case có prefix schema riêng
+- [x] GitHub Actions matrix: `{postgres, mysql, sqlite}` × integration tests
+- [x] SQLite unit tests (không cần containers)
+- [x] `make test-integration-mysql` target
+- [x] Test isolation: mỗi test case có prefix schema riêng
 
 ---
 

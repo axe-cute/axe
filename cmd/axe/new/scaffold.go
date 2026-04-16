@@ -89,6 +89,7 @@ func scaffold(name, target string, opts Options) error {
 		"pkg/logger",
 		"pkg/metrics",
 		"pkg/txmanager",
+		"pkg/ws",
 	}
 	if data.WithCache {
 		dirs = append(dirs, "pkg/cache", "pkg/ratelimit")
@@ -214,6 +215,15 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		{"internal/repository/.gitkeep", ""},
 		{"internal/service/.gitkeep", ""},
 		{"ent/schema/.gitkeep", ""},
+
+		// WebSocket hub — always scaffolded (used by cmd/api/main.go)
+		{"pkg/ws/adapter.go", tmplWSAdapter},
+		{"pkg/ws/metrics.go", tmplWSMetrics},
+		{"pkg/ws/room.go", tmplWSRoom},
+		{"pkg/ws/client.go", tmplWSClient},
+		{"pkg/ws/hub.go", tmplWSHub},
+		{"pkg/ws/auth.go", tmplWSAuth},
+		{"pkg/ws/redis_adapter.go", tmplWSRedisAdapter},
 	}
 
 	if data.WithCache {

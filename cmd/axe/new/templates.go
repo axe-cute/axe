@@ -1745,3 +1745,556 @@ func hasRole(userRole, required string) bool {
 	return userRole == "user" || userRole == "admin"
 }
 `
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pkg/ws templates — scaffolded into every new project
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tmplWSAdapter = `package ws
+
+import "context"
+
+// Adapter allows the Hub to broadcast across multiple instances (e.g. via Redis Pub/Sub).
+// The default MemoryAdapter is a no-op for single-instance deployments.
+type Adapter interface {
+	Publish(ctx context.Context, channel string, msg []byte) error
+	Subscribe(ctx context.Context, channel string, handler func(msg []byte)) error
+	Close() error
+}
+
+// MemoryAdapter is a no-op adapter for single-instance deployments.
+type MemoryAdapter struct{}
+
+func (MemoryAdapter) Publish(_ context.Context, _ string, _ []byte) error        { return nil }
+func (MemoryAdapter) Subscribe(_ context.Context, _ string, _ func([]byte)) error { return nil }
+func (MemoryAdapter) Close() error                                                 { return nil }
+`
+
+const tmplWSMetrics = `// Package ws provides a production-ready WebSocket hub.
+package ws
+
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	wsActiveConnections = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "axe", Subsystem: "ws", Name: "active_connections",
+		Help: "Number of currently active WebSocket connections.",
+	})
+	wsMessagesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "axe", Subsystem: "ws", Name: "messages_total",
+		Help: "Total number of WebSocket messages handled by the hub.",
+	}, []string{"direction"})
+	wsRoomsActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "axe", Subsystem: "ws", Name: "rooms_active",
+		Help: "Number of currently active WebSocket rooms.",
+	})
+	wsConnectRejectedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "axe", Subsystem: "ws", Name: "connect_rejected_total",
+		Help: "Total number of rejected WebSocket upgrade attempts.",
+	})
+)
+`
+
+const tmplWSRoom = `package ws
+
+import "sync"
+
+// Room is a named group of WebSocket clients.
+type Room struct {
+	id      string
+	clients map[string]*Client
+	mu      sync.RWMutex
+}
+
+func newRoom(id string) *Room { return &Room{id: id, clients: make(map[string]*Client)} }
+
+func (r *Room) add(c *Client)          { r.mu.Lock(); r.clients[c.id] = c; r.mu.Unlock() }
+func (r *Room) remove(clientID string) { r.mu.Lock(); delete(r.clients, clientID); r.mu.Unlock() }
+func (r *Room) broadcast(msg []byte) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	for _, c := range r.clients { c.send(msg) }
+}
+
+// Presence returns the list of client IDs in this room.
+func (r *Room) Presence() []string {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.clients))
+	for id := range r.clients { ids = append(ids, id) }
+	return ids
+}
+
+// Size returns the number of clients in this room.
+func (r *Room) Size() int          { r.mu.RLock(); defer r.mu.RUnlock(); return len(r.clients) }
+func (r *Room) isEmpty() bool      { r.mu.RLock(); defer r.mu.RUnlock(); return len(r.clients) == 0 }
+`
+
+const tmplWSClient = `package ws
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"nhooyr.io/websocket"
+)
+
+const (
+	sendBufSize  = 256
+	writeTimeout = 10 * time.Second
+	pingInterval = 30 * time.Second
+)
+
+// MessageHandler is a callback for incoming WebSocket messages.
+type MessageHandler func(msg []byte)
+
+// Client wraps a single WebSocket connection.
+type Client struct {
+	id        string
+	UserID    string
+	conn      *websocket.Conn
+	hub       *Hub
+	sendCh    chan []byte
+	done      chan struct{} // closed when readPump exits
+	onMessage MessageHandler
+	rooms     map[string]struct{}
+	mu        sync.RWMutex
+	log       *slog.Logger
+}
+
+func newClient(conn *websocket.Conn, hub *Hub) *Client { return newClientWithMeta(conn, hub, "") }
+
+func newClientWithMeta(conn *websocket.Conn, hub *Hub, userID string) *Client {
+	return &Client{
+		id: uuid.New().String(), UserID: userID,
+		conn: conn, hub: hub,
+		sendCh: make(chan []byte, sendBufSize),
+		done:   make(chan struct{}),
+		rooms:  make(map[string]struct{}),
+		log:    hub.log,
+	}
+}
+
+// ID returns the unique client identifier.
+func (c *Client) ID() string { return c.id }
+
+// OnMessage registers a handler for incoming messages.
+func (c *Client) OnMessage(fn MessageHandler) { c.mu.Lock(); c.onMessage = fn; c.mu.Unlock() }
+
+func (c *Client) send(msg []byte) {
+	select {
+	case c.sendCh <- msg:
+		wsMessagesTotal.WithLabelValues("outbound").Inc()
+	default:
+		c.log.Warn("ws: send buffer full", "client_id", c.id)
+	}
+}
+
+// Close signals the client to disconnect.
+func (c *Client) Close() { close(c.sendCh) }
+
+// Done returns a channel closed when the client disconnects.
+func (c *Client) Done() <-chan struct{} { return c.done }
+
+func (c *Client) readPump(ctx context.Context) {
+	defer func() {
+		close(c.done)
+		c.hub.unregister <- c
+	}()
+	for {
+		_, msg, err := c.conn.Read(ctx)
+		if err != nil {
+			if ctx.Err() == nil { c.log.Debug("ws: read error", "client_id", c.id, "error", err) }
+			return
+		}
+		wsMessagesTotal.WithLabelValues("inbound").Inc()
+		c.mu.RLock(); h := c.onMessage; c.mu.RUnlock()
+		if h != nil { h(msg) }
+	}
+}
+
+func (c *Client) writePump(ctx context.Context) {
+	ticker := time.NewTicker(pingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case msg, ok := <-c.sendCh:
+			if !ok { _ = c.conn.Close(websocket.StatusNormalClosure, ""); return }
+			wCtx, cancel := context.WithTimeout(ctx, writeTimeout)
+			err := c.conn.Write(wCtx, websocket.MessageText, msg); cancel()
+			if err != nil { c.log.Debug("ws: write error", "client_id", c.id, "error", err); return }
+		case <-ticker.C:
+			pCtx, cancel := context.WithTimeout(ctx, writeTimeout)
+			err := c.conn.Ping(pCtx); cancel()
+			if err != nil { c.log.Debug("ws: ping error", "client_id", c.id, "error", err); return }
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *Client) joinRoom(id string)  { c.mu.Lock(); c.rooms[id] = struct{}{}; c.mu.Unlock() }
+func (c *Client) leaveRoom(id string) { c.mu.Lock(); delete(c.rooms, id); c.mu.Unlock() }
+func (c *Client) allRooms() []string {
+	c.mu.RLock(); defer c.mu.RUnlock()
+	r := make([]string, 0, len(c.rooms))
+	for id := range c.rooms { r = append(r, id) }
+	return r
+}
+func (c *Client) String() string { return fmt.Sprintf("Client(%s)", c.id) }
+`
+
+const tmplWSHub = `package ws
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"sync"
+
+	"nhooyr.io/websocket"
+)
+
+// Hub manages all WebSocket connections and rooms.
+type Hub struct {
+	clients    map[string]*Client
+	rooms      map[string]*Room
+	mu         sync.RWMutex
+	register   chan *Client
+	unregister chan *Client
+	adapter    Adapter
+	ctx        context.Context
+	cancel     context.CancelFunc
+	log        *slog.Logger
+}
+
+// HubOption configures a Hub.
+type HubOption func(*Hub)
+
+// WithAdapter sets the cross-instance adapter (e.g. Redis Pub/Sub).
+func WithAdapter(a Adapter) HubOption   { return func(h *Hub) { h.adapter = a } }
+
+// WithLogger sets the logger for the hub.
+func WithLogger(l *slog.Logger) HubOption { return func(h *Hub) { h.log = l } }
+
+// NewHub creates a new WebSocket hub.
+func NewHub(opts ...HubOption) *Hub {
+	ctx, cancel := context.WithCancel(context.Background())
+	h := &Hub{
+		clients: make(map[string]*Client), rooms: make(map[string]*Room),
+		register: make(chan *Client, 32), unregister: make(chan *Client, 32),
+		adapter: MemoryAdapter{}, ctx: ctx, cancel: cancel, log: slog.Default(),
+	}
+	for _, o := range opts { o(h) }
+	return h
+}
+
+// Run starts the hub event loop. It blocks until ctx is canceled.
+func (h *Hub) Run(ctx context.Context) {
+	go func() { <-ctx.Done(); h.cancel() }()
+	for {
+		select {
+		case c := <-h.register:
+			h.mu.Lock(); h.clients[c.id] = c; h.mu.Unlock()
+			wsActiveConnections.Inc()
+			h.log.Info("ws: client connected", "client_id", c.id)
+		case c := <-h.unregister:
+			h.mu.Lock()
+			if _, ok := h.clients[c.id]; ok {
+				for _, rid := range c.allRooms() {
+					if room, ok := h.rooms[rid]; ok {
+						room.remove(c.id)
+						if room.isEmpty() { delete(h.rooms, rid); wsRoomsActive.Dec() }
+					}
+				}
+				delete(h.clients, c.id); wsActiveConnections.Dec()
+				h.log.Info("ws: client disconnected", "client_id", c.id)
+			}
+			h.mu.Unlock()
+		case <-h.ctx.Done():
+			h.mu.Lock()
+			for _, c := range h.clients { c.Close() }
+			h.clients = make(map[string]*Client); h.rooms = make(map[string]*Room)
+			h.mu.Unlock()
+			_ = h.adapter.Close()
+			return
+		}
+	}
+}
+
+// Upgrade upgrades an HTTP connection to a WebSocket connection.
+func (h *Hub) Upgrade(w http.ResponseWriter, r *http.Request) (*Client, error) {
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil { wsConnectRejectedTotal.Inc(); return nil, fmt.Errorf("ws: upgrade: %w", err) }
+	c := newClient(conn, h); h.register <- c
+	ctx, cancel := context.WithCancel(h.ctx)
+	go func() { defer cancel(); c.writePump(ctx) }()
+	go c.readPump(ctx)
+	return c, nil
+}
+
+// UpgradeAuthenticated upgrades with user identity from context.
+func (h *Hub) UpgradeAuthenticated(w http.ResponseWriter, r *http.Request, tracker *UserConnTracker) (*Client, error) {
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil { wsConnectRejectedTotal.Inc(); return nil, fmt.Errorf("ws: upgrade: %w", err) }
+	userID := ""
+	if claims := ClaimsFromCtx(r.Context()); claims != nil { userID = claims.UserID }
+	c := newClientWithMeta(conn, h, userID); h.register <- c
+	ctx, cancel := context.WithCancel(h.ctx)
+	go func() { defer cancel(); c.writePump(ctx) }()
+	go func() {
+		c.readPump(ctx)
+		if tracker != nil && userID != "" { tracker.Release(userID) }
+	}()
+	return c, nil
+}
+
+// Join adds a client to a room.
+func (h *Hub) Join(client *Client, roomID string) {
+	h.mu.Lock()
+	room, exists := h.rooms[roomID]
+	if !exists {
+		room = newRoom(roomID); h.rooms[roomID] = room; wsRoomsActive.Inc()
+		_ = h.adapter.Subscribe(h.ctx, roomID, func(msg []byte) {
+			h.mu.RLock(); r, ok := h.rooms[roomID]; h.mu.RUnlock()
+			if ok { r.broadcast(msg) }
+		})
+	}
+	room.add(client); h.mu.Unlock()
+	client.joinRoom(roomID)
+}
+
+// Leave removes a client from a room.
+func (h *Hub) Leave(client *Client, roomID string) {
+	h.mu.Lock()
+	if room, ok := h.rooms[roomID]; ok {
+		room.remove(client.id)
+		if room.isEmpty() { delete(h.rooms, roomID); wsRoomsActive.Dec() }
+	}
+	h.mu.Unlock(); client.leaveRoom(roomID)
+}
+
+// Broadcast sends a message to all clients in a room and publishes via the adapter.
+func (h *Hub) Broadcast(ctx context.Context, roomID string, msg []byte) error {
+	h.mu.RLock(); room, ok := h.rooms[roomID]; h.mu.RUnlock()
+	if ok { room.broadcast(msg) }
+	return h.adapter.Publish(ctx, roomID, msg)
+}
+
+// Presence returns the list of client IDs in a room.
+func (h *Hub) Presence(roomID string) []string {
+	h.mu.RLock(); room, ok := h.rooms[roomID]; h.mu.RUnlock()
+	if !ok { return nil }
+	return room.Presence()
+}
+
+// ClientCount returns the total number of connected clients.
+func (h *Hub) ClientCount() int { h.mu.RLock(); defer h.mu.RUnlock(); return len(h.clients) }
+
+// Shutdown cancels the hub context and closes all connections.
+func (h *Hub) Shutdown()        { h.cancel() }
+
+// Context returns the hub's lifecycle context.
+func (h *Hub) Context() context.Context { return h.ctx }
+
+// RoomSize returns the number of clients in a room.
+func (h *Hub) RoomSize(roomID string) int {
+	h.mu.RLock(); room, ok := h.rooms[roomID]; h.mu.RUnlock()
+	if !ok { return 0 }
+	return room.Size()
+}
+`
+
+const tmplWSAuth = `package ws
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
+
+	"{{.Module}}/pkg/jwtauth"
+	"{{.Module}}/pkg/logger"
+)
+
+type wsContextKey string
+
+const wsClaimsKey wsContextKey = "ws_jwt_claims"
+
+// WSBlocklist checks if a JWT has been revoked.
+type WSBlocklist interface {
+	IsTokenBlocked(ctx context.Context, jti string) (bool, error)
+}
+
+// ClaimsFromCtx extracts JWT claims set by WSAuth middleware.
+func ClaimsFromCtx(ctx context.Context) *jwtauth.Claims {
+	v, _ := ctx.Value(wsClaimsKey).(*jwtauth.Claims)
+	return v
+}
+
+type authOptions struct{ maxConns int }
+
+// AuthOption configures WSAuth behavior.
+type AuthOption func(*authOptions)
+
+// WithMaxConnsPerUser sets the maximum concurrent WebSocket connections per user.
+func WithMaxConnsPerUser(n int) AuthOption {
+	return func(o *authOptions) {
+		if n > 0 { o.maxConns = n }
+	}
+}
+
+// UserConnTracker tracks per-user WebSocket connection counts.
+type UserConnTracker struct{ m sync.Map }
+
+// NewUserConnTracker creates a new tracker.
+func NewUserConnTracker() *UserConnTracker { return &UserConnTracker{} }
+
+// Acquire attempts to increment the connection count for a user. Returns false if at max.
+func (t *UserConnTracker) Acquire(userID string, max int) bool {
+	actual, _ := t.m.LoadOrStore(userID, new(int64))
+	counter := actual.(*int64)
+	for {
+		cur := atomic.LoadInt64(counter)
+		if cur >= int64(max) { return false }
+		if atomic.CompareAndSwapInt64(counter, cur, cur+1) { return true }
+	}
+}
+
+// Release decrements the connection count for a user.
+func (t *UserConnTracker) Release(userID string) {
+	if v, ok := t.m.Load(userID); ok {
+		if atomic.AddInt64(v.(*int64), -1) < 0 { atomic.StoreInt64(v.(*int64), 0) }
+	}
+}
+
+// Count returns the current connection count for a user.
+func (t *UserConnTracker) Count(userID string) int64 {
+	v, ok := t.m.Load(userID)
+	if !ok { return 0 }
+	return atomic.LoadInt64(v.(*int64))
+}
+
+// WSAuth is a middleware that authenticates WebSocket connections via JWT.
+func WSAuth(svc *jwtauth.Service, blocklist WSBlocklist, tracker *UserConnTracker, opts ...AuthOption) func(http.Handler) http.Handler {
+	options := &authOptions{maxConns: 5}
+	for _, o := range opts { o(options) }
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromCtx(r.Context())
+			token := extractWSToken(r)
+			if token == "" {
+				log.Info("ws auth: missing token", "remote", r.RemoteAddr)
+				http.Error(w, "missing token", http.StatusUnauthorized)
+				wsConnectRejectedTotal.Inc()
+				return
+			}
+			claims, err := svc.Validate(token)
+			if err != nil {
+				log.Info("ws auth: invalid token", "remote", r.RemoteAddr, "error", err)
+				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+				wsConnectRejectedTotal.Inc()
+				return
+			}
+			if blocklist != nil && claims.JTI() != "" {
+				blocked, blErr := blocklist.IsTokenBlocked(r.Context(), claims.JTI())
+				if blErr != nil {
+					log.Warn("ws auth: blocklist check failed", "error", blErr)
+				} else if blocked {
+					http.Error(w, "token revoked", http.StatusUnauthorized)
+					wsConnectRejectedTotal.Inc()
+					return
+				}
+			}
+			if tracker != nil && !tracker.Acquire(claims.UserID, options.maxConns) {
+				http.Error(w, "too many connections", http.StatusTooManyRequests)
+				wsConnectRejectedTotal.Inc()
+				return
+			}
+			ctx := context.WithValue(r.Context(), wsClaimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func extractWSToken(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); h != "" {
+		if parts := strings.SplitN(h, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			if t := strings.TrimSpace(parts[1]); t != "" { return t }
+		}
+	}
+	return r.URL.Query().Get("token")
+}
+`
+
+const tmplWSRedisAdapter = `package ws
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// RedisAdapter implements Adapter using Redis Pub/Sub for multi-instance broadcasting.
+type RedisAdapter struct {
+	rdb     *redis.Client
+	prefix  string
+	log     *slog.Logger
+	pubsubs map[string]*redis.PubSub
+}
+
+// NewRedisAdapter creates a new Redis-backed adapter.
+func NewRedisAdapter(rdb *redis.Client, opts ...func(*RedisAdapter)) *RedisAdapter {
+	a := &RedisAdapter{rdb: rdb, prefix: "axe:ws:", log: slog.Default(), pubsubs: make(map[string]*redis.PubSub)}
+	for _, o := range opts { o(a) }
+	return a
+}
+
+// WithRedisPrefix sets the Redis key prefix.
+func WithRedisPrefix(p string) func(*RedisAdapter) { return func(a *RedisAdapter) { a.prefix = p } }
+
+// WithRedisLogger sets the logger.
+func WithRedisLogger(l *slog.Logger) func(*RedisAdapter) { return func(a *RedisAdapter) { a.log = l } }
+
+func (a *RedisAdapter) channel(ch string) string { return a.prefix + ch }
+
+// Publish sends a message to a Redis channel.
+func (a *RedisAdapter) Publish(ctx context.Context, channel string, msg []byte) error {
+	return a.rdb.Publish(ctx, a.channel(channel), msg).Err()
+}
+
+// Subscribe listens to a Redis channel and calls handler for each message.
+func (a *RedisAdapter) Subscribe(ctx context.Context, channel string, handler func([]byte)) error {
+	ch := a.channel(channel)
+	ps := a.rdb.Subscribe(ctx, ch)
+	if _, err := ps.Receive(ctx); err != nil {
+		_ = ps.Close()
+		return fmt.Errorf("ws/redis: subscribe to %q: %w", channel, err)
+	}
+	a.pubsubs[channel] = ps
+	go func() {
+		defer ps.Close() //nolint:errcheck
+		for msg := range ps.Channel() { handler([]byte(msg.Payload)) }
+	}()
+	a.log.Info("ws/redis: subscribed", "channel", ch)
+	return nil
+}
+
+// Close unsubscribes from all channels and closes PubSub connections.
+func (a *RedisAdapter) Close() error {
+	for ch, ps := range a.pubsubs {
+		_ = ps.Unsubscribe(context.Background(), a.channel(ch))
+		_ = ps.Close()
+	}
+	return nil
+}
+`

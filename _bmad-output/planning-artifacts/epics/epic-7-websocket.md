@@ -4,7 +4,7 @@
 
 **Business Value**: Real-time features (chat, notifications, live dashboard) là requirement phổ biến. Hiện tại axe không có, user phải tự implement từ đầu.
 
-**Status**: `in-progress` (Stories 7.1–7.4 implemented ✅)
+**Status**: ✅ Done (Sprint 17–18)
 
 **Priority**: P1
 
@@ -83,7 +83,7 @@ func (h *ChatHandler) Connect(w http.ResponseWriter, r *http.Request) {
 ```
 pkg/ws/
   hub.go           ← Hub (connection registry + broadcast)
-  client.go        ← Client (gorilla/websocket wrapper)
+  client.go        ← Client (nhooyr.io/websocket wrapper)
   room.go          ← Room (named group)
   redis_adapter.go ← Redis pub/sub scale-out
   middleware.go    ← JWT auth for WS upgrade
