@@ -214,6 +214,7 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		// Empty stubs for directories that are filled in by `axe generate resource`
 		{"internal/repository/.gitkeep", ""},
 		{"internal/service/.gitkeep", ""},
+		{"ent/generate.go", tmplEntGenerate},
 		{"ent/schema/.gitkeep", ""},
 
 		// WebSocket hub — always scaffolded (used by cmd/api/main.go)

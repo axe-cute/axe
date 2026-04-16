@@ -17,6 +17,7 @@ const tmplGoMod = `module {{.Module}}
 go 1.22.0
 
 require (
+	entgo.io/ent v0.14.6
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
@@ -959,6 +960,11 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+`
+
+const tmplEntGenerate = `package ent
+
+//go:generate go run -mod=mod entgo.io/ent/cmd/ent generate ./schema
 `
 
 const tmplOpenAPIYaml = `openapi: "3.0.3"
