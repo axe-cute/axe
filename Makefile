@@ -65,6 +65,11 @@ test-ws: ## Run WebSocket hub unit tests
 test-ws-integration: ## Run WebSocket Redis integration tests (requires Docker)
 	$(GO) test -tags=integration ./tests/ws/... -v -run "TestRedis" -timeout 60s
 
+.PHONY: test-plugin
+test-plugin: ## Run plugin unit tests
+	$(GO) test ./pkg/plugin/... -v -race -timeout 30s
+
+
 # ─── Code Quality ─────────────────────────────────────────────────────────────
 .PHONY: lint
 lint: ## Run golangci-lint

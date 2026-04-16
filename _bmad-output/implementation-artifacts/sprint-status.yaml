@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: 3
 phase: 2
 
-current_sprint: 19
-active_story: epic-8/story-8.1
+current_sprint: 20
+active_story: epic-8/story-8.3
 
 epics:
   - id: epic-1
@@ -138,10 +138,20 @@ epics:
 
   - id: epic-8
     title: "Plugin System & Ecosystem"
-    status: planned
+    status: in-progress
     stories:
-      - { id: story-8.1, title: "Plugin Interface + App.Use()",  status: planned, sprint: 19, priority: P2 }
-      - { id: story-8.2, title: "axe-plugin-storage (S3/MinIO)", status: planned, sprint: 19, priority: P2 }
+      - id: story-8.1
+        title: "Plugin Interface + App.Use()"
+        status: done
+        sprint: 19
+        priority: P2
+        notes: "pkg/plugin/plugin.go: Plugin interface, App host, typed service locator (Provide[T]/Resolve[T]/MustResolve[T] generics), FIFO start + LIFO shutdown, error rollback"
+      - id: story-8.2
+        title: "axe-plugin-storage (JuiceFS/Local)"
+        status: done
+        sprint: 19
+        priority: P2
+        notes: "pkg/plugin/storage/: FSStore (os pkg, works for local + JuiceFS POSIX mount), POST/GET/DELETE /upload, Prometheus metrics, zero external deps"
       - { id: story-8.3, title: "axe-plugin-email (SendGrid)",   status: planned, sprint: 20, priority: P2 }
       - { id: story-8.4, title: "Multi-Tenancy Foundation",      status: planned, sprint: 20, priority: P2 }
       - { id: story-8.5, title: "Plugin Registry CLI",           status: planned, sprint: 21, priority: P3 }
@@ -301,7 +311,17 @@ sprint_log:
   - sprint: 19
     goal: "Plugin Interface + axe-plugin-storage"
     stories: [story-8.1, story-8.2]
-    status: planned
+    status: done
+    completed_at: "2026-04-16"
+    results:
+      - "pkg/plugin/plugin.go: Plugin interface, App host, typed service locator via Go generics (Provide[T]/Resolve[T]/MustResolve[T])"
+      - "App lifecycle: Use() → Start() (FIFO) → Shutdown() (LIFO); error rollback if plugin N fails Register"
+      - "pkg/plugin/storage/: FSStore adapter — standard os pkg, zero external deps, works for local dev + JuiceFS POSIX mount"
+      - "HTTP routes: POST /upload (multipart), GET /upload/{key} (serve), DELETE /upload/{key} (remove)"
+      - "Prometheus: axe_storage_upload_bytes_total, axe_storage_upload_errors_total, axe_storage_operations_total"
+      - "config.go: STORAGE_BACKEND (local|juicefs), STORAGE_MOUNT_PATH, STORAGE_MAX_FILE_SIZE, STORAGE_URL_PREFIX"
+      - "cmd/api/main.go: pluginApp.Use(storage.New(...)) + pluginApp.Start() + pluginApp.Shutdown()"
+      - "25/25 tests PASS (-race): 12 plugin + 13 storage; go vet clean; go build clean; make test 0 FAIL"
 
   - sprint: 20
     goal: "axe-plugin-email + Multi-tenancy foundation"

@@ -29,6 +29,8 @@ import (
 	"github.com/axe-cute/axe/pkg/logger"
 	"github.com/axe-cute/axe/pkg/metrics"
 	"github.com/axe-cute/axe/pkg/outbox"
+	"github.com/axe-cute/axe/pkg/plugin"
+	"github.com/axe-cute/axe/pkg/plugin/storage"
 	"github.com/axe-cute/axe/pkg/ratelimit"
 	"github.com/axe-cute/axe/pkg/worker"
 	"github.com/axe-cute/axe/pkg/ws"
@@ -196,6 +198,32 @@ func main() {
 		})
 	})
 
+	// ── Plugin System ────────────────────────────────────────────────────────
+	pluginApp := plugin.NewApp(plugin.AppConfig{
+		Router:    r,
+		Config:    cfg,
+		Logger:    log,
+		DB:        sqlDB,
+		EntClient: entClient,
+		Cache:     cacheClient,
+		Hub:       wsHub,
+	})
+
+	if err := pluginApp.Use(storage.New(storage.Config{
+		Backend:     cfg.StorageBackend,
+		MountPath:   cfg.StorageMountPath,
+		MaxFileSize: cfg.StorageMaxFileSize,
+		URLPrefix:   cfg.StorageURLPrefix,
+	})); err != nil {
+		log.Error("plugin registration failed", "error", err)
+		os.Exit(1)
+	}
+
+	if err := pluginApp.Start(context.Background()); err != nil {
+		log.Error("plugin startup failed", "error", err)
+		os.Exit(1)
+	}
+
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.ServerPort),
@@ -246,6 +274,11 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Shutdown plugins (LIFO order) before HTTP server
+	if err := pluginApp.Shutdown(shutdownCtx); err != nil {
+		log.Error("plugin shutdown error", "error", err)
+	}
 
 	workerSrv.Shutdown()
 

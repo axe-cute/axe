@@ -53,6 +53,14 @@ type Config struct {
 	// "redis" enables cross-instance broadcast via Redis Pub/Sub.
 	HubAdapter string `env:"HUB_ADAPTER" env-default:"memory"`
 
+	// Storage Plugin
+	// StorageBackend selects the file storage adapter: "local" (dev) or "juicefs" (production).
+	// Both use the same filesystem adapter — JuiceFS mounts appear as a local directory.
+	StorageBackend     string `env:"STORAGE_BACKEND"       env-default:"local"`
+	StorageMountPath   string `env:"STORAGE_MOUNT_PATH"    env-default:"./uploads"`
+	StorageMaxFileSize int64  `env:"STORAGE_MAX_FILE_SIZE" env-default:"10485760"`
+	StorageURLPrefix   string `env:"STORAGE_URL_PREFIX"    env-default:"/upload"`
+
 	// Observability (optional)
 	OTELEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""`
 	OTELServiceName string `env:"OTEL_SERVICE_NAME"           env-default:"axe"`
@@ -149,6 +157,11 @@ func validate(cfg *Config) error {
 	validHubAdapters := map[string]bool{"memory": true, "redis": true}
 	if !validHubAdapters[cfg.HubAdapter] {
 		return fmt.Errorf("HUB_ADAPTER must be one of [memory, redis], got %q", cfg.HubAdapter)
+	}
+
+	validStorageBackends := map[string]bool{"local": true, "juicefs": true}
+	if !validStorageBackends[cfg.StorageBackend] {
+		return fmt.Errorf("STORAGE_BACKEND must be one of [local, juicefs], got %q", cfg.StorageBackend)
 	}
 
 	return nil
