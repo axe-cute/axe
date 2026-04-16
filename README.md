@@ -174,6 +174,7 @@ axe/
 │   ├── txmanager/                     # Transaction manager (context-injected tx)
 │   ├── validator/                     # Input validation
 │   ├── worker/                        # Asynq background worker
+│   ├── devroutes/                     # Rails-like route listing on 404 (dev mode)
 │   └── ws/                            # WebSocket hub, client, room, auth
 │       ├── hub.go                     #   Hub with Room-based broadcasting
 │       ├── client.go                  #   Per-connection client
@@ -267,7 +268,7 @@ axe generate resource Order \
   --with-auth
 
 # Admin-only (implies --with-auth)
-axe generate resource Config \
+axe generate resource AppConfig \
   --fields="key:string,value:text" \
   --admin-only
 
@@ -278,6 +279,10 @@ axe generate resource Chat \
 ```
 
 **Supported field types**: `string`, `text`, `int`, `float`, `bool`, `uuid`, `time`
+
+> **Reserved names**: `Config`, `Client`, `Query`, `Tx`, `Mutation`, `Hook`, `Policy`, `Value`,
+> `Predicate`, `Runtime`, `Context`, and Go keywords (`type`, `func`, `var`, etc.) are reserved
+> by ent and cannot be used as resource names. Use more specific names like `AppConfig`, `Setting`.
 
 ### `axe migrate` — Migration Runner
 
@@ -375,6 +380,7 @@ Lifecycle: FIFO registration, LIFO shutdown, automatic rollback on failure.
 | `GET /health` | Liveness probe |
 | `GET /ready` | Readiness probe (DB + Redis) |
 | `GET /metrics` | Prometheus scrape endpoint |
+| `GET /debug/routes` | Route listing (dev mode only) |
 | `GET /docs` | Swagger UI |
 | `GET /docs/redoc` | Redoc |
 | `GET /openapi.yaml` | OpenAPI 3.0 spec |

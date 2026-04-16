@@ -537,7 +537,7 @@ func wireMainGo(data ResourceData) error {
 		case "// axe:wire:ws-route":
 			if data.WithWS {
 				wsHandlerLine := fmt.Sprintf("%s%sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)", indent, data.NameLower, data.Name)
-				wsMountLine := fmt.Sprintf("%sr.With(ws.WSAuth(jwtSvc, cacheClient, wsTracker, ws.WithMaxConnsPerUser(5))).Mount(\"/ws/%s\", %sWSHandler.Routes())", indent, data.NamePlural, data.NameLower)
+				wsMountLine := fmt.Sprintf("%swsRouter.With(ws.WSAuth(jwtSvc, cacheClient, wsTracker, ws.WithMaxConnsPerUser(5))).Mount(\"/ws/%s\", %sWSHandler.Routes())", indent, data.NamePlural, data.NameLower)
 				result = append(result, wsHandlerLine, wsMountLine)
 				injections = append(injections,
 					injection{len(result) - 1, wsHandlerLine},
@@ -577,6 +577,6 @@ func printManualWiring(data ResourceData) {
 	fmt.Printf("      r.Mount(\"/%s\", %sHandler.Routes())\n", data.NamePlural, data.NameLower)
 	if data.WithWS {
 		fmt.Printf("      %sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)\n", data.NameLower, data.Name)
-		fmt.Printf("      r.With(ws.WSAuth(...)).Mount(\"/ws/%s\", %sWSHandler.Routes())\n", data.NamePlural, data.NameLower)
+		fmt.Printf("      wsRouter.With(ws.WSAuth(...)).Mount(\"/ws/%s\", %sWSHandler.Routes())\n", data.NamePlural, data.NameLower)
 	}
 }
