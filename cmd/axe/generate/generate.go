@@ -125,6 +125,33 @@ func newResourceData(name string, fields []Field, belongsTo string, withAuth, ad
 	}
 }
 
+// ── Name validation ──────────────────────────────────────────────────────────
+
+// reservedNames are identifiers that conflict with ent's generated code,
+// Go keywords, or common framework identifiers.
+var reservedNames = map[string]bool{
+	// ent predeclared identifiers (lowercase conflicts)
+	"client": true, "config": true, "context": true, "mutation": true,
+	"query": true, "tx": true, "hook": true, "policy": true,
+	"value": true, "predicate": true, "runtime": true,
+	// Go keywords
+	"type": true, "func": true, "var": true, "const": true, "package": true,
+	"import": true, "return": true, "interface": true, "struct": true,
+	"map": true, "chan": true, "range": true, "select": true, "switch": true,
+	"case": true, "default": true, "break": true, "continue": true,
+	"for": true, "go": true, "defer": true, "if": true, "else": true,
+	// common framework conflicts
+	"error": true, "string": true, "int": true, "bool": true, "float": true,
+}
+
+func validateResourceName(name string) error {
+	lower := strings.ToLower(name)
+	if reservedNames[lower] {
+		return fmt.Errorf("resource name %q is reserved (conflicts with ent/Go internals).\n  Try a more specific name, e.g.: AppConfig, SiteConfig, Setting", name)
+	}
+	return nil
+}
+
 // ── Resource command ──────────────────────────────────────────────────────────
 
 func resourceCmd() *cobra.Command {
@@ -148,6 +175,10 @@ func resourceCmd() *cobra.Command {
 				return fmt.Errorf("resource name is required")
 			}
 			name = toTitle(name)
+
+			if err := validateResourceName(name); err != nil {
+				return err
+			}
 
 			fields, err := parseFields(fieldsFlag)
 			if err != nil {
