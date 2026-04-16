@@ -537,7 +537,7 @@ func wireMainGo(data ResourceData) error {
 		case "// axe:wire:ws-route":
 			if data.WithWS {
 				wsHandlerLine := fmt.Sprintf("%s%sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)", indent, data.NameLower, data.Name)
-				wsMountLine := fmt.Sprintf("%swsRouter.With(ws.WSAuth(jwtSvc, cacheClient, wsTracker, ws.WithMaxConnsPerUser(5))).Mount(\"/ws/%s\", %sWSHandler.Routes())", indent, data.NamePlural, data.NameLower)
+				wsMountLine := fmt.Sprintf("%swsRouter.With(ws.WSAuth(jwtSvc, nil, wsTracker, ws.WithMaxConnsPerUser(5))).Mount(\"/ws/%s\", %sWSHandler.Routes())", indent, data.NamePlural, data.NameLower)
 				result = append(result, wsHandlerLine, wsMountLine)
 				injections = append(injections,
 					injection{len(result) - 1, wsHandlerLine},
