@@ -90,6 +90,7 @@ func scaffold(name, target string, opts Options) error {
 		"pkg/metrics",
 		"pkg/txmanager",
 		"pkg/ws",
+		"pkg/devroutes",
 	}
 	if data.WithCache {
 		dirs = append(dirs, "pkg/cache", "pkg/ratelimit")
@@ -225,6 +226,9 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		{"pkg/ws/hub.go", tmplWSHub},
 		{"pkg/ws/auth.go", tmplWSAuth},
 		{"pkg/ws/redis_adapter.go", tmplWSRedisAdapter},
+
+		// Dev routes — Rails-like route listing on 404
+		{"pkg/devroutes/devroutes.go", tmplDevRoutes},
 	}
 
 	if data.WithCache {

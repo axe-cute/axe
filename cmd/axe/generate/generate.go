@@ -446,16 +446,41 @@ func wireMainGo(data ResourceData) error {
 
 		switch trimmed {
 		case "// axe:wire:import":
-			// Inject handler/service/repository imports on first resource only.
+			// Inject handler/service/repository + ent imports on first resource only.
 			if !strings.Contains(source, fmt.Sprintf("%q", data.Module+"/internal/handler")) {
 				imp1 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/handler")
 				imp2 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/repository")
 				imp3 := fmt.Sprintf("%s%q", indent, data.Module+"/internal/service")
-				result = append(result, imp1, imp2, imp3)
+				imp4 := fmt.Sprintf("%sentsql %q", indent, "entgo.io/ent/dialect/sql")
+				imp5 := fmt.Sprintf("%sent %q", indent, data.Module+"/ent")
+				result = append(result, imp1, imp2, imp3, imp4, imp5)
 				injections = append(injections,
-					injection{len(result) - 2, imp1},
-					injection{len(result) - 1, imp2},
-					injection{len(result), imp3},
+					injection{len(result) - 4, imp1},
+					injection{len(result) - 3, imp2},
+					injection{len(result) - 2, imp3},
+					injection{len(result) - 1, imp4},
+					injection{len(result), imp5},
+				)
+			}
+
+		case "// axe:wire:db":
+			// Inject ent client setup on first resource only.
+			if !strings.Contains(source, "ent.NewClient") {
+				// Detect ent dialect from the sql.Open driver name in main.go.
+				entDialect := "postgres" // default
+				if strings.Contains(source, `sql.Open("mysql"`) {
+					entDialect = "mysql"
+				} else if strings.Contains(source, `sql.Open("sqlite3"`) {
+					entDialect = "sqlite3"
+				}
+				dbLine1 := fmt.Sprintf("%sdrv := entsql.OpenDB(%q, sqlDB)", indent, entDialect)
+				dbLine2 := fmt.Sprintf("%sentClient := ent.NewClient(ent.Driver(drv))", indent)
+				dbLine3 := fmt.Sprintf("%sdefer entClient.Close()", indent)
+				result = append(result, dbLine1, dbLine2, dbLine3)
+				injections = append(injections,
+					injection{len(result) - 2, dbLine1},
+					injection{len(result) - 1, dbLine2},
+					injection{len(result), dbLine3},
 				)
 			}
 
@@ -474,7 +499,7 @@ func wireMainGo(data ResourceData) error {
 			injections = append(injections, injection{len(result), handlerLine})
 
 		case "// axe:wire:route":
-			routeLine := fmt.Sprintf("%sr.Mount(\"/api/v1/%s\", %sHandler.Routes())", indent, data.NamePlural, data.NameLower)
+			routeLine := fmt.Sprintf("%sr.Mount(\"/%s\", %sHandler.Routes())", indent, data.NamePlural, data.NameLower)
 			result = append(result, routeLine)
 			injections = append(injections, injection{len(result), routeLine})
 
@@ -518,7 +543,7 @@ func printManualWiring(data ResourceData) {
 	fmt.Printf("      %sRepo := repository.New%sRepo(entClient)\n", data.NameLower, data.Name)
 	fmt.Printf("      %sSvc := service.New%sService(%sRepo)\n", data.NameLower, data.Name, data.NameLower)
 	fmt.Printf("      %sHandler := handler.New%sHandler(%sSvc)\n", data.NameLower, data.Name, data.NameLower)
-	fmt.Printf("      r.Mount(\"/api/v1/%s\", %sHandler.Routes())\n", data.NamePlural, data.NameLower)
+	fmt.Printf("      r.Mount(\"/%s\", %sHandler.Routes())\n", data.NamePlural, data.NameLower)
 	if data.WithWS {
 		fmt.Printf("      %sWSHandler := handler.New%sWSHandler(wsHub, wsTracker)\n", data.NameLower, data.Name)
 		fmt.Printf("      r.With(ws.WSAuth(...)).Mount(\"/ws/%s\", %sWSHandler.Routes())\n", data.NamePlural, data.NameLower)
