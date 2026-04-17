@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 
 	ent "github.com/axe-cute/axe/ent"
 	"github.com/axe-cute/axe/config"
@@ -155,12 +157,20 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   strings.Split(cfg.CORSAllowedOrigins, ","),
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders:   []string{"X-Request-ID"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 	r.Use(metrics.Middleware)          // Prometheus instrumentation
 	r.Use(chimiddleware.Compress(5))
 
 	// System endpoints (no auth, no rate limit)
 	r.Get("/health", healthHandler)
-	r.Get("/ready", readyHandler(sqlDB, cacheClient))
+	r.Get("/ready", readyHandler(sqlDB, cacheClient, cfg.StorageMountPath))
 	r.Handle("/metrics", metrics.Handler()) // Prometheus scrape endpoint
 
 	// API docs (no auth)
@@ -303,7 +313,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client) http.HandlerFunc {
+func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storagePath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{"status": "ok"}
 
@@ -323,6 +333,16 @@ func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client) http.HandlerFunc {
 			}
 		} else {
 			resp["cache"] = "disabled"
+		}
+
+		// Storage mount health check
+		if storagePath != "" {
+			if _, err := os.Stat(storagePath); err != nil {
+				resp["storage"] = "error: mount unavailable"
+				resp["status"] = "degraded"
+			} else {
+				resp["storage"] = "ok"
+			}
 		}
 
 		status := http.StatusOK

@@ -14,9 +14,10 @@ import (
 
 // handler provides HTTP endpoints for file operations.
 type handler struct {
-	store Store
-	cfg   Config
-	log   *slog.Logger
+	store   Store
+	cfg     Config
+	log     *slog.Logger
+	metrics *storageMetrics
 }
 
 // handleUpload handles POST /upload — multipart file upload.
@@ -30,14 +31,14 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxFileSize+1024*1024)
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		metricsUploadErrors.WithLabelValues("parse_error").Inc()
+		h.metrics.uploadErrors.WithLabelValues("parse_error").Inc()
 		writeError(w, http.StatusBadRequest, "failed to parse multipart form: "+err.Error())
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		metricsUploadErrors.WithLabelValues("missing_file").Inc()
+		h.metrics.uploadErrors.WithLabelValues("missing_file").Inc()
 		writeError(w, http.StatusBadRequest, "missing 'file' field in form data")
 		return
 	}
@@ -69,7 +70,7 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	result, err := h.store.Upload(r.Context(), key, file, header.Size, contentType)
 	if err != nil {
 		h.log.Warn("upload failed", "error", err, "filename", header.Filename)
-		metricsUploadErrors.WithLabelValues("store_error").Inc()
+		h.metrics.uploadErrors.WithLabelValues("store_error").Inc()
 
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "not allowed") {
@@ -81,8 +82,8 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metricsUploadBytes.Add(float64(result.Size))
-	metricsOps.WithLabelValues("upload", "ok").Inc()
+	h.metrics.uploadBytes.Add(float64(result.Size))
+	h.metrics.ops.WithLabelValues("upload", "ok").Inc()
 
 	h.log.Info("file uploaded",
 		"key", result.Key,
@@ -103,7 +104,7 @@ func (h *handler) handleServe(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := h.store.Open(r.Context(), key)
 	if err != nil {
-		metricsOps.WithLabelValues("serve", "error").Inc()
+		h.metrics.ops.WithLabelValues("serve", "error").Inc()
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "file not found")
 		} else {
@@ -119,7 +120,7 @@ func (h *handler) handleServe(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", ct)
 	}
 
-	metricsOps.WithLabelValues("serve", "ok").Inc()
+	h.metrics.ops.WithLabelValues("serve", "ok").Inc()
 
 	if _, err := io.Copy(w, reader); err != nil {
 		h.log.Warn("serve file copy error", "key", key, "error", err)
@@ -135,7 +136,7 @@ func (h *handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.store.Delete(r.Context(), key); err != nil {
-		metricsOps.WithLabelValues("delete", "error").Inc()
+		h.metrics.ops.WithLabelValues("delete", "error").Inc()
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "file not found")
 		} else {
@@ -144,7 +145,7 @@ func (h *handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metricsOps.WithLabelValues("delete", "ok").Inc()
+	h.metrics.ops.WithLabelValues("delete", "ok").Inc()
 	h.log.Info("file deleted", "key", key)
 
 	w.WriteHeader(http.StatusNoContent)

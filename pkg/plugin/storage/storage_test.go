@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/axe-cute/axe/config"
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -190,6 +191,86 @@ func TestFSStoreURL(t *testing.T) {
 	assert.Equal(t, "/upload/2026/04/16/abc.png", url)
 }
 
+// ── Path Traversal Tests ──────────────────────────────────────────────────────
+
+func TestSafePath_TraversalBlocked(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	traversalKeys := []string{
+		"../../etc/passwd",
+		"../../../etc/shadow",
+		"foo/../../..",
+		"../secret.txt",
+		"a/b/../../../../etc/hosts",
+	}
+
+	for _, key := range traversalKeys {
+		t.Run(key, func(t *testing.T) {
+			content := []byte("exploit")
+			_, err := store.Upload(context.Background(), key,
+				bytes.NewReader(content), int64(len(content)), "text/plain")
+			require.Error(t, err, "key %q should be blocked", key)
+			assert.Contains(t, err.Error(), "path traversal")
+		})
+	}
+}
+
+func TestSafePath_NormalKeysOK(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	validKeys := []string{
+		"test.txt",
+		"2026/04/17/photo.png",
+		"a/b/c/deep.pdf",
+		"user-uploads/avatar.jpg",
+	}
+
+	for _, key := range validKeys {
+		t.Run(key, func(t *testing.T) {
+			content := []byte("ok")
+			_, err := store.Upload(context.Background(), key,
+				bytes.NewReader(content), int64(len(content)), "text/plain")
+			require.NoError(t, err, "key %q should be allowed", key)
+		})
+	}
+}
+
+func TestSafePath_DeleteTraversalBlocked(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	err = store.Delete(context.Background(), "../../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal")
+}
+
+func TestSafePath_OpenTraversalBlocked(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	_, err = store.Open(context.Background(), "../../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal")
+}
+
+func TestSafePath_ExistsTraversalBlocked(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	_, err = store.Exists(context.Background(), "../../etc/passwd")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal")
+}
+
+// ── Plugin Tests ──────────────────────────────────────────────────────────────
+
 func TestPluginRegister(t *testing.T) {
 	cfg := testConfig(t)
 
@@ -200,6 +281,11 @@ func TestPluginRegister(t *testing.T) {
 	app := plugin.NewApp(plugin.AppConfig{
 		Router: r,
 		Logger: slog.Default(),
+		Config: &config.Config{
+			JWTSecret:                   "test-secret-256-bits-long-enough",
+			JWTAccessTokenExpiryMinutes: 15,
+			JWTRefreshTokenExpiryDays:   7,
+		},
 	})
 
 	err := p.Register(context.Background(), app)

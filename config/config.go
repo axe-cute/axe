@@ -61,6 +61,11 @@ type Config struct {
 	StorageMaxFileSize int64  `env:"STORAGE_MAX_FILE_SIZE" env-default:"10485760"`
 	StorageURLPrefix   string `env:"STORAGE_URL_PREFIX"    env-default:"/upload"`
 
+	// CORS
+	// Comma-separated list of allowed origins.  "*" allows all origins (dev-friendly).
+	// Production should list explicit origins: "https://app.example.com,https://admin.example.com"
+	CORSAllowedOrigins string `env:"CORS_ALLOWED_ORIGINS"  env-default:"*"`
+
 	// Observability (optional)
 	OTELEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""`
 	OTELServiceName string `env:"OTEL_SERVICE_NAME"           env-default:"axe"`

@@ -75,6 +75,12 @@ type Config struct {
 	// URLPrefix is the path prefix for serving files via HTTP.
 	// Default: "/upload"
 	URLPrefix string
+
+	// RequireAuth controls JWT authentication on file serving (GET) routes.
+	// Write operations (POST upload, DELETE) ALWAYS require JWT — this is not optional.
+	// When false (default): GET serves files publicly, writes need JWT.
+	// When true: ALL routes (read + write) require JWT (for private/internal files).
+	RequireAuth bool
 }
 
 // defaults fills in zero-value config fields with sensible defaults.

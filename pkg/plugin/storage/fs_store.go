@@ -41,6 +41,25 @@ func NewFSStore(cfg Config) (*FSStore, error) {
 	}, nil
 }
 
+// safePath ensures the resolved path stays within basePath.
+// Prevents path traversal attacks (e.g. key = "../../etc/passwd").
+func (s *FSStore) safePath(key string) (string, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	absBase, err := filepath.Abs(s.basePath)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve base: %w", err)
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve path: %w", err)
+	}
+	// absPath must be inside absBase (or equal to it)
+	if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) && absPath != absBase {
+		return "", fmt.Errorf("storage: invalid key %q (path traversal)", key)
+	}
+	return fullPath, nil
+}
+
 // Upload stores a file on the filesystem.
 // It enforces max file size and allowed content types.
 func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error) {
@@ -54,7 +73,10 @@ func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64,
 		return nil, fmt.Errorf("storage: file size %d exceeds max %d bytes", size, s.maxSize)
 	}
 
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create parent directories
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
@@ -91,7 +113,10 @@ func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64,
 
 // Delete removes a file from the filesystem.
 func (s *FSStore) Delete(_ context.Context, key string) error {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
 
 	if err := os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) {
@@ -105,7 +130,10 @@ func (s *FSStore) Delete(_ context.Context, key string) error {
 
 // Open returns a reader for the file content.
 func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.Open(fullPath)
 	if err != nil {
@@ -120,9 +148,12 @@ func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
 
 // Exists checks whether a file exists on the filesystem.
 func (s *FSStore) Exists(_ context.Context, key string) (bool, error) {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return false, err
+	}
 
-	_, err := os.Stat(fullPath)
+	_, err = os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
