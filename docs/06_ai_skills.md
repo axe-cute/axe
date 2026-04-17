@@ -1,98 +1,87 @@
-# 🤖 AI Skills Cần Thiết (Required AI Capabilities)
-> Những kỹ năng AI phải có để làm việc hiệu quả trong project axe
-> mà không phá vỡ kiến trúc "no magic".
+# 🤖 Required AI Capabilities
+> Skills an AI must have to work effectively in the axe project
+> without breaking the "no magic" architecture.
+>
+> 🇻🇳 [Phiên bản tiếng Việt](vi/06_ai_skills.md)
 
 ---
 
-## Tại Sao AI Skills Quan Trọng Đặc Biệt Với axe
+## Why AI Skills Matter Especially With axe
 
-axe có kiến trúc **stricte hơn bình thường**:
-- Layer boundaries rõ ràng và không được vi phạm
-- Import rules nghiêm ngặt (đặc biệt trong `internal/domain/`)
-- Interface-first design: AI phải hiểu interface trước khi implement
-- Transaction boundaries phải được AI nhận biết
-- Error taxonomy bắt buộc — AI không được tự tạo error format mới
+axe has a **stricter-than-usual architecture**:
+- Clear layer boundaries that must not be violated
+- Strict import rules (especially in `internal/domain/`)
+- Interface-first design: AI must understand interfaces before implementing
+- Transaction boundaries must be recognized by AI
+- Error taxonomy is mandatory — AI must not create new error formats
 
-**Nếu AI không có những skills này:** nó sẽ generate code đúng về syntax nhưng phá kiến trúc.
+**If AI lacks these skills:** it will generate syntactically correct code that breaks architecture.
 
 ---
 
 ## Skill 1: Layer-Aware Code Generation
 
-**Mô tả:**
-AI phải biết code đang được viết ở layer nào và áp dụng rules tương ứng.
+AI must know which layer code is being written in and apply corresponding rules.
 
-**Kiểm tra:**
 ```
-Prompt: "Viết function lấy danh sách orders của user"
+Prompt: "Write a function to list a user's orders"
 
-AI KHÔNG được viết:
-  → trong domain/: gọi database
-  → trong handler/: gọi repository.List()
-  → trong service/: parse HTTP request
-  → trong repository/: chứa business rule
+AI MUST NOT:
+  → in domain/: call database
+  → in handler/: call repository.List()
+  → in service/: parse HTTP request
+  → in repository/: contain business rules
 
-AI PHẢI:
-  → handler/: parse params, gọi service.ListOrders(ctx, userID, pagination)
-  → service/: validate ownership, gọi repo.ListByUserID(ctx, userID)
-  → repository/: chỉ SQL/DB call
+AI MUST:
+  → handler/: parse params, call service.ListOrders(ctx, userID, pagination)
+  → service/: validate ownership, call repo.ListByUserID(ctx, userID)
+  → repository/: SQL/DB calls only
 ```
-
-**Training signal:**
-Provide layer-specific constraint files mà AI đọc trước khi generate.
 
 ---
 
 ## Skill 2: Interface-First Thinking
 
-**Mô tả:**
-Trước khi viết implementation, AI phải extract interface trong `domain/`.
-
-**Pattern AI phải follow:**
+Before writing implementation, AI must extract interface in `domain/`.
 
 ```
-Step 1: Define interface trong domain/
+Step 1: Define interface in domain/
   type OrderRepository interface {
       Create(ctx, order) error
       FindByID(ctx, id) (*Order, error)
       ListByUserID(ctx, userID, pagination) ([]*Order, error)
   }
 
-Step 2: Implement trong repository/
+Step 2: Implement in repository/
   type postgresOrderRepo struct { db *ent.Client }
-  func (r *postgresOrderRepo) Create(ctx, order) error { ... }
 
-Step 3: Wire trong main.go
+Step 3: Wire in main.go
   repo := repository.NewPostgresOrderRepo(entClient)
   svc := service.NewOrderService(repo, txMgr)
   handler := handler.NewOrderHandler(svc)
 ```
 
-**Lỗi AI thường mắc:**
-Viết implementation trực tiếp → inject concrete type vào service → không testable.
+**Common AI mistake:** Writing implementation directly → injecting concrete type into service → not testable.
 
 ---
 
 ## Skill 3: Transaction Boundary Recognition
 
-**Mô tả:**
-AI phải tự nhận biết khi nào một operation cần transaction và wrap đúng cách.
+AI must recognize when an operation needs a transaction and wrap correctly.
 
-**Pattern nhận biết:**
+**Detection triggers:**
 ```
-Trigger words → cần transaction:
-  "create ... và update ..."
-  "insert ... nếu thành công thì insert ..."
-  "xử lý payment và tạo order"
-  "batch operation"
-  "multi-table write"
+"create ... and update ..."
+"insert ... if successful then insert ..."
+"process payment and create order"
+"batch operation"
+"multi-table write"
 ```
 
-**Output AI phải generate khi detect:**
+**Expected output:**
 ```go
 func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) error {
     return s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
-        // Tất cả operations dùng ctx này sẽ trong cùng transaction
         order, err := s.orderRepo.Create(ctx, ...)
         if err != nil { return err }
 
@@ -109,10 +98,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) er
 
 ## Skill 4: Error Taxonomy Compliance
 
-**Mô tả:**
-AI không được tự tạo error responses. Phải dùng `pkg/apperror` taxonomy.
-
-**AI phải biết map:**
+AI must not create custom error responses. Must use `pkg/apperror` taxonomy.
 
 | Situation | Error Type |
 |---|---|
@@ -123,17 +109,10 @@ AI không được tự tạo error responses. Phải dùng `pkg/apperror` taxon
 | DB/external failure | `apperror.ErrInternal` |
 | Business rule violated | `apperror.ErrConflict` |
 
-**AI không được viết:**
 ```go
 // ❌ Custom error format
 return c.JSON(400, map[string]string{"error": "user not found"})
 
-// ❌ Raw errors
-return errors.New("not found")
-```
-
-**AI phải viết:**
-```go
 // ✅ apperror taxonomy
 return apperror.ErrNotFound.WithMessage("user not found").WithCause(err)
 ```
@@ -142,10 +121,8 @@ return apperror.ErrNotFound.WithMessage("user not found").WithCause(err)
 
 ## Skill 5: Import Discipline (Domain Layer Guard)
 
-**Mô tả:**
-AI phải từ chối import infra packages vào `internal/domain/`.
+AI must refuse to import infra packages into `internal/domain/`.
 
-**Domain import whitelist AI phải enforce:**
 ```go
 // ✅ ALLOWED in domain/:
 import (
@@ -154,7 +131,7 @@ import (
     "fmt"
     "strings"
     "time"
-    "github.com/google/uuid"  // chỉ type definition
+    "github.com/google/uuid"  // type definition only
 )
 
 // ❌ FORBIDDEN in domain/:
@@ -167,55 +144,34 @@ import (
 )
 ```
 
-**AI phải detect và cảnh báo** nếu user muốn thêm forbidden import vào domain layer.
-
 ---
 
 ## Skill 6: Outbox Pattern Awareness
 
-**Mô tả:**
-Khi có side effects sau DB write (gửi email, notify, trigger job), AI phải suggest Outbox pattern thay vì direct call.
+When side effects follow DB writes (send email, notify, trigger job), AI must suggest Outbox instead of direct calls.
 
-**Pattern AI phải recognize:**
-```
-"Sau khi tạo user, gửi welcome email" → Outbox pattern
-"Sau khi payment success, notify order" → Outbox pattern
-"Sau khi update order, trigger analytics" → Outbox pattern
-```
-
-**AI không được generate:**
 ```go
-// ❌ Direct call sau DB write (inconsistency risk)
+// ❌ Direct call after DB write (inconsistency risk)
 if err := repo.CreateOrder(ctx, order); err != nil {
     return err
 }
-emailService.SendConfirmation(order.UserEmail) // có thể fail!
-```
+emailService.SendConfirmation(order.UserEmail) // may fail!
 
-**AI phải generate:**
-```go
 // ✅ Outbox pattern
 return tx.WithinTransaction(ctx, func(ctx context.Context) error {
     if err := repo.CreateOrder(ctx, order); err != nil {
         return err
     }
-    // Lưu event cùng transaction → atomic
     return outboxRepo.Append(ctx, events.OrderCreated{OrderID: order.ID})
 })
 ```
 
 ---
 
-## Skill 7: SQL Quality Awareness (khi dùng sqlc)
+## Skill 7: SQL Quality Awareness
 
-**Mô tả:**
-AI viết SQL queries cho sqlc phải đảm bảo:
-- Có index hint khi cần
-- Không gây N+1
-- Pagination đúng (`LIMIT $1 OFFSET $2`)
-- Không dùng `SELECT *` trong production queries
+AI writing sqlc queries must ensure: indexes are hinted, no N+1, proper pagination, no `SELECT *`.
 
-**AI phải flag:**
 ```sql
 -- ❌ SELECT * (over-fetching)
 SELECT * FROM orders WHERE user_id = $1;
@@ -230,82 +186,46 @@ LIMIT $2 OFFSET $3;
 
 ## Skill 8: Test Generation Pattern
 
-**Mô tả:**
-Mỗi khi generate code, AI phải generate test cùng lúc theo đúng pattern.
+Every code generation must include corresponding tests:
 
-**Testing rules:**
 ```
-Handler test:
-  → httptest.NewRecorder() + httptest.NewRequest()
-  → Mock Service bằng interface (không cần DB)
-  → Test: 200 OK, 400 Bad Input, 401 Unauthorized, 404 Not Found
-
-Service test:
-  → Mock Repository bằng interface
-  → Test: happy path, validation fail, repo error
-
-Repository test:
-  → testcontainers-go (real PostgreSQL in Docker)
-  → Test: insert + query + constraint violations
+Handler test: httptest + mock Service interface → 200, 400, 401, 404
+Service test: mock Repository interface → happy path, validation fail, repo error
+Repository test: testcontainers-go (real PostgreSQL) → insert, query, constraints
 ```
 
 ---
 
-## Skill 9: Architecture Decision Record (ADR) Awareness
+## Skill 9: ADR Awareness
 
-**Mô tả:**
-Khi AI đề xuất thay đổi architectural decision, phải đề xuất viết ADR.
+When proposing architectural changes, AI must suggest writing an ADR (Architecture Decision Record).
 
-**Trigger cho ADR:**
-- Thêm dependency mới
-- Thay đổi error handling strategy
-- Thay đổi authentication approach
-- Thêm layer mới
-- Thay đổi transaction pattern
-
-**ADR template AI nên output:**
-```markdown
-# ADR-XXX: [Decision Title]
-Date: YYYY-MM-DD
-Status: Proposed | Accepted | Deprecated
-
-## Context
-[Tại sao cần ra quyết định này?]
-
-## Decision
-[Quyết định là gì?]
-
-## Consequences
-✅ [Lợi ích]
-❌ [Đánh đổi]
-```
+**Triggers:** new dependency, error handling change, auth approach change, new layer, transaction pattern change.
 
 ---
 
 ## Skill 10: Code Review Checklist
 
-**Mô tả:**
-AI phải tự apply checklist khi review hoặc generate code:
+AI must self-apply this checklist when generating or reviewing code:
 
-```markdown
-## Pre-commit checklist AI tự check:
-□ Code ở đúng layer không?
-□ Interface được define trong domain/ chưa?
-□ Transaction cần thiết đã được wrap chưa?
-□ Error dùng apperror taxonomy chưa?
-□ Domain layer không import infra packages?
-□ Test được viết cùng production code?
-□ SQL có explicit columns, pagination, index?
-□ Outbox pattern nếu có side effect?
-□ Context được propagate qua tất cả function calls?
-□ Logger inject qua context, không phải global?
+```
+□ Code in the correct layer?
+□ Interface defined in domain/?
+□ Transaction wrapped when needed?
+□ Errors use apperror taxonomy?
+□ Domain layer free of infra imports?
+□ Tests written alongside production code?
+□ SQL has explicit columns, pagination, indexes?
+□ Outbox pattern if side effects exist?
+□ Context propagated through all function calls?
+□ Logger injected via context, not global?
 ```
 
 ---
 
-## Tóm tắt AI Skills Matrix
+## AI Skills Matrix
 
-| Skill | Priority | Khó implement |
+| Skill | Priority | Implementation Difficulty |
 |---|---|---|
 | Layer-aware generation | 🔴 Critical | Medium |
 | Interface-first thinking | 🔴 Critical | Medium |

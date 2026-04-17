@@ -1,69 +1,71 @@
-# ✅ Điểm Sáng (Bright Spots)
-> Những điều đúng, mạnh, và đáng giữ lại từ cả hai bản báo cáo.
+# ✅ Bright Spots
+> Things that are correct, strong, and worth keeping from both reports.
+>
+> 🇻🇳 [Phiên bản tiếng Việt](vi/01_bright_spots.md)
 
 ---
 
-## 1. Phân tích Prisma Client Go — Xuất sắc
+## 1. Prisma Client Go Analysis — Excellent
 
-**Từ báo cáo 1:**
+**From Report 1:**
 
-- Truy vết lịch sử kỹ thuật rõ ràng: Rust engine → TypeScript migration → Go client bị "khai tử"
-- Kết luận đúng và dứt khoát: **loại bỏ Prisma khỏi stack Go là quyết định bắt buộc**, không phải tùy chọn
-- Giải thích rõ lý do tại sao embedded V8/Node.js là giải pháp không thể chấp nhận trong high-performance Go binary
+- Clear technical history tracing: Rust engine → TypeScript migration → Go client "deprecated"
+- Correct and decisive conclusion: **removing Prisma from the Go stack is mandatory**, not optional
+- Clear explanation of why embedded V8/Node.js is unacceptable in a high-performance Go binary
 
-**Tại sao quan trọng:**
-Nhiều team vẫn cố dùng Prisma Client Go v6 "tạm thời" → tích lũy security debt. Việc cắt bỏ sớm và có lý luận vững chắc là dấu hiệu của architectural maturity.
-
----
-
-## 2. Hiểu sâu sự đối lập Rails vs Go
-
-**Từ báo cáo 1:**
-
-- Phân biệt rõ **Convention over Configuration** (Rails) vs **Explicit over Implicit** (Go)
-- Nêu đúng vấn đề: cố sao chép Rails sang Go là "phản thực tiễn" vì Go forbids runtime reflection patterns
-- Chỉ ra "Go Way": làm một việc, làm tốt, kết hợp qua interfaces
-
-**Điểm đặc biệt sáng:**
-> "Viết chương trình làm một việc và làm tốt, sau đó kết hợp lại qua giao diện tiêu chuẩn"
-— Đây là Unix Philosophy, không chỉ là Go philosophy. Nắm được gốc rễ này là nền tảng thiết kế bền vững.
+**Why it matters:**
+Many teams still use Prisma Client Go v6 "temporarily" → accumulating security debt. Cutting early with solid reasoning is a sign of architectural maturity.
 
 ---
 
-## 3. Kiến trúc Layered thay thế MVC — Đúng hướng
+## 2. Deep Understanding of Rails vs Go
 
-**Từ báo cáo 1:**
+**From Report 1:**
 
-| Layer | Trách nhiệm | Tương đương Rails |
+- Clear distinction between **Convention over Configuration** (Rails) vs **Explicit over Implicit** (Go)
+- Correctly identifies the problem: copying Rails to Go is "anti-practical" because Go forbids runtime reflection patterns
+- Points out the "Go Way": do one thing well, compose via interfaces
+
+**Especially bright:**
+> "Write programs that do one thing and do it well, then compose through standard interfaces"
+— This is Unix Philosophy, not just Go philosophy. Grasping this root is the foundation for sustainable design.
+
+---
+
+## 3. Layered Architecture Over MVC — Right Direction
+
+**From Report 1:**
+
+| Layer | Responsibility | Rails Equivalent |
 |---|---|---|
 | `cmd/api/main.go` | Composition Root | `config/environment.rb` |
-| `internal/domain/` | Entities + Interfaces | Model definitions (không phải ActiveRecord) |
+| `internal/domain/` | Entities + Interfaces | Model definitions (not ActiveRecord) |
 | `internal/handler/` | HTTP delivery | Controllers |
-| `internal/service/` | Business logic | Fat Models → tách ra |
+| `internal/service/` | Business logic | Fat Models → extracted |
 | `internal/repository/` | Data access | ActiveRecord calls |
 | `pkg/` | Shared utilities | `lib/` |
 
-**Tại sao đúng:** Cấu trúc này giải quyết được Circular Import — vấn đề compiler Go sẽ reject ngay.
+**Why correct:** This structure solves Circular Import — which Go's compiler rejects immediately.
 
 ---
 
-## 4. Đề xuất Tooling Hợp Lý
+## 4. Sensible Tooling Choices
 
-**Từ báo cáo 1:**
+**From Report 1:**
 
-- **Chi Router**: Lightweight, 100% `net/http` compatible, không vendor lock-in → ✅ Đúng
-- **Ent**: Schema-first, compile-time type safety, codegen trước runtime → ✅ Đúng
-- **sqlc**: SQL-first, AST analysis, zero runtime magic → ✅ Đúng
-- **Wire**: Compile-time DI codegen, không phải runtime reflection → ✅ Đúng
+- **Chi Router**: Lightweight, 100% `net/http` compatible, no vendor lock-in → ✅
+- **Ent**: Schema-first, compile-time type safety, codegen before runtime → ✅
+- **sqlc**: SQL-first, AST analysis, zero runtime magic → ✅
+- **Wire**: Compile-time DI codegen, not runtime reflection → ✅
 
-**Từ báo cáo 2 (xác nhận):**
-- Stack này là "hợp lý" — Principal Engineer reviewer cũng công nhận tooling chọn đúng
+**From Report 2 (confirmation):**
+- Stack is "reasonable" — Principal Engineer reviewer also acknowledged correct tooling choices
 
 ---
 
-## 5. Dependency Inversion Pattern — Implementation Đúng
+## 5. Dependency Inversion Pattern — Correct Implementation
 
-**Từ báo cáo 1:**
+**From Report 1:**
 
 ```go
 type MessageDB interface {
@@ -79,58 +81,58 @@ func NewMessagesHandler(db MessageDB) *MessagesHandler {
 }
 ```
 
-**Tại sao quan trọng:**
-- Handler không biết implementation cụ thể → testable
-- Nếu thiếu dependency → compiler error, không phải production panic
-- Pattern này cho phép mock DB trong unit test không cần real PostgreSQL
+**Why important:**
+- Handler doesn't know specific implementation → testable
+- Missing dependency → compiler error, not production panic
+- This pattern allows mocking DB in unit tests without real PostgreSQL
 
 ---
 
-## 6. So sánh Cost Model Rõ Ràng
+## 6. Clear Cost Model Comparison
 
-**Từ báo cáo 1:**
+**From Report 1:**
 
-| Giai đoạn | Rails | Go |
+| Phase | Rails | Go |
 |---|---|---|
-| MVP (0–6 tháng) | ✅ Nhanh hơn | ❌ Chậm hơn do boilerplate |
-| Scale (Năm 2+) | ❌ N+1, RAM, nợ kỹ thuật | ✅ Tường minh, refactorable |
+| MVP (0–6 months) | ✅ Faster | ❌ Slower due to boilerplate |
+| Scale (Year 2+) | ❌ N+1, RAM, tech debt | ✅ Explicit, refactorable |
 
-**Quan trọng:** Báo cáo không giấu nhược điểm Go — đây là dấu hiệu trung thực và đáng tin cậy.
-
----
-
-## 7. Báo cáo 2 — Gap Analysis Sắc Bén
-
-**Từ báo cáo 2 (Principal Engineer review):**
-
-- Nhận diện đúng 10 lỗ hổng thực sự
-- Không phủ nhận kiến trúc, chỉ bổ sung những thứ còn thiếu
-- Phong cách review: **phân tích → chỉ ra gap → đề xuất fix** → đây là cách review chuẩn
+**Important:** The report doesn't hide Go's weaknesses — a sign of honesty and trustworthiness.
 
 ---
 
-## 8. Định nghĩa "No Magic" Rõ Ràng
+## 7. Report 2 — Sharp Gap Analysis
 
-**Từ báo cáo 2:**
+**From Report 2 (Principal Engineer review):**
+
+- Correctly identified 10 real gaps
+- Doesn't reject the architecture, only supplements what's missing
+- Review style: **analyze → identify gap → propose fix** → standard review process
+
+---
+
+## 8. Clear "No Magic" Definition
+
+**From Report 2:**
 
 > Allowed Magic:
 > - Compile-time only
 > - Must be inspectable
 > - Must generate static code
 
-**Đây là định nghĩa operationalizable** — team có thể dùng làm checklist khi review PR.
+**This is an operationalizable definition** — teams can use it as a checklist when reviewing PRs.
 
 ---
 
-## Tóm tắt Điểm Sáng
+## Summary
 
 ```
-✅ Prisma rejection → kết luận đúng, có căn cứ kỹ thuật
-✅ Rails vs Go philosophy → hiểu gốc rễ, không chỉ surface
-✅ Layered Architecture → giải quyết circular import
-✅ Tooling stack → Chi + Ent + sqlc + Wire → coherent
-✅ DI pattern → compile-time safety, testable
-✅ Cost model → trung thực, không bán "silver bullet"
-✅ Gap analysis (báo cáo 2) → sắc bén, actionable
-✅ "No Magic" definition → operationalizable
+✅ Prisma rejection        → correct conclusion with technical basis
+✅ Rails vs Go philosophy  → understands the root, not just surface
+✅ Layered Architecture    → solves circular import
+✅ Tooling stack           → Chi + Ent + sqlc + Wire → coherent
+✅ DI pattern              → compile-time safety, testable
+✅ Cost model              → honest, not selling a "silver bullet"
+✅ Gap analysis (Report 2) → sharp, actionable
+✅ "No Magic" definition   → operationalizable
 ```

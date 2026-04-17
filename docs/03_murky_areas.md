@@ -1,25 +1,24 @@
-# 🌫️ Điều Mờ (Murky Areas)
-> Những điểm **không sai, không đúng** — mơ hồ, thiếu định nghĩa rõ ràng,
-> khiến team khó ra quyết định nhất quán khi build thực tế.
+# 🌫️ Murky Areas
+> Points that are **neither wrong nor right** — ambiguous, lacking clear definition,
+> making it hard for teams to make consistent decisions during implementation.
+>
+> 🇻🇳 [Phiên bản tiếng Việt](vi/03_murky_areas.md)
 
 ---
 
-## 1. "Không Ma Thuật" — Định Nghĩa Chưa Đủ Operationalizable
+## 1. "No Magic" — Not Yet Operationalizable
 
-**Vấn đề:**
-Cả hai báo cáo đều dùng cụm "no magic" / "tường minh" rất nhiều, nhưng:
-- Ai quyết định cái gì là "magic"?
-- `go generate` có phải magic không?
-- Ent codegen có phải magic không?
-- Struct tags (`json:"name"`) có phải magic không?
+**Problem:**
+Both reports use "no magic" / "explicit" extensively, but:
+- Who decides what counts as "magic"?
+- Is `go generate` magic?
+- Is Ent codegen magic?
+- Are struct tags (`json:"name"`) magic?
 
-**Tại sao mờ:**
-Không có **test/checklist** để verify "no magic". Khi review PR, 2 engineer có thể tranh luận mãi về việc một đoạn code có "magic" hay không.
+**Clarification needed:**
 
-**Làm rõ cần thiết:**
-
-```markdown
-## "No Magic" Decision Matrix:
+```
+"No Magic" Decision Matrix:
 
 ✅ ALLOWED (Compile-time, inspectable, generates static code):
   - Struct tags (json, db, validate)
@@ -28,113 +27,94 @@ Không có **test/checklist** để verify "no magic". Khi review PR, 2 engineer
   - Build constraints
 
 ❌ FORBIDDEN (Runtime, opaque, hides control flow):
-  - reflect.ValueOf / reflect.TypeOf trong runtime hot path
-  - init() functions với side effects phức tạp
-  - Global var mutation sau startup
-  - Monkey patching (impossible in Go, nhưng cần nêu rõ)
-  - Plugin system với dynamic loading
+  - reflect.ValueOf / reflect.TypeOf in runtime hot paths
+  - init() functions with complex side effects
+  - Global var mutation after startup
+  - Monkey patching
+  - Plugin system with dynamic loading
 ```
 
 ---
 
-## 2. Ranh Giới Giữa Service và Handler — Chưa Rõ
+## 2. Service vs Handler Boundary — Unclear
 
-**Vấn đề:**
-Báo cáo 1 nói:
-> Handler: "phân tích yêu cầu HTTP, gọi tầng service"
-> Service: "áp dụng các thuật toán kinh doanh"
+**Problem:**
+Report 1 says:
+> Handler: "parse HTTP request, call service layer"
+> Service: "apply business algorithms"
 
-Nhưng không define:
-- Validation thuộc về Handler hay Service?
-- Authorization check (RBAC) thuộc về Middleware, Handler, hay Service?
-- DTO conversion (HTTP request → domain struct) xảy ra ở đâu?
-- Pagination logic thuộc về Handler, Service, hay Repository?
+But doesn't define:
+- Does validation belong in Handler or Service?
+- Does authorization check (RBAC) belong in Middleware, Handler, or Service?
+- Where does DTO conversion (HTTP request → domain struct) happen?
+- Does pagination logic belong in Handler, Service, or Repository?
 
-**Hệ quả thực tế:**
-```
-Dev A: đặt email validation ở Handler
-Dev B: đặt email validation ở Service
-Dev C: đặt validation ở domain entity
-→ 3 cách, không nhất quán, conflict khi merge
-```
+**Clarification needed:**
 
-**Làm rõ cần thiết:**
-
-| Concern | Layer | Lý do |
+| Concern | Layer | Reason |
 |---|---|---|
-| Input parsing (JSON → struct) | Handler | Phụ thuộc HTTP protocol |
-| Input validation (format, required) | Handler | Trả về 400 trước khi vào business |
-| Business validation (email đã tồn tại?) | Service | Cần DB access |
-| Authorization (user có quyền không?) | Middleware + Service | Middleware check token, Service check ownership |
-| DTO → Domain Entity mapping | Service | Cách ly handler khỏi domain changes |
-| Pagination params | Handler | Parse từ query string |
+| Input parsing (JSON → struct) | Handler | Depends on HTTP protocol |
+| Input validation (format, required) | Handler | Returns 400 before entering business |
+| Business validation (email exists?) | Service | Needs DB access |
+| Authorization (user has permission?) | Middleware + Service | Middleware checks token, Service checks ownership |
+| DTO → Domain Entity mapping | Service | Isolates handler from domain changes |
+| Pagination params | Handler | Parsed from query string |
 | Pagination logic | Repository | SQL LIMIT/OFFSET |
 
 ---
 
-## 3. Ent vs sqlc — Coexistence Chưa Được Define
+## 3. Ent vs sqlc — Coexistence Not Defined
 
-**Vấn đề:**
-Báo cáo 1 kết luận: "dùng Ent chính, sqlc cho analytics". Báo cáo 2 đồng ý nhưng không có implementation guide.
+**Problem:**
+Report 1 concludes: "use Ent primarily, sqlc for analytics". Report 2 agrees but provides no implementation guide.
 
-**Mờ cụ thể:**
-- 2 tool này dùng **2 connection pool riêng** hay dùng chung?
-- Migration quản lý bởi Ent Atlas hay bằng file SQL riêng?
-- Khi Ent schema thay đổi, sqlc queries có tự detect không?
-- Test setup: mock Ent client và sqlc queries như thế nào?
+**Specific ambiguities:**
+- Do these two tools use **2 separate connection pools** or share one?
+- Is migration managed by Ent Atlas or separate SQL files?
+- When Ent schema changes, do sqlc queries auto-detect?
+- Test setup: how to mock Ent client and sqlc queries?
 
-**Làm rõ cần thiết:**
+**Clarification:**
 ```
 Architecture:
-  ┌─────────────────────────────────────────┐
-  │           cmd/api/main.go               │
-  │  db := sql.Open(...)                    │
-  │  entClient := ent.NewClient(ent.Driver(db)) │
-  │  queries := sqlc.New(db)               │
-  │  (cùng 1 *sql.DB, 2 client wrappers)  │
-  └─────────────────────────────────────────┘
+  ┌──────────────────────────────────────────┐
+  │           cmd/api/main.go                │
+  │  db := sql.Open(...)                     │
+  │  entClient := ent.NewClient(ent.Driver(db))  │
+  │  queries := sqlc.New(db)                 │
+  │  (same *sql.DB, 2 client wrappers)       │
+  └──────────────────────────────────────────┘
 ```
-→ **Dùng chung 1 `*sql.DB` connection pool**, 2 client layer trên đó.
+→ **Shared single `*sql.DB` connection pool**, two client layers on top.
 
 ---
 
-## 4. Configuration Management — Nhiều Lựa Chọn Nhưng Không Quyết Định
+## 4. Configuration Management — Multiple Choices, No Decision
 
-**Vấn đề:**
-Báo cáo 1 đề xuất "Viper hoặc Cleanenv" — nhưng không chọn.
+**Problem:**
+Report 1 proposes "Viper or Cleanenv" — but doesn't choose.
 
-**Sự khác biệt quan trọng:**
 | | Viper | Cleanenv |
 |---|---|---|
-| Config file support | ✅ YAML, TOML, JSON, HCL | ❌ Chỉ `.env` và env vars |
+| Config file support | ✅ YAML, TOML, JSON, HCL | ❌ Only `.env` and env vars |
 | Struct binding | ✅ | ✅ |
 | Hot reload | ✅ | ❌ |
-| Dependency size | Lớn (cobra, etc.) | Nhỏ |
-| "No config file" cloud-native | ❌ Có thể dùng file | ✅ Pure env vars |
+| Dependency size | Large (cobra, etc.) | Small |
+| "No config file" cloud-native | ❌ May use files | ✅ Pure env vars |
 
-**Làm rõ cần thiết:**
-Nếu target là cloud-native/12-Factor → **Cleanenv**.
-Nếu cần multi-environment config files → **Viper**.
-Phải chọn 1, không để team tự quyết định.
+**Decision:** If targeting cloud-native/12-Factor → **Cleanenv**. If needing multi-environment config files → **Viper**. Must choose one.
 
 ---
 
-## 5. Testing Strategy — Thiếu Nhiều Tầng
+## 5. Testing Strategy — Missing Layers
 
-**Vấn đề:**
-Báo cáo 1 nói "unit test dễ hơn Rails" qua httptest và mock DB. Đúng nhưng chưa đủ.
+**Problem:**
+Report 1 says "unit testing is easier than Rails" via httptest and mock DB. True but insufficient.
 
-**Mờ cụ thể:**
-- Integration test (với real DB) viết như thế nào? testcontainers-go?
-- E2E test có không? Nếu có, dùng gì?
-- Test data setup/teardown strategy là gì?
-- Coverage target là bao nhiêu %?
-- Contract testing với external APIs?
+**Clarification needed:**
 
-**Làm rõ cần thiết:**
-
-```markdown
-## Testing Pyramid for axe:
+```
+Testing Pyramid for axe:
 
 Layer 4: E2E (optional, smoke only)
 Layer 3: Integration — testcontainers-go + real PostgreSQL
@@ -145,27 +125,20 @@ Layer 0: Domain unit — pure functions, no mock needed
 
 ---
 
-## 6. Observability — Hoàn Toàn Không Được Nhắc Đến
+## 6. Observability — Completely Unmentioned
 
-**Vấn đề:**
-Cả 2 báo cáo gần như không đề cập:
+**Problem:**
+Neither report substantially addresses:
 - Logging format (JSON structured logs?)
 - Metrics (Prometheus? OpenTelemetry?)
-- Tracing (distributed tracing khi có microservices?)
+- Tracing (distributed tracing for microservices?)
 - Health check endpoints
 
-**Mờ cụ thể:**
-- Logger inject vào mọi layer hay dùng `slog` global?
-- Request ID propagation qua `context.Context` như thế nào?
-- Log level per environment?
-
-**Làm rõ cần thiết:**
+**Clarification — context-aware structured logging:**
 ```go
-// Context-aware structured logging pattern
 func (s *OrderService) CreateOrder(ctx context.Context, ...) error {
-    logger := LoggerFromCtx(ctx). // lấy từ context, có request_id
+    logger := LoggerFromCtx(ctx). // from context, has request_id
         With("order_id", order.ID)
-
     logger.Info("creating order")
     ...
 }
@@ -173,26 +146,26 @@ func (s *OrderService) CreateOrder(ctx context.Context, ...) error {
 
 ---
 
-## 7. Authentication / Authorization Model — Mờ Hoàn Toàn
+## 7. Authentication / Authorization Model — Completely Murky
 
-**Vấn đề:**
-Báo cáo 1 nhắc đến "middleware JWT" nhưng không define:
-- JWT hay Session? Tại sao?
-- RBAC hay ABAC hay Policy-based?
+**Problem:**
+Report 1 mentions "JWT middleware" but doesn't define:
+- JWT or Session? Why?
+- RBAC or ABAC or Policy-based?
 - Token refresh strategy?
 - Multi-tenant support?
-- Permission check xảy ra ở đâu (middleware vs service)?
+- Where does permission check happen (middleware vs service)?
 
 ---
 
-## Tóm tắt Điều Mờ
+## Summary
 
 ```
-🌫️ "No Magic" definition        → cần decision matrix cụ thể
-🌫️ Service vs Handler boundary  → cần responsibility table
-🌫️ Ent + sqlc coexistence       → cần shared connection pool guide
-🌫️ Config management            → Viper hay Cleanenv phải chọn 1
-🌫️ Testing strategy             → thiếu pyramid, thiếu integration test
-🌫️ Observability                → hoàn toàn chưa define
-🌫️ Auth model                   → JWT / RBAC strategy không rõ
+🌫️ "No Magic" definition        → needs specific decision matrix
+🌫️ Service vs Handler boundary  → needs responsibility table
+🌫️ Ent + sqlc coexistence       → needs shared connection pool guide
+🌫️ Config management            → Viper or Cleanenv, must choose one
+🌫️ Testing strategy             → missing pyramid, missing integration test
+🌫️ Observability                → completely undefined
+🌫️ Auth model                   → JWT / RBAC strategy unclear
 ```

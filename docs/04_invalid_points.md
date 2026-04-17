@@ -1,46 +1,43 @@
-# ❌ Điểm Không Hợp Lý (Invalid / Overreaching Points)
-> Những luận điểm **sai**, **phóng đại**, hoặc **tạo ra kỳ vọng không thực tế**
-> trong cả hai bản báo cáo.
+# ❌ Invalid / Overreaching Points
+> Arguments that are **wrong**, **exaggerated**, or **create unrealistic expectations**
+> in both reports.
+>
+> 🇻🇳 [Phiên bản tiếng Việt](vi/04_invalid_points.md)
 
 ---
 
-## 1. "Khả năng Mở Rộng Vô Hạn" — Phóng Đại Nguy Hiểm
+## 1. "Unlimited Scalability" — Dangerous Exaggeration
 
-**Trích từ báo cáo 1:**
-> "một nền tảng tường minh và có **khả năng mở rộng vô hạn**"
+**From Report 1:**
+> "an explicit platform with **unlimited scalability**"
 
-**Tại sao sai:**
-Không có hệ thống nào có khả năng mở rộng vô hạn. Tuyên bố này là marketing language, không phải engineering statement.
+**Why wrong:**
+No system has unlimited scalability. This is marketing language, not an engineering statement.
 
-**Vấn đề thực tế:**
-- Go xử lý concurrency tốt hơn Ruby, nhưng **database vẫn là bottleneck chính**
-- Connection pool của PostgreSQL có giới hạn (~500–1000 connections thực tế)
-- Network bandwidth, disk I/O, memory đều có giới hạn vật lý
-- Golang binary chạy trên 1 core nếu không set GOMAXPROCS đúng
+**Reality:**
+- Go handles concurrency better than Ruby, but **database is still the primary bottleneck**
+- PostgreSQL connection pool has limits (~500–1000 practical connections)
+- Network bandwidth, disk I/O, memory all have physical limits
 
-**Phiên bản trung thực:**
-> "Go cho phép scale horizontal hiệu quả hơn Ruby do lightweight goroutines và static binary deployment, nhưng bottleneck chuyển sang tầng database và infrastructure sớm hơn."
+**Honest version:**
+> "Go enables more efficient horizontal scaling than Ruby due to lightweight goroutines and static binary deployment, but bottlenecks shift to the database and infrastructure layer sooner."
 
 ---
 
-## 2. Loại Bỏ Hoàn Toàn GORM — Thiếu Nuance
+## 2. Complete GORM Ban — Lacks Nuance
 
-**Trích từ báo cáo 1:**
-> "GORM bắt buộc phải bị loại khỏi bản thiết kế kiến trúc"
+**From Report 1:**
+> "GORM must be removed from the architecture design"
 
-**Tại sao không hợp lý:**
-GORM có những use case hợp lệ:
-- Internal admin tools không cần hiệu năng cao
-- Rapid prototyping feature mới trước khi optimize
-- Team nhỏ với deadline MVP gấp
+**Why unreasonable:**
+GORM has valid use cases:
+- Internal admin tools that don't need high performance
+- Rapid prototyping new features before optimization
+- Small teams with tight MVP deadlines
 
-**Vấn đề của việc cấm tuyệt đối:**
-- Tạo ra "political debt" — dev sẽ dùng GORM ngầm rồi giấu
-- Mất đi tactical flexibility
-
-**Phiên bản hợp lý hơn:**
-```markdown
-## GORM Usage Policy:
+**More reasonable version:**
+```
+GORM Usage Policy:
 ❌ FORBIDDEN in: core business logic, high-traffic endpoints
 ⚠️  ALLOWED in: admin scripts, one-off data migrations, internal tooling
 ✅  PREFERRED: Ent (mutations) + sqlc (queries)
@@ -48,117 +45,107 @@ GORM có những use case hợp lệ:
 
 ---
 
-## 3. "Hiệu Năng Tối Đa" Của sqlc — Không Đủ Context
+## 3. sqlc "Maximum Performance" — Insufficient Context
 
-**Trích từ báo cáo 1:**
-> "sqlc: Hiệu năng tối đa, chỉ bị giới hạn bởi tốc độ mạng và trình điều khiển"
+**From Report 1:**
+> "sqlc: Maximum performance, only limited by network speed and driver"
 
-**Tại sao misleading:**
-- sqlc chỉ giúp tầng **code** không có overhead
-- Hiệu năng thực tế phụ thuộc vào **query quality** — index missing, N+1 vẫn xảy ra với sqlc
-- `pgx` driver (thay vì `database/sql`) còn nhanh hơn nhiều nhưng không được đề cập
+**Why misleading:**
+- sqlc only eliminates **code-level** overhead
+- Actual performance depends on **query quality** — missing indexes, N+1 still occur with sqlc
+- `pgx` driver (instead of `database/sql`) is much faster but wasn't mentioned
 
-**Thực tế:**
+**Reality:**
 ```
-Bottleneck thứ tự quan trọng:
-1. Missing indexes          ← quan trọng nhất
-2. N+1 query problems       ← rất phổ biến
-3. Connection pool config   ← sering bị bỏ quên
+Bottleneck priority order:
+1. Missing indexes          ← most important
+2. N+1 query problems       ← very common
+3. Connection pool config   ← often forgotten
 4. Network latency (DB location)
 5. ORM/library overhead     ← GORM ~5-10%, sqlc ~0%
 ```
-→ Library choice là **bước cuối** trong chuỗi tối ưu hiệu năng.
+→ Library choice is the **last step** in the performance optimization chain.
 
 ---
 
-## 4. "Circular Dependency Là Lỗi Kiến Trúc Của MVC" — Partially Wrong
+## 4. "Circular Dependency Is an MVC Architecture Flaw" — Partially Wrong
 
-**Trích từ báo cáo 1:**
-> "việc tái hiện cấu trúc thư mục của Rails là hành động tự sát về mặt kiến trúc"
+**From Report 1:**
+> "reproducing Rails folder structure is architectural suicide"
 
-**Tại sao quá đà:**
-- Circular dependency là **vấn đề thiết kế**, không phải vấn đề của folder structure
-- MVC folder structure không tự nhiên tạo circular import
-- Circular import xảy ra khi **package responsibilities không rõ ràng**, bất kể folder nào
+**Why overblown:**
+- Circular dependency is a **design issue**, not a folder structure issue
+- MVC folder structure doesn't inherently create circular imports
+- Circular imports happen when **package responsibilities are unclear**, regardless of folder structure
 
-**Ví dụ minh chứng:**
-```
-Folder structure: controllers/ + models/ + views/
-→ KHÔNG có circular import nếu:
-  controllers import models ✅
-  models KHÔNG import controllers ✅
-  views KHÔNG import controllers ✅
-```
-
-**Phiên bản chính xác hơn:**
-> "MVC folder structure trong Go có nguy cơ cao dẫn đến circular import nếu team không hiểu rõ dependency direction. Clean Architecture giải quyết vấn đề này bằng cách enforce direction tường minh hơn."
+**More accurate version:**
+> "MVC folder structure in Go has a high risk of circular imports if the team doesn't clearly understand dependency direction. Clean Architecture solves this by enforcing explicit direction."
 
 ---
 
-## 5. Wire — Được Trình Bày Như Silver Bullet
+## 5. Wire — Presented as Silver Bullet
 
-**Trích từ báo cáo 1:**
-> "Nếu dự án phình to... nền tảng có thể tích hợp Google Wire"
+**From Report 1:**
+> "If the project grows... the platform can integrate Google Wire"
 
-**Tại sao murky:**
-- Wire có learning curve cao và debugging phức tạp
-- Wire-generated code dài và khó đọc
-- Wire không giải quyết được tất cả DI scenarios (circular deps trong DI graph)
-- Nhiều large Go projects (k8s ecosystem) **không dùng Wire**
+**Why murky:**
+- Wire has a high learning curve and complex debugging
+- Wire-generated code is long and hard to read
+- Wire doesn't solve all DI scenarios (circular deps in DI graph)
+- Many large Go projects (k8s ecosystem) **don't use Wire**
 
-**Thực tế:**
-Với project < 50 endpoints: `main.go` manual wiring hoàn toàn đủ.
-Wire chỉ cần thiết khi > 100+ components cần wire.
+**Reality:**
+For projects < 50 endpoints: `main.go` manual wiring is entirely sufficient.
+Wire is only needed with > 100+ components.
 
 ---
 
-## 6. Báo Cáo 2 — "10 Lỗ Hổng" Nhưng Ưu Tiên Sai
+## 6. Report 2 — "10 Gaps" But Wrong Priority Order
 
-**Trích từ báo cáo 2:**
-> 10 lỗ hổng được liệt kê theo thứ tự: Transaction model, Outbox, Domain boundary...
+**From Report 2:**
+> 10 gaps listed in order: Transaction model, Outbox, Domain boundary...
 
-**Vấn đề thứ tự ưu tiên:**
-Báo cáo 2 đặt "Transaction model" là critical nhất — đúng. Nhưng đặt "Developer adoption" (#8) và "Observability" (#7) — **đây là thứ tự sai với thực tế**.
+Report 2 places "Developer adoption" at #8 and "Observability" at #7 — **wrong order for real-world impact**.
 
-**Thứ tự đúng theo impact:**
+**Correct order by impact:**
 ```
-1. Transaction model          → data corruption ngay lập tức
-2. Error taxonomy             → API unusable ngay lập tức
-3. Developer adoption         → team không dùng được kiến trúc
-4. Observability              → production incident không debug được
-5. Outbox pattern             → data inconsistency (chỉ khi dùng queue)
+1. Transaction model          → immediate data corruption
+2. Error taxonomy             → API immediately unusable
+3. Developer adoption         → team can't use the architecture
+4. Observability              → production incidents can't be debugged
+5. Outbox pattern             → data inconsistency (only with queues)
 6. CQRS light                 → performance degradation (gradual)
 7. Domain boundary            → architectural decay (long-term)
-8. Failure strategy           → production incident (eventually)
+8. Failure strategy           → production incidents (eventually)
 9. Performance/caching        → scale issue (later stage)
 10. Deployment model          → devops concern (separate team)
 ```
 
 ---
 
-## 7. Không Nhắc Đến pgx — Thiếu Sót Quan Trọng
+## 7. No Mention of pgx — Important Omission
 
-**Vấn đề:**
-Cả 2 báo cáo đề cập `database/sql` standard library nhưng không nhắc đến `pgx` (jackc/pgx).
+**Problem:**
+Both reports mention `database/sql` standard library but never mention `pgx` (jackc/pgx).
 
-**Thực tế:**
-- `pgx` là PostgreSQL driver được recommend cho production Go apps
-- Native PostgreSQL types support (JSONB, arrays, custom types)
-- Performance cao hơn `database/sql` built-in driver
-- sqlc, Ent đều support pgx natively
+**Reality:**
+- `pgx` is the recommended PostgreSQL driver for production Go apps
+- Native PostgreSQL type support (JSONB, arrays, custom types)
+- Higher performance than `database/sql` built-in driver
+- sqlc and Ent both support pgx natively
 
-**Đây là missing foundation** — ảnh hưởng đến toàn bộ data layer.
+**This is a missing foundation** — affects the entire data layer.
 
 ---
 
-## Tóm tắt Điểm Không Hợp Lý
+## Summary
 
 ```
-❌ "Mở rộng vô hạn"      → marketing, không phải engineering
-❌ Cấm tuyệt đối GORM     → thiếu nuance, tạo workarounds ngầm
-❌ sqlc "hiệu năng tối đa"→ misleading, query quality mới quan trọng
-❌ MVC = circular import  → quá đà, vấn đề là package design
-❌ Wire = silver bullet   → over-engineered với team nhỏ
-❌ Priority order báo cáo 2 → sắp xếp chưa đúng real-world impact
-❌ Thiếu pgx hoàn toàn    → foundation bị missing
+❌ "Unlimited scalability"  → marketing, not engineering
+❌ Absolute GORM ban        → lacks nuance, creates hidden workarounds
+❌ sqlc "max performance"   → misleading, query quality matters most
+❌ MVC = circular import    → overblown, issue is package design
+❌ Wire = silver bullet     → over-engineered for small teams
+❌ Report 2 priority order  → doesn't match real-world impact
+❌ Missing pgx entirely     → foundation gap
 ```
