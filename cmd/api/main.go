@@ -169,8 +169,9 @@ func main() {
 	r.Use(chimiddleware.Compress(5))
 
 	// System endpoints (no auth, no rate limit)
+	// Note: readyHandler is wired after plugin startup (line ~240) so it has
+	// access to the resolved FSStore for write-verify health check.
 	r.Get("/health", healthHandler)
-	r.Get("/ready", readyHandler(sqlDB, cacheClient, cfg.StorageMountPath))
 	r.Handle("/metrics", metrics.Handler()) // Prometheus scrape endpoint
 
 	// API docs (no auth)
@@ -238,6 +239,17 @@ func main() {
 		log.Error("plugin startup failed", "error", err)
 		os.Exit(1)
 	}
+
+	// Resolve FSStore for /ready health check AFTER plugins are started.
+	// Uses write-verify cycle (write+read+delete sentinel file) instead of
+	// os.Stat — catches stale/read-only FUSE mounts that Stat would miss.
+	var storageHealthFn func() error
+	if fsStore, ok := plugin.Resolve[storage.Store](pluginApp, storage.ServiceKey); ok {
+		if hc, ok := fsStore.(interface{ HealthCheck() error }); ok {
+			storageHealthFn = hc.HealthCheck
+		}
+	}
+	r.Get("/ready", readyHandler(sqlDB, cacheClient, storageHealthFn))
 
 	// ── HTTP Server ───────────────────────────────────────────────────────────
 	srv := &http.Server{
@@ -313,7 +325,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storagePath string) http.HandlerFunc {
+func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storageHealthFn func() error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{"status": "ok"}
 
@@ -335,10 +347,11 @@ func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storagePath string) 
 			resp["cache"] = "disabled"
 		}
 
-		// Storage mount health check
-		if storagePath != "" {
-			if _, err := os.Stat(storagePath); err != nil {
-				resp["storage"] = "error: mount unavailable"
+		// Storage mount health check — write-verify cycle (not just os.Stat).
+		// Catches stale FUSE mounts and read-only JuiceFS conditions.
+		if storageHealthFn != nil {
+			if err := storageHealthFn(); err != nil {
+				resp["storage"] = "error: " + err.Error()
 				resp["status"] = "degraded"
 			} else {
 				resp["storage"] = "ok"
@@ -352,5 +365,3 @@ func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storagePath string) 
 		middleware.WriteJSON(w, status, resp)
 	}
 }
-
-

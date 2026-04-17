@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // FSStore implements [Store] using standard filesystem operations.
@@ -103,6 +105,13 @@ func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64,
 		return nil, fmt.Errorf("storage: file size exceeds max %d bytes", s.maxSize)
 	}
 
+	// Flush FUSE/OS buffers before close to prevent silent data loss on crash.
+	// Critical for JuiceFS — the FUSE client may buffer writes asynchronously.
+	if err := f.Sync(); err != nil {
+		_ = os.Remove(fullPath)
+		return nil, wrapFSError("fsync", err)
+	}
+
 	return &Result{
 		Key:         key,
 		URL:         s.URL(key),
@@ -122,7 +131,7 @@ func (s *FSStore) Delete(_ context.Context, key string) error {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("storage: file %q not found", key)
 		}
-		return fmt.Errorf("storage: delete: %w", err)
+		return wrapFSError("delete", err)
 	}
 
 	return nil
@@ -140,7 +149,7 @@ func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("storage: file %q not found", key)
 		}
-		return nil, fmt.Errorf("storage: open: %w", err)
+		return nil, wrapFSError("open", err)
 	}
 
 	return f, nil
@@ -167,4 +176,53 @@ func (s *FSStore) Exists(_ context.Context, key string) (bool, error) {
 // URL returns the serving URL path for a given key.
 func (s *FSStore) URL(key string) string {
 	return s.urlPrefix + "/" + key
+}
+
+// HealthCheck performs a write→read→delete cycle on the storage mount.
+// This verifies the path is writable — os.Stat alone is insufficient because
+// a stale or read-only FUSE mount (e.g. JuiceFS with exceeded quota) passes
+// Stat but fails on writes.
+func (s *FSStore) HealthCheck() error {
+	sentinel := filepath.Join(s.basePath, ".axe-health-check")
+
+	if err := os.WriteFile(sentinel, []byte("ok"), 0o644); err != nil {
+		return wrapFSError("health-check write", err)
+	}
+	defer os.Remove(sentinel)
+
+	data, err := os.ReadFile(sentinel)
+	if err != nil {
+		return wrapFSError("health-check read", err)
+	}
+	if string(data) != "ok" {
+		return fmt.Errorf("storage: health-check: read-back value mismatch")
+	}
+	return nil
+}
+
+// wrapFSError translates low-level OS/FUSE errors into storage-layer errors.
+// It prevents raw syscall details (e.g. "transport endpoint is not connected")
+// from leaking into HTTP responses. A returned error includes [storage: op: ...]
+// prefix that callers can match on.
+func wrapFSError(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	// FUSE mount is disconnected or transport broken (JuiceFS crash/restart)
+	if errors.Is(err, syscall.ENOTCONN) || errors.Is(err, syscall.EIO) {
+		return fmt.Errorf("storage: %s: mount unavailable (check JuiceFS connection)", op)
+	}
+	// Read-only mount (quota exceeded or intentional RO)
+	if errors.Is(err, syscall.EROFS) {
+		return fmt.Errorf("storage: %s: mount is read-only", op)
+	}
+	// No space left (disk full or JuiceFS quota)
+	if errors.Is(err, syscall.ENOSPC) {
+		return fmt.Errorf("storage: %s: no space left on mount", op)
+	}
+	// Permission denied
+	if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+		return fmt.Errorf("storage: %s: permission denied", op)
+	}
+	return fmt.Errorf("storage: %s: %w", op, err)
 }

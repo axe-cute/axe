@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/axe-cute/axe/config"
@@ -304,4 +305,118 @@ func TestPluginShutdown(t *testing.T) {
 	// Shutdown before register should not panic
 	err := p.Shutdown(context.Background())
 	require.NoError(t, err)
+}
+
+// ── HealthCheck Tests ─────────────────────────────────────────────────────────
+
+func TestHealthCheck_WritableMount(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	err = store.HealthCheck()
+	assert.NoError(t, err, "HealthCheck should succeed on a writable temp directory")
+}
+
+func TestHealthCheck_SentinelFileCleanedUp(t *testing.T) {
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	err = store.HealthCheck()
+	require.NoError(t, err)
+
+	// Sentinel file must be removed after successful check
+	sentinelPath := cfg.MountPath + "/.axe-health-check"
+	_, statErr := os.Stat(sentinelPath)
+	assert.True(t, os.IsNotExist(statErr), "sentinel file should be deleted after HealthCheck")
+}
+
+func TestHealthCheck_ReadOnlyDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("cannot test read-only dir as root")
+	}
+
+	dir := t.TempDir()
+	// Make the directory read-only
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	store := &FSStore{basePath: dir, maxSize: 10 * 1024 * 1024, urlPrefix: "/upload"}
+
+	err := store.HealthCheck()
+	assert.Error(t, err, "HealthCheck should fail on read-only directory")
+	assert.Contains(t, err.Error(), "storage:")
+}
+
+// ── wrapFSError Tests ─────────────────────────────────────────────────────────
+
+func TestWrapFSError_Nil(t *testing.T) {
+	err := wrapFSError("op", nil)
+	assert.NoError(t, err)
+}
+
+func TestWrapFSError_ENOTCONN(t *testing.T) {
+	err := wrapFSError("open", syscall.ENOTCONN)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mount unavailable")
+	assert.Contains(t, err.Error(), "JuiceFS")
+	// Must NOT expose raw syscall message to callers
+	assert.NotContains(t, err.Error(), "transport endpoint")
+}
+
+func TestWrapFSError_EIO(t *testing.T) {
+	err := wrapFSError("delete", syscall.EIO)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mount unavailable")
+}
+
+func TestWrapFSError_EROFS(t *testing.T) {
+	err := wrapFSError("write", syscall.EROFS)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read-only")
+}
+
+func TestWrapFSError_ENOSPC(t *testing.T) {
+	err := wrapFSError("write", syscall.ENOSPC)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no space left")
+}
+
+func TestWrapFSError_EACCES(t *testing.T) {
+	err := wrapFSError("open", syscall.EACCES)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+func TestWrapFSError_Generic(t *testing.T) {
+	err := wrapFSError("stat", syscall.ENOENT)
+	require.Error(t, err)
+	// Generic errors are wrapped with the op name
+	assert.Contains(t, err.Error(), "storage: stat:")
+}
+
+// ── fsync on Upload ───────────────────────────────────────────────────────────
+
+func TestUpload_DataReadableAfterClose(t *testing.T) {
+	// This tests that data written by Upload is immediately readable
+	// (fsync ensures the FUSE/OS buffers are flushed before we return)
+	cfg := testConfig(t)
+	store, err := NewFSStore(cfg)
+	require.NoError(t, err)
+
+	content := []byte("critical data that must survive a crash")
+	result, err := store.Upload(context.Background(), "critical.txt",
+		bytes.NewReader(content), int64(len(content)), "text/plain")
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(content)), result.Size)
+
+	// Read back immediately — data must be durable
+	reader, err := store.Open(context.Background(), "critical.txt")
+	require.NoError(t, err)
+	defer reader.Close()
+
+	got, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	assert.Equal(t, content, got, "data must be fully durable after Upload returns")
 }

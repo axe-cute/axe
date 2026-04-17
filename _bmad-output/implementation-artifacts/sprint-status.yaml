@@ -381,3 +381,28 @@ epics_continued:
         sprint: 21
         priority: P1
         notes: "Rate limit scaffold TODO replaced with real redis_rate implementation; go-redis/redis_rate added to tmplGoMod; docs/05_plans.md axe new --with-storage mismatch fixed"
+      - id: story-9.3
+        title: "Storage: fsync + write-verify health check"
+        status: done
+        sprint: 21
+        priority: P0
+        notes: |
+          pkg/plugin/storage/fs_store.go: added f.Sync() before close in Upload() to flush FUSE buffers.
+          Added FSStore.HealthCheck() — write+read+delete sentinel cycle instead of os.Stat.
+          cmd/api/main.go: /ready now calls HealthCheck() via interface assertion instead of os.Stat(path).
+      - id: story-9.4
+        title: "Storage: wrap FUSE errors → AppError"
+        status: done
+        sprint: 21
+        priority: P1
+        notes: |
+          Added wrapFSError(op, err) in fs_store.go.
+          Handles ENOTCONN, EIO (mount unavailable), EROFS (read-only), ENOSPC (quota), EACCES/EPERM (permissions).
+          Applied to Delete, Open, fsync call. Prevents raw syscall messages leaking to HTTP clients.
+          11 new tests added to storage_test.go.
+      - id: story-9.5
+        title: "Create ADR-010 file"
+        status: done
+        sprint: 21
+        priority: P1
+        notes: "docs/adr/010-fsstore-posix-over-s3.md created. ADR README updated with full 001-010 index and pending-file note for 002,004-009."
