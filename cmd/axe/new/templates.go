@@ -95,6 +95,9 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+
+# Uploads (storage plugin)
+uploads/
 `
 
 const tmplAirToml = `root = "."
@@ -326,6 +329,17 @@ ASYNQ_QUEUE_CRITICAL=critical
 `
 	}
 
+	storageSection := ""
+	if data.WithStorage {
+		storageSection = `
+# Storage (file uploads)
+STORAGE_BACKEND=local
+STORAGE_MOUNT_PATH=./uploads
+STORAGE_MAX_FILE_SIZE=10485760
+STORAGE_URL_PREFIX=/upload
+`
+	}
+
 	return fmt.Sprintf(`# =============================================================================
 # %s — Environment Configuration
 # Copy this to .env and fill in your values
@@ -342,11 +356,11 @@ LOG_LEVEL=debug           # debug | info | warn | error
 JWT_SECRET=your-256-bit-secret-change-in-production
 JWT_ACCESS_TOKEN_EXPIRY_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
-%s
+%s%s
 # Observability (optional for local dev)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 OTEL_SERVICE_NAME=%s
-`, data.Name, dbSection, redisSection, asynqSection, data.Name)
+`, data.Name, dbSection, redisSection, asynqSection, storageSection, data.Name)
 }
 
 // tmplDockerCompose builds docker-compose.yml dynamically based on DB and feature flags.
@@ -488,6 +502,10 @@ func tmplMainAPIGo(data TemplateData) string {
 		imports += `
 	"{{.Module}}/pkg/worker"`
 	}
+	if data.WithStorage {
+		imports += `
+	"{{.Module}}/pkg/storage"`
+	}
 	imports += `
 	"{{.Module}}/pkg/jwtauth"
 	"{{.Module}}/pkg/metrics"
@@ -556,6 +574,28 @@ func tmplMainAPIGo(data TemplateData) string {
 `
 	}
 
+	storageInit := ""
+	if data.WithStorage {
+		storageInit = `
+	// ── File Storage ──────────────────────────────────────────────────────────
+	storageHandler := storage.NewHandler(storage.Config{
+		Backend:     cfg.StorageBackend,
+		MountPath:   cfg.StorageMountPath,
+		MaxFileSize: cfg.StorageMaxFileSize,
+		URLPrefix:   cfg.StorageURLPrefix,
+	}, log)
+	log.Info("storage enabled", "backend", cfg.StorageBackend, "mount", cfg.StorageMountPath, "prefix", cfg.StorageURLPrefix)
+`
+	}
+
+	storageRoute := ""
+	if data.WithStorage {
+		storageRoute = `
+	restRouter.Handle(cfg.StorageURLPrefix+"/*", storageHandler)
+	restRouter.Handle(cfg.StorageURLPrefix, storageHandler)
+`
+	}
+
 	workerStart := ""
 	workerStop := ""
 	if data.WithWorker {
@@ -600,7 +640,7 @@ func main() {
 	log := logger.New(cfg.Environment)
 	slog.SetDefault(log)
 	log.Info("%s starting", "port", cfg.ServerPort, "env", cfg.Environment)
-%s%s
+%s%s%s
 	_ = log
 
 	// ── Database ─────────────────────────────────────────────────────────────
@@ -641,7 +681,7 @@ func main() {
 
 	// axe:wire:repo
 	// axe:wire:handler
-
+%s
 	restRouter.Get("/health", healthHandler)
 	restRouter.Handle("/metrics", metrics.Handler())
 
@@ -742,7 +782,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	_ = enc.Encode(v)
 }
-`, imports, data.Name, cacheInit, workerInit, sqlDriverName, workerStart, workerStop)
+`, imports, data.Name, cacheInit, workerInit, storageInit, sqlDriverName, storageRoute, workerStart, workerStop)
 }
 
 
@@ -948,6 +988,14 @@ type Config struct {
 	// Observability
 	OTELEndpoint    string ` + "`" + `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""` + "`" + `
 	OTELServiceName string ` + "`" + `env:"OTEL_SERVICE_NAME"           env-default:"app"` + "`" + `
+
+	// Storage
+	StorageBackend     string ` + "`" + `env:"STORAGE_BACKEND"       env-default:"local"` + "`" + `
+	StorageMountPath   string ` + "`" + `env:"STORAGE_MOUNT_PATH"    env-default:"./uploads"` + "`" + `
+	StorageMaxFileSize int64  ` + "`" + `env:"STORAGE_MAX_FILE_SIZE" env-default:"10485760"` + "`" + `
+	StorageURLPrefix   string ` + "`" + `env:"STORAGE_URL_PREFIX"    env-default:"/upload"` + "`" + `
+
+	// axe:plugin:config
 }
 
 // Load reads configuration from environment variables.
@@ -2559,3 +2607,332 @@ func methodColor(method string) string {
 }
 `
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Storage plugin templates
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TmplStorageCore = `package storage
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// Config configures the storage package.
+type Config struct {
+	Backend     string   // "local" or "juicefs" (both use FSStore — distinction is for logging)
+	MountPath   string   // base directory, e.g. "./uploads" or "/mnt/jfs/uploads"
+	MaxFileSize int64    // max upload size in bytes (default: 10MB)
+	AllowedTypes []string // restrict MIME types, empty = allow all
+	URLPrefix   string   // HTTP route prefix, e.g. "/upload"
+}
+
+func (c *Config) defaults() {
+	if c.MountPath == "" { c.MountPath = "./uploads" }
+	if c.MaxFileSize <= 0 { c.MaxFileSize = 10 * 1024 * 1024 }
+	if c.URLPrefix == "" { c.URLPrefix = "/upload" }
+	if c.Backend == "" { c.Backend = "local" }
+}
+
+// Store abstracts file storage operations.
+type Store interface {
+	Upload(ctx context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error)
+	Delete(ctx context.Context, key string) error
+	Open(ctx context.Context, key string) (io.ReadCloser, error)
+	Exists(ctx context.Context, key string) (bool, error)
+	URL(key string) string
+}
+
+// Result holds metadata about a stored file.
+type Result struct {
+	Key         string ` + "`" + `json:"key"` + "`" + `
+	URL         string ` + "`" + `json:"url"` + "`" + `
+	Size        int64  ` + "`" + `json:"size"` + "`" + `
+	ContentType string ` + "`" + `json:"content_type"` + "`" + `
+}
+
+// KeyForFile generates a storage key: YYYY/MM/DD/{name}
+func KeyForFile(name string) string {
+	return time.Now().UTC().Format("2006/01/02") + "/" + name
+}
+
+// ── FSStore ──────────────────────────────────────────────────────────────────
+
+// FSStore implements Store using standard filesystem operations.
+// Works identically on local directories and JuiceFS mount points.
+type FSStore struct {
+	basePath  string
+	maxSize   int64
+	allowed   map[string]bool
+	urlPrefix string
+}
+
+// NewFSStore creates a filesystem-backed store.
+func NewFSStore(cfg Config) (*FSStore, error) {
+	cfg.defaults()
+	if err := os.MkdirAll(cfg.MountPath, 0o755); err != nil {
+		return nil, fmt.Errorf("storage: create base dir %q: %w", cfg.MountPath, err)
+	}
+	allowed := make(map[string]bool, len(cfg.AllowedTypes))
+	for _, t := range cfg.AllowedTypes {
+		allowed[strings.ToLower(t)] = true
+	}
+	return &FSStore{basePath: cfg.MountPath, maxSize: cfg.MaxFileSize, allowed: allowed, urlPrefix: cfg.URLPrefix}, nil
+}
+
+func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error) {
+	if len(s.allowed) > 0 && !s.allowed[strings.ToLower(contentType)] {
+		return nil, fmt.Errorf("storage: content type %q not allowed", contentType)
+	}
+	if size > s.maxSize {
+		return nil, fmt.Errorf("storage: file size %d exceeds max %d bytes", size, s.maxSize)
+	}
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return nil, fmt.Errorf("storage: mkdir: %w", err)
+	}
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("storage: create file: %w", err)
+	}
+	defer f.Close()
+	limited := io.LimitReader(r, s.maxSize+1)
+	written, err := io.Copy(f, limited)
+	if err != nil {
+		_ = os.Remove(fullPath)
+		return nil, fmt.Errorf("storage: write: %w", err)
+	}
+	if written > s.maxSize {
+		_ = os.Remove(fullPath)
+		return nil, fmt.Errorf("storage: file size exceeds max %d bytes", s.maxSize)
+	}
+	return &Result{Key: key, URL: s.URL(key), Size: written, ContentType: contentType}, nil
+}
+
+func (s *FSStore) Delete(_ context.Context, key string) error {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	if err := os.Remove(fullPath); err != nil {
+		if os.IsNotExist(err) { return fmt.Errorf("storage: file %q not found", key) }
+		return fmt.Errorf("storage: delete: %w", err)
+	}
+	return nil
+}
+
+func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	f, err := os.Open(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) { return nil, fmt.Errorf("storage: file %q not found", key) }
+		return nil, fmt.Errorf("storage: open: %w", err)
+	}
+	return f, nil
+}
+
+func (s *FSStore) Exists(_ context.Context, key string) (bool, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	_, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) { return false, nil }
+		return false, fmt.Errorf("storage: stat: %w", err)
+	}
+	return true, nil
+}
+
+func (s *FSStore) URL(key string) string { return s.urlPrefix + "/" + key }
+`
+
+const TmplStorageHandler = `package storage
+
+import (
+	"fmt"
+	"io"
+	"log/slog"
+	"mime"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+// Handler provides HTTP endpoints for file operations.
+type Handler struct {
+	store Store
+	cfg   Config
+	log   *slog.Logger
+}
+
+// NewHandler creates a storage HTTP handler.
+func NewHandler(cfg Config, log *slog.Logger) *Handler {
+	cfg.defaults()
+	store, err := NewFSStore(cfg)
+	if err != nil {
+		log.Error("storage: failed to create store", "error", err)
+	}
+	return &Handler{store: store, cfg: cfg, log: log}
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.handleUpload(w, r)
+	case http.MethodGet:
+		h.handleServe(w, r)
+	case http.MethodDelete:
+		h.handleDelete(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxFileSize+1024*1024)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		metricsUploadErrors.WithLabelValues("parse_error").Inc()
+		writeError(w, http.StatusBadRequest, "failed to parse multipart form: "+err.Error())
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		metricsUploadErrors.WithLabelValues("missing_file").Inc()
+		writeError(w, http.StatusBadRequest, "missing 'file' field in form data")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" || contentType == "application/octet-stream" {
+		ext := filepath.Ext(header.Filename)
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			contentType = ct
+		} else {
+			buf := make([]byte, 512)
+			n, _ := file.Read(buf)
+			contentType = http.DetectContentType(buf[:n])
+			if seeker, ok := file.(io.ReadSeeker); ok {
+				_, _ = seeker.Seek(0, io.SeekStart)
+			}
+		}
+	}
+
+	ext := filepath.Ext(header.Filename)
+	key := KeyForFile(uuid.New().String() + ext)
+
+	result, err := h.store.Upload(r.Context(), key, file, header.Size, contentType)
+	if err != nil {
+		h.log.Warn("upload failed", "error", err, "filename", header.Filename)
+		metricsUploadErrors.WithLabelValues("store_error").Inc()
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not allowed") {
+			status = http.StatusUnsupportedMediaType
+		} else if strings.Contains(err.Error(), "exceeds max") {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	metricsUploadBytes.Add(float64(result.Size))
+	metricsOps.WithLabelValues("upload", "ok").Inc()
+	h.log.Info("file uploaded", "key", result.Key, "size", result.Size, "content_type", result.ContentType)
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, ` + "`" + `{"key":%q,"url":%q,"size":%d,"content_type":%q}` + "`" + `, result.Key, result.URL, result.Size, result.ContentType)
+}
+
+func (h *Handler) handleServe(w http.ResponseWriter, r *http.Request) {
+	key := h.extractKey(r)
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+	reader, err := h.store.Open(r.Context(), key)
+	if err != nil {
+		metricsOps.WithLabelValues("serve", "error").Inc()
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "file not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to open file")
+		}
+		return
+	}
+	defer reader.Close()
+	ext := filepath.Ext(key)
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	metricsOps.WithLabelValues("serve", "ok").Inc()
+	if _, err := io.Copy(w, reader); err != nil {
+		h.log.Warn("serve file copy error", "key", key, "error", err)
+	}
+}
+
+func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
+	key := h.extractKey(r)
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+	if err := h.store.Delete(r.Context(), key); err != nil {
+		metricsOps.WithLabelValues("delete", "error").Inc()
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "file not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to delete file")
+		}
+		return
+	}
+	metricsOps.WithLabelValues("delete", "ok").Inc()
+	h.log.Info("file deleted", "key", key)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) extractKey(r *http.Request) string {
+	prefix := h.cfg.URLPrefix + "/"
+	key := strings.TrimPrefix(r.URL.Path, prefix)
+	if key == r.URL.Path { return "" }
+	return key
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, ` + "`" + `{"error":%q}` + "`" + `, msg)
+}
+`
+
+const TmplStorageMetrics = `package storage
+
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	metricsUploadBytes = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "upload_bytes_total",
+		Help:      "Total bytes uploaded.",
+	})
+	metricsUploadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "upload_errors_total",
+		Help:      "Total upload errors by reason.",
+	}, []string{"reason"})
+	metricsOps = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "operations_total",
+		Help:      "Total storage operations by operation and status.",
+	}, []string{"operation", "status"})
+)
+`

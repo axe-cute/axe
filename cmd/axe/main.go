@@ -18,6 +18,7 @@ import (
 	"github.com/axe-cute/axe/cmd/axe/generate"
 	"github.com/axe-cute/axe/cmd/axe/migrate"
 	axenew "github.com/axe-cute/axe/cmd/axe/new"
+	"github.com/axe-cute/axe/cmd/axe/plugin"
 )
 
 var version = "0.1.0"
@@ -38,6 +39,7 @@ ship a full CRUD resource in under 10 minutes.`,
 	root.AddCommand(axenew.Command())
 	root.AddCommand(generate.Command())
 	root.AddCommand(migrate.Command())
+	root.AddCommand(plugin.Command())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)

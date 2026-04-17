@@ -19,6 +19,7 @@ type TemplateData struct {
 	WithWorker  bool
 	WithCache   bool
 	WithMetrics bool
+	WithStorage bool
 }
 
 // dbConfig groups per-driver DSN defaults used inside templates.
@@ -63,13 +64,15 @@ func scaffold(name, target string, opts Options) error {
 		WithWorker:  !opts.NoWorker,
 		WithCache:   !opts.NoCache,
 		WithMetrics: true,
+		WithStorage: opts.WithStorage,
 	}
 
 	fmt.Printf("\n🪓  axe new — scaffolding %q\n", name)
 	fmt.Printf("   module  : %s\n", opts.Module)
 	fmt.Printf("   database: %s (%s)\n", dbc.EnvName, dbc.Driver)
 	fmt.Printf("   worker  : %v\n", data.WithWorker)
-	fmt.Printf("   cache   : %v\n\n", data.WithCache)
+	fmt.Printf("   cache   : %v\n", data.WithCache)
+	fmt.Printf("   storage : %v\n\n", data.WithStorage)
 
 	// ── 1. Create directory tree ──────────────────────────────────────────────
 	dirs := []string{
@@ -97,6 +100,9 @@ func scaffold(name, target string, opts Options) error {
 	}
 	if data.WithWorker {
 		dirs = append(dirs, "pkg/worker")
+	}
+	if data.WithStorage {
+		dirs = append(dirs, "pkg/storage")
 	}
 
 	for _, d := range dirs {
@@ -240,6 +246,13 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 	if data.WithWorker {
 		files = append(files,
 			fileEntry{"pkg/worker/worker.go", tmplWorker},
+		)
+	}
+	if data.WithStorage {
+		files = append(files,
+			fileEntry{"pkg/storage/storage.go", TmplStorageCore},
+			fileEntry{"pkg/storage/handler.go", TmplStorageHandler},
+			fileEntry{"pkg/storage/metrics.go", TmplStorageMetrics},
 		)
 	}
 
