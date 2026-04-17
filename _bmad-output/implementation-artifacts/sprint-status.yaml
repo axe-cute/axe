@@ -153,7 +153,7 @@ epics:
         sprint: 19
         priority: P2
         notes: "pkg/plugin/storage/: FSStore (os pkg, works for local + JuiceFS POSIX mount), POST/GET/DELETE /upload, Prometheus metrics, zero external deps"
-      - { id: story-8.3, title: "axe-plugin-email (SendGrid)",        status: planned, sprint: 21, priority: P2 }
+      - { id: story-8.3, title: "axe-plugin-email (SendGrid/SMTP)",        status: in-progress, sprint: 21, priority: P2 }
       - { id: story-8.4, title: "Multi-Tenancy Foundation",           status: planned, sprint: 22, priority: P2 }
       - { id: story-8.5, title: "Plugin Registry CLI",                status: planned, sprint: 23, priority: P3 }
       - id: story-8.6
@@ -348,10 +348,9 @@ sprint_log:
       - "Story 6.4: Docker job now depends on scaffold-test passing"
 
   - sprint: 21
-    goal: "Email Plugin (SendGrid/SMTP)"
-    stories: [story-8.3]
-    status: planned
-    notes: "Moved from Sprint 20 — storage hardening (P0) takes priority"
+    goal: "Email Plugin + Test Coverage (pkg/cache, pkg/ratelimit, pkg/outbox) + Fix generated repo stubs"
+    stories: [story-8.3, story-9.1, story-9.2]
+    status: in-progress
 
   - sprint: 22
     goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
@@ -364,3 +363,21 @@ sprint_log:
     stories: [story-8.5]
     status: planned
 
+
+epics_continued:
+  - id: epic-9
+    title: "DX Quality — Test Coverage & Generated Code Fidelity"
+    status: in-progress
+    stories:
+      - id: story-9.1
+        title: "Unit tests: pkg/cache, pkg/ratelimit, pkg/outbox"
+        status: in-progress
+        sprint: 21
+        priority: P1
+        notes: "PRD success metric: test coverage ≥ 80% — 14 packages had zero tests"
+      - id: story-9.2
+        title: "Fix generated repo stubs → compile-ready Ent bodies"
+        status: done
+        sprint: 21
+        priority: P1
+        notes: "Rate limit scaffold TODO replaced with real redis_rate implementation; go-redis/redis_rate added to tmplGoMod; docs/05_plans.md axe new --with-storage mismatch fixed"

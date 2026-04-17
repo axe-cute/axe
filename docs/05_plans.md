@@ -152,19 +152,20 @@ svc := plugin.MustResolve[MyService](app, "my-service")
 ### 4.2 Storage Plugin Integration (Sprint 20) ✅
 
 ```bash
-axe new blog-api --with-storage     # Include at creation
-axe plugin add storage              # Add to existing project
+axe new blog-api                    # Create project first
+axe plugin add storage              # Add storage plugin to existing project
 ```
 
 Auto-creates: `pkg/storage/` (Store, FSStore, Handler, metrics), config fields, env vars, route wiring.
+Security defaults: JWT auth on POST/DELETE, path traversal protection, CORS middleware.
 
 ### 4.3 Upcoming Plugins
 
 | Plugin | Sprint | Status |
 |---|---|---|
 | Email (SendGrid/SMTP) | 21 | 🟡 Planned |
-| Multi-tenancy middleware | 21 | 🟡 Planned |
-| Plugin Registry CLI | 22 | 🟡 Planned |
+| Multi-tenancy middleware | 22 | 🟡 Planned |
+| Plugin Registry CLI | 23 | 🟡 Planned |
 
 ---
 
