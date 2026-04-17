@@ -1,528 +1,453 @@
+<div align="center">
+
 # 🪓 axe
 
-> Go web framework — Clean Architecture, zero runtime magic, production-grade from day one.
+### Ship production Go APIs in minutes, not months.
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · File Storage
 
----
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
+[![Release](https://img.shields.io/badge/v0.1.5-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
 
-## Philosophy
-
-- **No runtime magic** — every behavior is traceable at compile-time
-- **Clean Architecture baked-in** — layer violations caught by the compiler
-- **Production-grade from day one** — transactions, structured logging, error taxonomy, rate limiting
-- **DX-first** — new developer ships a feature on day one
-- **Plugin-friendly** — extend without touching core (storage, email, payments…)
+</div>
 
 ---
 
-## Features
+<br/>
 
-| Category | What you get |
-|---|---|
-| **HTTP** | Chi v5 router, structured middleware (logging, recovery, request ID, CORS) |
-| **ORM + Query** | Ent (writes) + sqlc (complex reads), shared `*sql.DB` pool |
-| **Multi-DB** | PostgreSQL (pgx v5), MySQL, SQLite — pluggable adapter interface |
-| **Auth** | JWT access/refresh tokens, token blocklist via Redis, role-based middleware |
-| **Cache** | Redis client with key-prefix isolation |
-| **Rate Limiting** | Redis sliding-window limiter (global + strict per-route) |
-| **Background Jobs** | Asynq (Redis-backed queues, Asynqmon dashboard at `:8081`) |
-| **Outbox Pattern** | Atomic DB write + event dispatch, background poller → Asynq |
-| **WebSocket** | Hub/Client/Room abstraction, Redis Pub/Sub adapter for multi-instance, JWT auth, per-user connection limits |
-| **File Storage** | FSStore plugin — local dev & JuiceFS production (POSIX, zero SDK deps), POST/GET/DELETE `/upload` endpoints |
-| **Plugin System** | `plugin.Plugin` interface, typed service locator, FIFO register / LIFO shutdown |
-| **Observability** | Prometheus metrics (`/metrics`), structured slog logging (JSON in prod), OpenTelemetry-ready |
-| **Code Generator** | `axe generate resource` — 10 files across all layers in one command |
-| **Project Scaffold** | `axe new` — full project from scratch, `< 5 min` to first API call |
-| **API Docs** | OpenAPI 3.0 spec, Swagger UI (`/docs`), Redoc (`/docs/redoc`) |
-| **CI** | GitHub Actions: multi-DB matrix (Postgres + MySQL + SQLite), lint, race, coverage |
-
----
-
-## Quick Start — New Project (< 5 minutes)
-
-**Prerequisites**: Go 1.22+, Docker
+## ⚡ 60 Seconds to Your First API
 
 ```bash
-# Install the CLI
 go install github.com/axe-cute/axe/cmd/axe@latest
 
-# Scaffold a new project
 axe new blog-api --module=github.com/you/blog-api
+cd blog-api && make setup && make run
 
-# One-command setup (copies .env, starts Postgres + Redis, migrates, seeds)
-cd blog-api && make setup
-
-# Run (hot-reload with air if installed)
-make run
-# → http://localhost:8080
+# Generate a full CRUD resource (10 files across all layers)
+axe generate resource Post --fields="title:string,body:text,published:bool"
 ```
-
-Check health:
-```bash
-curl http://localhost:8080/health
-# {"status":"ok","service":"axe"}
-```
-
-### More scaffolding options
 
 ```bash
-# MySQL backend
-axe new shop --db=mysql --module=github.com/acme/shop
-
-# Lightweight (SQLite, no worker, no cache — no Docker needed)
-axe new lite --db=sqlite --no-worker --no-cache --yes
-
-# With file storage plugin (upload/download/delete endpoints)
-axe new media-api --with-storage
-
-# Interactive wizard (prompts for all options)
-axe new
+curl http://localhost:8080/api/v1/posts/        # List
+curl -X POST http://localhost:8080/api/v1/posts/ -d '{"title":"Hello"}' -H "Content-Type: application/json"
 ```
+
+> **That's it.** Domain entity, HTTP handler, service, repository, Ent schema, migration, sqlc queries, and tests — all generated and wired.
+
+<br/>
 
 ---
 
-## Contributing — Framework Development
+## 🏗️ What You Get
 
-```bash
-# Clone the framework repo
-git clone https://github.com/axe-cute/axe && cd axe
+<table>
+<tr><td>
 
-# Setup and run
-make setup && make run
-# → http://localhost:8080
-```
+**🔀 HTTP & Routing**
+- Chi v5 radix-tree router
+- Structured middleware stack
+- Faster than Gin & Echo ([benchmarks](#-performance))
 
----
+</td><td>
 
-## Development Commands
+**🔐 Auth & Security**
+- JWT access/refresh tokens
+- Redis token blocklist
+- Role-based middleware
 
-```bash
-# ── Run ──────────────────────────────────────────────
-make run                     # API server (air hot-reload if available)
-make build                   # Build binary to ./bin/axe
+</td><td>
 
-# ── Test ─────────────────────────────────────────────
-make test                    # All unit tests (< 30s)
-make test-race               # With race detector
-make test-coverage           # HTML coverage report
-make test-integration        # PostgreSQL integration (Docker)
-make test-integration-mysql  # MySQL integration (Docker)
-make test-integration-sqlite # SQLite integration (no Docker)
-make test-ws                 # WebSocket hub unit tests
-make test-ws-integration     # WebSocket Redis integration (Docker)
-make test-plugin             # Plugin + storage unit tests
+**🗄️ Multi-Database**
+- PostgreSQL (pgx v5)
+- MySQL 8+
+- SQLite (no CGO)
 
-# ── Quality ──────────────────────────────────────────
-make lint                    # golangci-lint
-make vet                     # go vet
-make fmt                     # gofmt + goimports
+</td></tr>
+<tr><td>
 
-# ── Codegen ──────────────────────────────────────────
-make generate                # All generators (Ent + sqlc + Wire)
-make generate-ent            # Ent ORM only
-make generate-sqlc           # sqlc only
+**⚡ Real-time**
+- WebSocket Hub/Client/Room
+- Redis Pub/Sub for scaling
+- JWT auth on WS connections
 
-# ── Database ─────────────────────────────────────────
-make migrate-up              # Apply pending migrations
-make migrate-down            # Rollback last migration
-make migrate-status          # Show migration status
-make seed                    # Load test/seed data
+</td><td>
 
-# ── Docker ───────────────────────────────────────────
-make docker-up               # Start PostgreSQL + Redis + Asynqmon
-make docker-down             # Stop services
-make docker-logs             # Follow compose logs
+**📦 File Storage**
+- POSIX filesystem (zero SDK)
+- Local dev & JuiceFS prod
+- Upload/serve/delete API
 
-# ── Misc ─────────────────────────────────────────────
-make setup                   # Full local setup from zero
-make tidy                    # go mod tidy
-make clean                   # Remove build artifacts
-```
+</td><td>
 
----
+**🔧 Background Jobs**
+- Asynq worker (Redis queues)
+- Outbox pattern (atomic events)
+- Dashboard at `:8081`
 
-## Project Structure
+</td></tr>
+<tr><td>
 
-```
-axe/
-├── cmd/
-│   ├── api/main.go                    # Composition Root
-│   └── axe/                           # CLI tool
-│       ├── main.go                    #   axe new / generate / migrate
-│       ├── new/                       #   Project scaffolding
-│       ├── generate/                  #   Resource code generator
-│       ├── migrate/                   #   DB migration runner
-│       └── plugin/                    #   Plugin manager (axe plugin add)
-├── internal/
-│   ├── domain/                        # Entities + Interfaces ONLY (no infra imports)
-│   ├── handler/                       # HTTP layer (Chi)
-│   │   └── middleware/                # JWT auth, RBAC, logger, recovery, request ID
-│   ├── service/                       # Business logic, transactions, outbox
-│   └── repository/                    # Data access (Ent writes, sqlc reads)
-├── pkg/
-│   ├── apperror/                      # Error taxonomy (NotFound, Forbidden, Conflict…)
-│   ├── cache/                         # Redis cache client
-│   ├── db/                            # Pluggable DB adapter interface
-│   │   ├── postgres/                  #   PostgreSQL (pgx v5)
-│   │   ├── mysql/                     #   MySQL 8+
-│   │   └── sqlite/                    #   SQLite (pure Go, no CGO)
-│   ├── jwtauth/                       # JWT issue / verify / refresh
-│   ├── logger/                        # Structured slog wrapper
-│   ├── metrics/                       # Prometheus middleware + /metrics handler
-│   ├── outbox/                        # Outbox event poller → Asynq
-│   ├── plugin/                        # Plugin system (interface + typed service locator)
-│   │   └── storage/                   # File storage plugin (FSStore)
-│   ├── ratelimit/                     # Redis sliding-window rate limiter
-│   ├── txmanager/                     # Transaction manager (context-injected tx)
-│   ├── validator/                     # Input validation
-│   ├── worker/                        # Asynq background worker
-│   ├── devroutes/                     # Rails-like route listing on 404 (dev mode)
-│   └── ws/                            # WebSocket hub, client, room, auth
-│       ├── hub.go                     #   Hub with Room-based broadcasting
-│       ├── client.go                  #   Per-connection client
-│       ├── auth.go                    #   WSAuth middleware (JWT header + query)
-│       ├── adapter.go                 #   Adapter interface (Memory / Redis)
-│       ├── redis_adapter.go           #   Redis Pub/Sub for multi-instance
-│       └── metrics.go                 #   Prometheus counters
-├── ent/schema/                        # Ent ORM schema definitions
-├── db/
-│   ├── migrations/                    # SQL migrations
-│   └── queries/                       # sqlc SQL queries
-├── config/config.go                   # Cleanenv configuration (env vars)
-├── docs/
-│   ├── openapi.yaml                   # OpenAPI 3.0 spec
-│   ├── architecture_contract.md       # Layer rules
-│   ├── data_consistency.md            # Transaction + outbox patterns
-│   └── adr/                           # Architecture Decision Records
-├── .github/workflows/                 # CI: multi-DB matrix, lint, race
-├── docker-compose.yml                 # PostgreSQL + Redis + Asynqmon
-├── Makefile                           # All development commands
-└── .env.example                       # Environment variable reference
-```
+**📊 Observability**
+- Prometheus `/metrics`
+- Structured slog (JSON in prod)
+- OpenTelemetry-ready
+
+</td><td>
+
+**🧩 Plugin System**
+- `plugin.Plugin` interface
+- Typed service locator
+- FIFO register / LIFO shutdown
+
+</td><td>
+
+**🛡️ Production Defaults**
+- Rate limiting (Redis sliding window)
+- Error taxonomy (typed errors)
+- Transaction manager
+
+</td></tr>
+</table>
+
+<br/>
 
 ---
 
-## Architecture
-
-See [`docs/architecture_contract.md`](docs/architecture_contract.md) for the full contract.
-
-```
-┌───────────────────────────────────────────────┐
-│               cmd/api/main.go                 │  ← Composition Root
-│  (wires: config, DB, cache, JWT, WS, plugins) │
-└────────────────────┬──────────────────────────┘
-                     │
-┌────────────────────▼──────────────────────────┐
-│             internal/handler/                 │  ← HTTP layer (Chi)
-│   • Parse request, validate, call service     │
-│   • Middleware: JWT, RBAC, rate limit, metrics│
-└────────────────────┬──────────────────────────┘
-                     │ via interface
-┌────────────────────▼──────────────────────────┐
-│             internal/service/                 │  ← Business logic
-│   • Rules, authorization, TxManager, outbox   │
-└────────────────────┬──────────────────────────┘
-                     │ via interface
-┌────────────────────▼──────────────────────────┐
-│           internal/repository/                │  ← Data access
-│   • Ent (writes), sqlc (complex reads)        │
-└────────────────────┬──────────────────────────┘
-                     │
-┌────────────────────▼──────────────────────────┐
-│      PostgreSQL / MySQL / SQLite              │
-│          (pluggable via pkg/db)               │
-└───────────────────────────────────────────────┘
-```
-
-Key rules:
-- `internal/domain/` — only stdlib imports, no infrastructure
-- `internal/handler/` — parse request → validate → call service → write response
-- `internal/service/` — business rules, transactions, outbox events
-- `internal/repository/` — DB access only (Ent writes, sqlc reads)
-
----
-
-## axe CLI
+## 🪓 The CLI
 
 ### `axe new` — Project Scaffolding
 
 ```bash
-axe new blog-api                                           # Defaults: Postgres + worker + cache
-axe new shop --db=mysql --module=github.com/acme/shop      # MySQL
-axe new lite --db=sqlite --no-worker --no-cache --yes      # Minimal, no Docker needed
+axe new blog-api                                # Postgres + worker + cache (default)
+axe new shop --db=mysql                         # MySQL backend
+axe new lite --db=sqlite --no-worker --no-cache # Minimal, zero Docker
+axe new media --with-storage                    # Includes file upload endpoints
+axe new                                         # Interactive wizard
 ```
 
 ### `axe generate resource` — Code Generator
 
-```bash
-# Full CRUD (10 files: domain, handler, service, repo, schema, migration, queries, tests)
-axe generate resource Post \
-  --fields="title:string,body:text,published:bool,views:int"
-
-# With relationship
-axe generate resource Comment \
-  --fields="body:text,score:int" \
-  --belongs-to=Post
-
-# With JWT authentication
-axe generate resource Order \
-  --fields="amount:float,status:string" \
-  --with-auth
-
-# Admin-only (implies --with-auth)
-axe generate resource Setting \
-  --fields="key:string,value:text" \
-  --admin-only
-
-# With WebSocket room (scaffolds pkg/ws if missing)
-axe generate resource Chat \
-  --fields="message:text" \
-  --with-ws
-```
-
-**Supported field types**: `string`, `text`, `int`, `float`, `bool`, `uuid`, `time`
-
-> **Reserved names**: The following names are reserved by Ent and **cannot** be used as resource names:
->
-> `Config`, `Client`, `Query`, `Tx`, `Mutation`, `Hook`, `Policy`, `Value`,
-> `Predicate`, `Runtime`, `Context`, plus Go keywords (`type`, `func`, `var`, …)
->
-> If you try, `axe` will stop before generating any files:
-> ```
-> Error: resource name "Config" is reserved (conflicts with ent/Go internals).
->   Try a more specific name, e.g.: AppConfig, SiteConfig, Setting
-> ```
-
-### `axe plugin` — Plugin Manager
-
-Add optional plugins to an existing project without re-scaffolding:
+One command → 10 files across all Clean Architecture layers:
 
 ```bash
-# Add file storage to an existing project
-axe plugin add storage
+axe generate resource Post    --fields="title:string,body:text,published:bool"
+axe generate resource Comment --fields="body:text" --belongs-to=Post
+axe generate resource Order   --fields="amount:float,status:string" --with-auth
+axe generate resource Setting --fields="key:string,value:text" --admin-only
+axe generate resource Chat    --fields="message:text" --with-ws
 ```
 
-This automatically:
-- Creates `pkg/storage/` (Store, FSStore, Handler, Prometheus metrics)
-- Injects config fields into `config/config.go`
-- Wires handler + routes into `cmd/api/main.go`
-- Adds env vars to `.env.example`
-- Adds `uploads/` to `.gitignore`
+**Field types**: `string` · `text` · `int` · `float` · `bool` · `uuid` · `time`
 
-### `axe migrate` — Migration Runner
+> ⚠️ Names like `Config`, `Client`, `Query`, `Tx` are reserved by Ent.
+> axe will catch this and suggest alternatives like `AppConfig` or `Setting`.
+
+### `axe plugin add` — Extend Existing Projects
 
 ```bash
-axe migrate up       # Apply all pending migrations
-axe migrate down     # Rollback last migration
-axe migrate status   # Show current state
+axe plugin add storage    # Injects pkg/storage/, config, routes, env vars
 ```
+
+Auto-wires everything — no manual setup required.
+
+### `axe migrate` — Database Migrations
+
+```bash
+axe migrate up       # Apply pending
+axe migrate down     # Rollback last
+axe migrate status   # Current state
+```
+
+<br/>
 
 ---
 
-## WebSocket
+## 📐 Architecture
 
-Real-time support with Hub/Client/Room pattern. Supports single-instance (memory) and multi-instance (Redis Pub/Sub) deployments.
+Clean Architecture enforced by Go's import system — **the compiler catches layer violations**.
 
-```bash
-# Connect (JWT via query param for browser clients)
-websocat "ws://localhost:8080/ws?token=<jwt>"
-
-# Or via header
-websocat -H="Authorization: Bearer <jwt>" ws://localhost:8080/ws
+```
+                    cmd/api/main.go                         ← Composition Root
+                         │
+              ┌──────────▼──────────┐
+              │  internal/handler/  │                       ← HTTP (Chi)
+              │  middleware: JWT,   │                         Parse → Validate → Call Service
+              │  RBAC, rate limit   │
+              └──────────┬──────────┘
+                         │ via interface
+              ┌──────────▼──────────┐
+              │  internal/service/  │                       ← Business Logic
+              │  rules, tx, outbox  │                         Authorization, Transactions
+              └──────────┬──────────┘
+                         │ via interface
+              ┌──────────▼──────────┐
+              │ internal/repository │                       ← Data Access
+              │ Ent (writes)        │                         Ent ORM + sqlc reads
+              │ sqlc (complex reads)│
+              └──────────┬──────────┘
+                         │
+              ┌──────────▼──────────┐
+              │  PostgreSQL / MySQL │                       ← Pluggable via pkg/db
+              │  / SQLite           │
+              └─────────────────────┘
 ```
 
-Configuration:
-```env
-HUB_ADAPTER=memory   # or "redis" for multi-instance
-```
+**Rules**: `domain/` has zero infra imports · `handler/` never touches DB · `service/` owns business rules · `repository/` owns data access
+
+<br/>
 
 ---
 
-## File Storage Plugin
+## 📦 File Storage
 
-Zero-dependency file storage via POSIX filesystem. Works identically on local dev directories and JuiceFS mount points (no SDK needed).
-
-**Two ways to enable:**
+POSIX filesystem storage — zero SDK dependencies. Works on local directories and JuiceFS mounts.
 
 ```bash
-# Option 1: Include at project creation
-axe new blog-api --with-storage
-
-# Option 2: Add to an existing project
+# Enable at creation or add later
+axe new myapp --with-storage
 axe plugin add storage
-```
 
-**Usage:**
-
-```bash
 # Upload
 curl -X POST http://localhost:8080/upload -F "file=@photo.png"
-# → {"key":"2026/04/16/uuid.png","url":"/upload/2026/04/16/uuid.png","size":12345,"content_type":"image/png"}
+# → {"key":"2026/04/16/uuid.png","url":"/upload/...","size":12345,"content_type":"image/png"}
 
-# Download
+# Download / Delete
 curl http://localhost:8080/upload/2026/04/16/uuid.png -o photo.png
-
-# Delete
-curl -X DELETE http://localhost:8080/upload/2026/04/16/uuid.png
-# → 204 No Content
+curl -X DELETE http://localhost:8080/upload/2026/04/16/uuid.png  # → 204
 ```
 
-Configuration:
+<details>
+<summary>Configuration & Metrics</summary>
+
 ```env
-STORAGE_BACKEND=local               # "local" (dev) or "juicefs" (production)
-STORAGE_MOUNT_PATH=./uploads        # or /mnt/jfs/uploads
-STORAGE_MAX_FILE_SIZE=10485760      # 10MB
+STORAGE_BACKEND=local          # local | juicefs
+STORAGE_MOUNT_PATH=./uploads
+STORAGE_MAX_FILE_SIZE=10485760 # 10MB
 STORAGE_URL_PREFIX=/upload
 ```
 
-Prometheus metrics:
-- `axe_storage_upload_bytes_total` — total bytes uploaded
-- `axe_storage_operations_total{operation,status}` — ops by type and result
-- `axe_storage_upload_errors_total{reason}` — errors by cause
+Prometheus metrics: `axe_storage_upload_bytes_total` · `axe_storage_operations_total{op,status}` · `axe_storage_upload_errors_total{reason}`
+
+</details>
+
+<br/>
 
 ---
 
-## Plugin System
+## 🔌 WebSocket
+
+Hub/Client/Room pattern with JWT auth. Single-instance (memory) or multi-instance (Redis Pub/Sub).
+
+```bash
+websocat "ws://localhost:8080/ws/chats/?token=<jwt>"
+```
+
+```bash
+# Generate a resource with WebSocket room
+axe generate resource Chat --fields="message:text" --with-ws
+```
+
+<details>
+<summary>Configuration</summary>
+
+```env
+HUB_ADAPTER=memory   # memory | redis
+```
+
+</details>
+
+<br/>
+
+---
+
+## 🚀 Performance
+
+Benchmarked against the most popular Go frameworks · Apple M1 · Go 1.25 · 5 runs median
+
+| Scenario | 🪓 axe (Chi) | Gin | Echo | Fiber |
+|---|:---:|:---:|:---:|:---:|
+| **Static JSON** | **583 ns** 🏆 | 704 ns | 792 ns | 4,158 ns |
+| **URL Params** | **731 ns** 🏆 | 763 ns | 760 ns | 4,381 ns |
+| **Middleware Stack** | **1,014 ns** 🏆 | 1,961 ns | 1,980 ns | 7,458 ns |
+| **JSON Body Parse** | 2,909 ns | 2,914 ns | 2,883 ns | 10,992 ns |
+| **50-Route Match** | 1,443 ns | 747 ns | 626 ns | 4,269 ns |
+
+> **axe wins 3/5 scenarios** outright. Middleware stack is **2× faster** than Gin and Echo.
+> JSON parsing is a tie (dominated by `encoding/json`, not the router).
+> Multi-route matching is ≤1µs difference — negligible vs real DB/network latency.
+>
+> [→ Full benchmark source & raw data](benchmarks/)
+
+<br/>
+
+---
+
+## 🧩 Plugin System
 
 Extend axe without modifying core code:
 
 ```go
-// Create a plugin
 type MyPlugin struct{}
 
 func (p *MyPlugin) Name() string { return "my-plugin" }
 func (p *MyPlugin) Register(ctx context.Context, app *plugin.App) error {
-    // Access: app.Router, app.DB, app.Cache, app.Hub, app.Logger
     plugin.Provide[MyService](app, "my-service", svc)
     return nil
 }
 func (p *MyPlugin) Shutdown(ctx context.Context) error { return nil }
 
-// Register in main.go
+// Usage
 app.Use(&MyPlugin{})
-app.Start(ctx)
-
-// Other plugins resolve dependencies:
 svc := plugin.MustResolve[MyService](app, "my-service")
 ```
 
-Lifecycle: FIFO registration, LIFO shutdown, automatic rollback on failure.
+Lifecycle: FIFO registration · LIFO shutdown · automatic rollback on failure.
+
+<br/>
 
 ---
 
-## Observability
+## 🛠️ Developer Experience
 
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Liveness probe |
-| `GET /ready` | Readiness probe (DB + Redis) |
-| `GET /metrics` | Prometheus scrape endpoint |
-| `GET /debug/routes` | Route listing — categorized by API / WebSocket / System (dev mode only) |
-| `GET /docs` | Swagger UI |
-| `GET /docs/redoc` | Redoc |
-| `GET /openapi.yaml` | OpenAPI 3.0 spec |
+### Rails-like Route Listing
 
-### Development Route Listing
-
-In development mode, hitting a non-existent route returns a **Rails-like route listing page** grouped by category:
+In development, hitting a non-existent route shows a **categorized route page**:
 
 ```
-Routing Error
-No route matches [GET] "/api/v1/does-not-exist"
+Routing Error — No route matches [GET] "/api/v1/nope"
 
-── API ─────────────────────────────
+── API ─────────────────────────
 GET     /api/v1/posts/
 POST    /api/v1/posts/
 GET     /api/v1/posts/{id}
-PUT     /api/v1/posts/{id}
-DELETE  /api/v1/posts/{id}
 
-── WebSocket ───────────────────────
+── WebSocket ───────────────────
 GET     /ws/chats/
 
-── System ──────────────────────────
+── System ──────────────────────
 GET     /health
 GET     /metrics
-GET     /debug/routes
 ```
 
-Also printed to the terminal on startup. In production, returns `{"error":"not found"}`.
+### Endpoints Out of the Box
+
+| Endpoint | Purpose |
+|---|---|
+| `/health` | Liveness probe |
+| `/ready` | Readiness (DB + Redis) |
+| `/metrics` | Prometheus scrape |
+| `/debug/routes` | Full route table |
+| `/upload` | File storage (when enabled) |
+
+<br/>
 
 ---
 
-## Environment Configuration
+## 📖 Quick Reference
 
-See [`.env.example`](.env.example) for the full reference. Key variables:
+<details>
+<summary><strong>Make Commands</strong></summary>
+
+```bash
+make run                     # Hot-reload dev server
+make build                   # Binary → ./bin/axe
+make test                    # Unit tests (< 30s)
+make test-race               # Race detector
+make test-integration        # Postgres (Docker)
+make test-integration-mysql  # MySQL (Docker)
+make test-integration-sqlite # SQLite
+make lint                    # golangci-lint
+make generate                # Ent + sqlc codegen
+make migrate-up              # Apply migrations
+make docker-up               # Postgres + Redis + Asynqmon
+make setup                   # Full zero-to-running
+```
+
+</details>
+
+<details>
+<summary><strong>Project Structure</strong></summary>
+
+```
+axe/
+├── cmd/api/main.go              # Composition Root
+├── cmd/axe/                     # CLI: new / generate / migrate / plugin
+├── internal/
+│   ├── domain/                  # Entities + Interfaces (stdlib only)
+│   ├── handler/                 # HTTP layer + middleware
+│   ├── service/                 # Business logic + transactions
+│   └── repository/              # Data access (Ent + sqlc)
+├── pkg/
+│   ├── cache/                   # Redis client
+│   ├── db/{postgres,mysql,sqlite}  # DB adapters
+│   ├── jwtauth/                 # JWT tokens
+│   ├── metrics/                 # Prometheus
+│   ├── outbox/                  # Event outbox → Asynq
+│   ├── plugin/storage/          # File storage plugin
+│   ├── ratelimit/               # Rate limiter
+│   ├── worker/                  # Background jobs
+│   ├── ws/                      # WebSocket hub
+│   └── devroutes/               # Dev route listing
+├── ent/schema/                  # ORM schemas
+├── db/{migrations,queries}/     # SQL files
+├── config/config.go             # Env-based config
+└── benchmarks/                  # Framework benchmarks
+```
+
+</details>
+
+<details>
+<summary><strong>Environment Variables</strong></summary>
 
 ```env
-# Server
 SERVER_PORT=8080
-ENVIRONMENT=development               # development | staging | production
-
-# Database (pluggable: postgres | mysql | sqlite3)
-DB_DRIVER=postgres
+ENVIRONMENT=development           # development | staging | production
+DB_DRIVER=postgres                # postgres | mysql | sqlite3
 DATABASE_URL=postgres://axe:axe@localhost:5432/axe_dev?sslmode=disable
-
-# Redis (cache + rate limiter + worker + WS pub/sub)
 REDIS_URL=redis://localhost:6379/0
-
-# Auth
 JWT_SECRET=your-256-bit-secret
-
-# WebSocket
-HUB_ADAPTER=memory                     # memory | redis
-
-# Storage
-STORAGE_BACKEND=local                  # local | juicefs
+HUB_ADAPTER=memory                # memory | redis
+STORAGE_BACKEND=local             # local | juicefs
 STORAGE_MOUNT_PATH=./uploads
 ```
 
----
+See [`.env.example`](.env.example) for the full reference.
 
-## Reference Implementation
+</details>
 
-The `User` domain is the **canonical reference** for all other domains:
-- [`internal/domain/user.go`](internal/domain/user.go)
-- [`internal/handler/user_handler.go`](internal/handler/user_handler.go)
-- [`internal/service/user_service.go`](internal/service/user_service.go)
-- [`internal/repository/user_repo.go`](internal/repository/user_repo.go)
-
-When in doubt → read User domain.
-
----
-
-## Onboarding (1 day)
-
-**Morning** (4h):
-1. Read [`docs/architecture_contract.md`](docs/architecture_contract.md) → 30 min
-2. `make setup && make run` → 5 min
-3. Read User domain code end-to-end → 90 min
-4. Run and read User tests → 30 min
-
-**Afternoon** (4h):
-1. `axe generate resource YourDomain --fields="..." --with-auth`
-2. Customize generated code
-3. Write 1 business rule in service layer
-4. Submit PR
-
----
-
-## Docker Services
-
-```bash
-make docker-up    # Starts:
-```
+<details>
+<summary><strong>Docker Services</strong></summary>
 
 | Service | Port | Purpose |
 |---|---|---|
 | PostgreSQL 16 | `5432` | Primary database |
-| Redis 7 | `6379` | Cache, rate limiter, worker queues, WS pub/sub |
+| Redis 7 | `6379` | Cache, rate limiter, queues, WS pub/sub |
 | Asynqmon | `8081` | Background job dashboard |
+
+```bash
+make docker-up    # Start all
+make docker-down  # Stop all
+```
+
+</details>
+
+<br/>
 
 ---
 
-## License
+## 🤝 Contributing
 
-MIT
+```bash
+git clone https://github.com/axe-cute/axe && cd axe && make setup && make run
+```
+
+See [`docs/architecture_contract.md`](docs/architecture_contract.md) for layer rules.
+
+---
+
+<div align="center">
+
+**MIT License** · Built with ❤️ and Go
+
+</div>
