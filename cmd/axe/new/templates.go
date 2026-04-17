@@ -261,10 +261,10 @@ make docker-down      # Stop Docker services
 
 ` + "```bash" + `
 # Generate a full CRUD resource
-go run ./cmd/axe generate resource Post --fields="title:string,body:text,published:bool"
+axe generate resource Post --fields="title:string,body:text,published:bool"
 
 # With authentication
-go run ./cmd/axe generate resource Order --fields="amount:float" --with-auth
+axe generate resource Order --fields="amount:float" --with-auth
 ` + "```" + `
 
 ## Project Structure

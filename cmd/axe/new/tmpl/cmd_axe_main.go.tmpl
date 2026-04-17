@@ -2,7 +2,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/axe generate resource Chat --fields="title:string,body:text" --with-ws
+//	axe generate resource Chat --fields="title:string,body:text" --with-ws
 //	go run ./cmd/axe migrate up / down / status / create <name>
 //	go run ./cmd/axe version
 package main
@@ -100,9 +100,9 @@ func resourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resource <Name>",
 		Short: "Generate a full CRUD resource (domain + handler + service + repo + schema + SQL)",
-		Example: `  go run ./cmd/axe generate resource Post --fields="title:string,body:text"
-  go run ./cmd/axe generate resource Order --fields="amount:float" --with-auth
-  go run ./cmd/axe generate resource Event --fields="title:string" --with-ws`,
+		Example: `  axe generate resource Post --fields="title:string,body:text"
+  axe generate resource Order --fields="amount:float" --with-auth
+  axe generate resource Event --fields="title:string" --with-ws`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := toTitle(args[0])

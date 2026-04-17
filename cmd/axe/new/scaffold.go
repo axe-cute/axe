@@ -102,7 +102,7 @@ func scaffold(name, target string, opts Options) error {
 		dirs = append(dirs, "pkg/worker")
 	}
 	if data.WithStorage {
-		dirs = append(dirs, "pkg/storage")
+		dirs = append(dirs, "pkg/storage", "uploads")
 	}
 
 	for _, d := range dirs {
@@ -305,7 +305,7 @@ Next steps:
 
 	fmt.Printf(`
   # Generate your first resource:
-  go run ./cmd/axe generate resource Post --fields="title:string,body:text"
+  axe generate resource Post --fields="title:string,body:text"
 
   # API will be available at:
   curl http://localhost:8080/health
