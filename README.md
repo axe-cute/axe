@@ -8,7 +8,7 @@ Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · F
 
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/v0.1.5-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
+[![Release](https://img.shields.io/badge/v0.1.6-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
 
 </div>
 
