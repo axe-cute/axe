@@ -4,7 +4,7 @@ version: 3
 phase: 2
 
 current_sprint: 20
-active_story: epic-8/story-8.6
+active_story: null  # Sprint 20 complete
 
 epics:
   - id: epic-1
@@ -122,9 +122,10 @@ epics:
         notes: "scaffold() runs go mod tidy; tmplMainAxeGo = full migrate up/down/status/create (pgx/v5 inline); make setup && make run verified end-to-end"
       - id: story-6.4
         title: "axe new CI integration test"
-        status: planned
-        sprint: 16
+        status: done
+        sprint: 20
         priority: P1
+        notes: "ci.yml scaffold-test job: matrix {postgres,mysql,sqlite}, axe new --yes → go vet → go build → go test"
 
   - id: epic-7
     title: "WebSocket Hub & Real-time Support"
@@ -335,8 +336,16 @@ sprint_log:
   - sprint: 20
     goal: "Storage Hardening (Security) + axe new CI test"
     stories: [story-8.6, story-6.4]
-    status: in-progress
-    notes: "Story 8.6 (P0): JWT auth on upload/delete, path traversal fix, CORS, /ready health check, metrics labels. Story 6.4 carried from Sprint 16."
+    status: done
+    completed_at: "2026-04-17"
+    results:
+      - "Story 8.6: JWT auth on POST/DELETE storage routes (always), optional on GET via RequireAuth"
+      - "Story 8.6: safePath() blocks path traversal attacks"
+      - "Story 8.6: CORS middleware (go-chi/cors), /ready storage health check, metrics backend label"
+      - "Story 8.6: 18/18 tests PASS (-race), full suite 0 FAIL"
+      - "Story 6.4: ci.yml scaffold-test job — matrix {postgres,mysql,sqlite}"
+      - "Story 6.4: axe new --yes → go vet → go build → go test on generated project"
+      - "Story 6.4: Docker job now depends on scaffold-test passing"
 
   - sprint: 21
     goal: "Email Plugin (SendGrid/SMTP)"

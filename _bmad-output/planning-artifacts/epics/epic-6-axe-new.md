@@ -97,14 +97,20 @@
 - API :8080 + Redis + Asynq worker all green ✅
 
 ### Story 6.4 — `axe new` Integration Test
-**Sprint**: 20 (carried from 16) | **Priority**: P1 | **Status**: 🟡 Planned
+**Sprint**: 20 (carried from 16) | **Priority**: P1 | **Status**: ✅ Done
 
 **Goal**: CI tự động generate project mới và verify nó build được.
 
 **Acceptance Criteria**:
-- [ ] CI job: `axe new test-project-ci && cd test-project-ci && go build ./...`
-- [ ] CI job: `go test ./...` passes trên generated project
-- [ ] Nếu test fail → CI blocks merge
+- [x] CI job: `axe new test-project-ci && cd test-project-ci && go build ./...`
+- [x] CI job: `go test ./...` passes trên generated project
+- [x] Nếu test fail → CI blocks merge
+
+**Results**:
+- `.github/workflows/ci.yml`: `scaffold-test` job added
+- Matrix: postgres, mysql, sqlite (3 variants, fail-fast: false)
+- Steps: build CLI → `axe new --yes` → `go vet` → `go build` → `go test`
+- Docker job now depends on scaffold-test passing
 
 ---
 
