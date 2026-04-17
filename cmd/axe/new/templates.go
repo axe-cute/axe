@@ -578,12 +578,13 @@ func tmplMainAPIGo(data TemplateData) string {
 	if data.WithStorage {
 		storageInit = `
 	// ── File Storage ──────────────────────────────────────────────────────────
-	storageHandler := storage.NewHandler(storage.Config{
+	storageCfg := storage.Config{
 		Backend:     cfg.StorageBackend,
 		MountPath:   cfg.StorageMountPath,
 		MaxFileSize: cfg.StorageMaxFileSize,
 		URLPrefix:   cfg.StorageURLPrefix,
-	}, log)
+	}
+	storageHandler := storage.NewHandler(storageCfg, log)
 	log.Info("storage enabled", "backend", cfg.StorageBackend, "mount", cfg.StorageMountPath, "prefix", cfg.StorageURLPrefix)
 `
 	}
@@ -591,8 +592,17 @@ func tmplMainAPIGo(data TemplateData) string {
 	storageRoute := ""
 	if data.WithStorage {
 		storageRoute = `
-	restRouter.Handle(cfg.StorageURLPrefix+"/*", storageHandler)
-	restRouter.Handle(cfg.StorageURLPrefix, storageHandler)
+	// ── Storage routes ────────────────────────────────────────────────────────
+	// GET (serve files): public by default
+	// POST (upload) + DELETE: require JWT authentication — secure by design
+	restRouter.Route(cfg.StorageURLPrefix, func(r chi.Router) {
+		r.Get("/*", storageHandler.HandleServe)
+		r.Group(func(r chi.Router) {
+			r.Use(jwtauth.ChiMiddleware(jwtSvc))
+			r.Post("/", storageHandler.HandleUpload)
+			r.Delete("/*", storageHandler.HandleDelete)
+		})
+	})
 `
 	}
 
@@ -1326,8 +1336,11 @@ const tmplJwtauth = `// Package jwtauth provides JWT token generation and valida
 package jwtauth
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -1424,6 +1437,42 @@ var (
 	ErrTokenInvalid = errors.New("token invalid")
 	ErrTokenRevoked = errors.New("token revoked")
 )
+
+// ── Chi Middleware ────────────────────────────────────────────────────────────
+
+type contextKey string
+
+const claimsKey contextKey = "jwt_claims"
+
+// ChiMiddleware returns a chi-compatible middleware that validates JWT tokens.
+// It extracts the token from the Authorization header (Bearer <token>),
+// validates it, and injects the claims into the request context.
+// Requests without a valid token receive 401 Unauthorized.
+func ChiMiddleware(svc *Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+				http.Error(w, ` + "`" + `{"error":"missing or invalid Authorization header"}` + "`" + `, http.StatusUnauthorized)
+				return
+			}
+			tokenStr := strings.TrimPrefix(auth, "Bearer ")
+			claims, err := svc.Validate(tokenStr)
+			if err != nil {
+				http.Error(w, ` + "`" + `{"error":"` + "`" + `+err.Error()+` + "`" + `"}` + "`" + `, http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// ClaimsFromContext extracts JWT claims from the request context.
+func ClaimsFromContext(ctx context.Context) (*Claims, bool) {
+	claims, ok := ctx.Value(claimsKey).(*Claims)
+	return claims, ok
+}
 `
 
 const tmplCache = `// Package cache provides a Redis-backed cache client for {{.Name}}.
@@ -2686,6 +2735,24 @@ func NewFSStore(cfg Config) (*FSStore, error) {
 	return &FSStore{basePath: cfg.MountPath, maxSize: cfg.MaxFileSize, allowed: allowed, urlPrefix: cfg.URLPrefix}, nil
 }
 
+// safePath ensures the resolved path stays within basePath.
+// Prevents path traversal attacks (e.g. key = "../../etc/passwd").
+func (s *FSStore) safePath(key string) (string, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	absBase, err := filepath.Abs(s.basePath)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve base: %w", err)
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve path: %w", err)
+	}
+	if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) && absPath != absBase {
+		return "", fmt.Errorf("storage: invalid key %q (path traversal)", key)
+	}
+	return fullPath, nil
+}
+
 func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error) {
 	if len(s.allowed) > 0 && !s.allowed[strings.ToLower(contentType)] {
 		return nil, fmt.Errorf("storage: content type %q not allowed", contentType)
@@ -2693,7 +2760,10 @@ func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64,
 	if size > s.maxSize {
 		return nil, fmt.Errorf("storage: file size %d exceeds max %d bytes", size, s.maxSize)
 	}
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return nil, fmt.Errorf("storage: mkdir: %w", err)
 	}
@@ -2716,8 +2786,11 @@ func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64,
 }
 
 func (s *FSStore) Delete(_ context.Context, key string) error {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
-	if err := os.Remove(fullPath); err != nil {
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
+	if err = os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) { return fmt.Errorf("storage: file %q not found", key) }
 		return fmt.Errorf("storage: delete: %w", err)
 	}
@@ -2725,7 +2798,10 @@ func (s *FSStore) Delete(_ context.Context, key string) error {
 }
 
 func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) { return nil, fmt.Errorf("storage: file %q not found", key) }
@@ -2735,8 +2811,11 @@ func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
 }
 
 func (s *FSStore) Exists(_ context.Context, key string) (bool, error) {
-	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
-	_, err := os.Stat(fullPath)
+	fullPath, err := s.safePath(key)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) { return false, nil }
 		return false, fmt.Errorf("storage: stat: %w", err)
@@ -2762,6 +2841,9 @@ import (
 )
 
 // Handler provides HTTP endpoints for file operations.
+// Auth model:
+//   - GET (serve files): public by default
+//   - POST (upload) + DELETE: require JWT — enforced at routing level
 type Handler struct {
 	store Store
 	cfg   Config
@@ -2778,20 +2860,8 @@ func NewHandler(cfg Config, log *slog.Logger) *Handler {
 	return &Handler{store: store, cfg: cfg, log: log}
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		h.handleUpload(w, r)
-	case http.MethodGet:
-		h.handleServe(w, r)
-	case http.MethodDelete:
-		h.handleDelete(w, r)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request) {
+// HandleUpload handles POST / — multipart file upload (JWT required).
+func (h *Handler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxFileSize+1024*1024)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		metricsUploadErrors.WithLabelValues("parse_error").Inc()
@@ -2847,7 +2917,8 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, ` + "`" + `{"key":%q,"url":%q,"size":%d,"content_type":%q}` + "`" + `, result.Key, result.URL, result.Size, result.ContentType)
 }
 
-func (h *Handler) handleServe(w http.ResponseWriter, r *http.Request) {
+// HandleServe handles GET /* — serve file content (public).
+func (h *Handler) HandleServe(w http.ResponseWriter, r *http.Request) {
 	key := h.extractKey(r)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing file key")
@@ -2874,7 +2945,8 @@ func (h *Handler) handleServe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
+// HandleDelete handles DELETE /* — remove file (JWT required).
+func (h *Handler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	key := h.extractKey(r)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "missing file key")
