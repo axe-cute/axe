@@ -109,6 +109,9 @@ AI must not create custom error responses. Must use `pkg/apperror` taxonomy.
 | DB/external failure | `apperror.ErrInternal` |
 | Business rule violated | `apperror.ErrConflict` |
 
+> **Note**: In the actual source code, the struct uses field `HTTPStatus` (not `Status`).
+> See `pkg/apperror/apperror.go` for details.
+
 ```go
 // ❌ Custom error format
 return c.JSON(400, map[string]string{"error": "user not found"})

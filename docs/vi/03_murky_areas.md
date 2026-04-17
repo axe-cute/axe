@@ -3,6 +3,20 @@
 > Những điểm **không sai, không đúng** — mơ hồ, thiếu định nghĩa rõ ràng,
 > khiến team khó ra quyết định nhất quán khi build thực tế.
 
+### 📌 Trạng thái hiện tại (v0.1.5)
+
+> **Tất cả 7 điều mờ đã được làm rõ và implement:**
+>
+> | # | Murky Area | Quyết định |
+> |---|---|---|
+> | 1 | "No Magic" definition | ✅ Decision Matrix trong `architecture_contract.md` |
+> | 2 | Service vs Handler | ✅ Responsibility table được áp dụng |
+> | 3 | Ent + sqlc | ✅ Shared `*sql.DB` pool |
+> | 4 | Config management | ✅ **Cleanenv** (`config/config.go`) |
+> | 5 | Testing strategy | ✅ Multi-DB matrix CI (Postgres + MySQL + SQLite) |
+> | 6 | Observability | ✅ `pkg/logger` (slog) + `pkg/metrics` (Prometheus) |
+> | 7 | Auth model | ✅ JWT + RBAC (`pkg/jwtauth` + `middleware/auth.go`) |
+
 ---
 
 ## 1. "Không Ma Thuật" — Định Nghĩa Chưa Đủ Operationalizable
@@ -189,11 +203,13 @@ Báo cáo 1 nhắc đến "middleware JWT" nhưng không define:
 ## Tóm tắt Điều Mờ
 
 ```
-🌫️ "No Magic" definition        → cần decision matrix cụ thể
-🌫️ Service vs Handler boundary  → cần responsibility table
-🌫️ Ent + sqlc coexistence       → cần shared connection pool guide
-🌫️ Config management            → Viper hay Cleanenv phải chọn 1
-🌫️ Testing strategy             → thiếu pyramid, thiếu integration test
-🌫️ Observability                → hoàn toàn chưa define
-🌫️ Auth model                   → JWT / RBAC strategy không rõ
+✅ "No Magic" definition        → Decision Matrix trong architecture_contract.md
+✅ Service vs Handler boundary  → Responsibility table được áp dụng
+✅ Ent + sqlc coexistence       → Shared *sql.DB pool, 2 client wrappers
+✅ Config management            → Chọn Cleanenv (12-Factor, env vars only)
+✅ Testing strategy             → Multi-DB CI matrix + testcontainers
+✅ Observability                → slog (JSON) + Prometheus /metrics
+✅ Auth model                   → JWT access/refresh + RBAC middleware
 ```
+
+> Tài liệu này giữ nguyên nội dung gốc để làm **bối cảnh lịch sử** cho các quyết định kiến trúc.

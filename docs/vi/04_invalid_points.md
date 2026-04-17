@@ -3,6 +3,12 @@
 > Những luận điểm **sai**, **phóng đại**, hoặc **tạo ra kỳ vọng không thực tế**
 > trong cả hai bản báo cáo.
 
+### 📌 Trạng thái hiện tại (v0.1.5)
+
+> Một số điểm đã được giải quyết:
+> - **#5 Wire**: axe dùng **manual wiring** trong `main.go` — xác nhận phê phán là đúng
+> - **#7 pgx**: Đã tích hợp pgx v5 (`pkg/db/postgres/adapter.go`)
+
 ---
 
 ## 1. "Khả năng Mở Rộng Vô Hạn" — Phóng Đại Nguy Hiểm
@@ -148,7 +154,7 @@ Cả 2 báo cáo đề cập `database/sql` standard library nhưng không nhắ
 - Performance cao hơn `database/sql` built-in driver
 - sqlc, Ent đều support pgx natively
 
-**Đây là missing foundation** — ảnh hưởng đến toàn bộ data layer.
+**Đã giải quyết trong v0.1.5** — axe dùng pgx v5 qua `pkg/db/postgres/adapter.go`.
 
 ---
 
@@ -159,7 +165,9 @@ Cả 2 báo cáo đề cập `database/sql` standard library nhưng không nhắ
 ❌ Cấm tuyệt đối GORM     → thiếu nuance, tạo workarounds ngầm
 ❌ sqlc "hiệu năng tối đa"→ misleading, query quality mới quan trọng
 ❌ MVC = circular import  → quá đà, vấn đề là package design
-❌ Wire = silver bullet   → over-engineered với team nhỏ
+✅ Wire = silver bullet   → axe dùng manual wiring, xác nhận phê phán đúng
 ❌ Priority order báo cáo 2 → sắp xếp chưa đúng real-world impact
-❌ Thiếu pgx hoàn toàn    → foundation bị missing
+✅ pgx                    → đã tích hợp pgx v5 (pkg/db/postgres)
 ```
+
+> Tài liệu này giữ nguyên nội dung gốc để làm **bối cảnh lịch sử** cho các quyết định kiến trúc.

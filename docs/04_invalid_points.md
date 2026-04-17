@@ -6,6 +6,14 @@
 
 ---
 
+### 📌 Current Status (v0.1.5)
+
+> Some points have been addressed:
+> - **#5 Wire**: axe uses **manual wiring** in `main.go` — confirms the criticism
+> - **#7 pgx**: Now integrated via `pkg/db/postgres/adapter.go` (pgx v5)
+
+---
+
 ## 1. "Unlimited Scalability" — Dangerous Exaggeration
 
 **From Report 1:**
@@ -134,7 +142,7 @@ Both reports mention `database/sql` standard library but never mention `pgx` (ja
 - Higher performance than `database/sql` built-in driver
 - sqlc and Ent both support pgx natively
 
-**This is a missing foundation** — affects the entire data layer.
+**Resolved in v0.1.5** — axe uses pgx v5 via `pkg/db/postgres/adapter.go`.
 
 ---
 
@@ -145,7 +153,9 @@ Both reports mention `database/sql` standard library but never mention `pgx` (ja
 ❌ Absolute GORM ban        → lacks nuance, creates hidden workarounds
 ❌ sqlc "max performance"   → misleading, query quality matters most
 ❌ MVC = circular import    → overblown, issue is package design
-❌ Wire = silver bullet     → over-engineered for small teams
+✅ Wire = silver bullet     → axe uses manual wiring, confirms criticism
 ❌ Report 2 priority order  → doesn't match real-world impact
-❌ Missing pgx entirely     → foundation gap
+✅ pgx                      → integrated pgx v5 (pkg/db/postgres)
 ```
+
+> This document preserves original content as **historical context** for architecture decisions.

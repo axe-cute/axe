@@ -125,6 +125,9 @@ AI không được tự tạo error responses. Phải dùng `pkg/apperror` taxon
 | DB/external failure | `apperror.ErrInternal` |
 | Business rule violated | `apperror.ErrConflict` |
 
+> **Lưu ý**: Trong source code thực tế, struct dùng field `HTTPStatus` (không phải `Status`).
+> Xem `pkg/apperror/apperror.go` để biết chi tiết.
+
 **AI không được viết:**
 ```go
 // ❌ Custom error format

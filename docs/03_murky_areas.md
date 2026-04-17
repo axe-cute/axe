@@ -6,6 +6,22 @@
 
 ---
 
+### 📌 Current Status (v0.1.5)
+
+> **All 7 murky areas have been clarified and implemented:**
+>
+> | # | Murky Area | Decision |
+> |---|---|---|
+> | 1 | "No Magic" definition | ✅ Decision Matrix in `architecture_contract.md` |
+> | 2 | Service vs Handler | ✅ Responsibility table applied |
+> | 3 | Ent + sqlc | ✅ Shared `*sql.DB` pool |
+> | 4 | Config management | ✅ **Cleanenv** (`config/config.go`) |
+> | 5 | Testing strategy | ✅ Multi-DB matrix CI (Postgres + MySQL + SQLite) |
+> | 6 | Observability | ✅ `pkg/logger` (slog) + `pkg/metrics` (Prometheus) |
+> | 7 | Auth model | ✅ JWT + RBAC (`pkg/jwtauth` + `middleware/auth.go`) |
+
+---
+
 ## 1. "No Magic" — Not Yet Operationalizable
 
 **Problem:**
@@ -161,11 +177,13 @@ Report 1 mentions "JWT middleware" but doesn't define:
 ## Summary
 
 ```
-🌫️ "No Magic" definition        → needs specific decision matrix
-🌫️ Service vs Handler boundary  → needs responsibility table
-🌫️ Ent + sqlc coexistence       → needs shared connection pool guide
-🌫️ Config management            → Viper or Cleanenv, must choose one
-🌫️ Testing strategy             → missing pyramid, missing integration test
-🌫️ Observability                → completely undefined
-🌫️ Auth model                   → JWT / RBAC strategy unclear
+✅ "No Magic" definition        → Decision Matrix in architecture_contract.md
+✅ Service vs Handler boundary  → Responsibility table applied
+✅ Ent + sqlc coexistence       → Shared *sql.DB pool, 2 client wrappers
+✅ Config management            → Cleanenv chosen (12-Factor, env vars only)
+✅ Testing strategy             → Multi-DB CI matrix + testcontainers
+✅ Observability                → slog (JSON) + Prometheus /metrics
+✅ Auth model                   → JWT access/refresh + RBAC middleware
 ```
+
+> This document preserves original content as **historical context** for architecture decisions.

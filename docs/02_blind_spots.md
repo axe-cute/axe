@@ -3,6 +3,20 @@
 >
 > 🇻🇳 [Phiên bản tiếng Việt](vi/02_blind_spots.md)
 
+### 📌 Current Status (v0.1.5)
+
+> **All 7 blind spots have been resolved in the codebase:**
+>
+> | # | Blind Spot | Resolution |
+> |---|---|---|
+> | 1 | Transaction model | ✅ `pkg/txmanager/txmanager.go` |
+> | 2 | Outbox pattern | ✅ `pkg/outbox/poller.go` |
+> | 3 | Domain boundary | ✅ Import rules enforced in `domain/*.go` |
+> | 4 | CQRS light | ✅ Ent (writes) + sqlc (reads) |
+> | 5 | Error taxonomy | ✅ `pkg/apperror/apperror.go` |
+> | 6 | Failure strategy | ✅ `/health` + `/ready` endpoints |
+> | 7 | Developer adoption | ✅ `axe generate resource` CLI |
+
 ---
 
 ## 1. No Transaction Model — Most Critical Gap
@@ -180,11 +194,14 @@ axe generate resource User --fields="name:string,email:string,age:int"
 ## Summary
 
 ```
-🕳️ Transaction model          → missing, will cause data corruption
-🕳️ Outbox pattern             → missing, will lose production events
-🕳️ Domain boundary strict     → undefined, AI will gradually break it
-🕳️ CQRS light (Ent vs sqlc)  → no rule, devs will guess
-🕳️ Error taxonomy             → missing, API responses inconsistent
-🕳️ Failure strategy           → missing, production will break
-🕳️ Developer adoption         → missing, beautiful architecture nobody can use
+✅ Transaction model          → pkg/txmanager (Unit of Work pattern)
+✅ Outbox pattern             → pkg/outbox (Transactional Outbox → Asynq)
+✅ Domain boundary strict     → Import rules enforced, comment guards
+✅ CQRS light (Ent vs sqlc)  → Ent writes, sqlc reads, shared *sql.DB
+✅ Error taxonomy             → pkg/apperror (AppError + typed errors)
+✅ Failure strategy           → /health + /ready probes
+✅ Developer adoption         → axe CLI generator + scaffolding
 ```
+
+> This document preserves original content as **historical context** for architecture decisions.
+

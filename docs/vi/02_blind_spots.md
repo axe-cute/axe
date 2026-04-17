@@ -2,6 +2,20 @@
 > 🇬🇧 [English version](../02_blind_spots.md)
 > Những vấn đề mà cả hai báo cáo **không nhìn thấy** — không phải sai, mà là **chưa nghĩ đến**.
 
+### 📌 Trạng thái hiện tại (v0.1.5)
+
+> **Tất cả 7 điểm mù đã được giải quyết trong source code:**
+>
+> | # | Blind Spot | Fix |
+> |---|---|---|
+> | 1 | Transaction model | ✅ `pkg/txmanager/txmanager.go` |
+> | 2 | Outbox pattern | ✅ `pkg/outbox/poller.go` |
+> | 3 | Domain boundary | ✅ Import rules enforced in `domain/*.go` |
+> | 4 | CQRS light | ✅ Ent (writes) + sqlc (reads) |
+> | 5 | Error taxonomy | ✅ `pkg/apperror/apperror.go` |
+> | 6 | Failure strategy | ✅ `/health` + `/ready` endpoints |
+> | 7 | Developer adoption | ✅ `axe generate resource` CLI |
+
 ---
 
 ## 1. Không có Transaction Model — Lỗ hổng Critical Nhất
@@ -227,11 +241,13 @@ axe generate resource User --fields="name:string,email:string,age:int"
 ## Tóm tắt Điểm Mù
 
 ```
-🕳️ Transaction model          → không có, sẽ gây data corruption
-🕳️ Outbox pattern             → không có, sẽ mất events production
-🕳️ Domain boundary strict     → chưa define, AI sẽ phá dần
-🕳️ CQRS light (Ent vs sqlc)   → không có rule, dev tự đoán
-🕳️ Error taxonomy             → không có, API response không consistent
-🕳️ Failure strategy           → không có, production sẽ vỡ
-🕳️ Developer adoption         → không có, kiến trúc đẹp nhưng không dùng được
+✅ Transaction model          → pkg/txmanager (Unit of Work pattern)
+✅ Outbox pattern             → pkg/outbox (Transactional Outbox → Asynq)
+✅ Domain boundary strict     → Import rules enforced, comment guards
+✅ CQRS light (Ent vs sqlc)   → Ent writes, sqlc reads, shared *sql.DB
+✅ Error taxonomy             → pkg/apperror (AppError + typed errors)
+✅ Failure strategy           → /health + /ready probes
+✅ Developer adoption         → axe CLI generator + scaffolding
 ```
+
+> Tài liệu này giữ nguyên nội dung gốc để làm **bối cảnh lịch sử** cho các quyết định kiến trúc.
