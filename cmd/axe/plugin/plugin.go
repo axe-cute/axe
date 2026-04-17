@@ -111,16 +111,24 @@ func addStorage() error {
 	// Init block (after axe:wire:handler)
 	storageInit := `
 	// ── File Storage ──────────────────────────────────────────────────────────
-	storageHandler := storage.NewHandler(storage.Config{
+	storageCfg := storage.Config{
 		Backend:     cfg.StorageBackend,
 		MountPath:   cfg.StorageMountPath,
 		MaxFileSize: cfg.StorageMaxFileSize,
 		URLPrefix:   cfg.StorageURLPrefix,
-	}, log)
+	}
+	storageHandler := storage.NewHandler(storageCfg, log)
 	log.Info("storage enabled", "backend", cfg.StorageBackend, "mount", cfg.StorageMountPath)
 
-	restRouter.Handle(cfg.StorageURLPrefix+"/*", storageHandler)
-	restRouter.Handle(cfg.StorageURLPrefix, storageHandler)`
+	// Storage routes: GET public, POST/DELETE require JWT — secure by design
+	restRouter.Route(cfg.StorageURLPrefix, func(r chi.Router) {
+		r.Get("/*", storageHandler.HandleServe)
+		r.Group(func(r chi.Router) {
+			r.Use(jwtauth.ChiMiddleware(jwtSvc))
+			r.Post("/", storageHandler.HandleUpload)
+			r.Delete("/*", storageHandler.HandleDelete)
+		})
+	})`
 	if err := injectAfterMarker(mainPath, "// axe:wire:handler", storageInit); err == nil {
 		injected = true
 	}
