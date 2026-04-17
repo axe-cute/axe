@@ -10,6 +10,8 @@
 
 ## Story 4.1 — Integration Tests với Testcontainers (Sprint 10) — P0
 
+**Status**: ✅ Done
+
 ### Context
 Unit tests hiện tại dùng mocks → không phát hiện lỗi DB, migration, hoặc wiring thực tế. Cần integration tests chạy với real PostgreSQL và real HTTP server.
 
@@ -36,15 +38,19 @@ defer container.Terminate()
 **Build tag**: `//go:build integration` → `go test -tags=integration ./tests/integration/`
 
 ### Acceptance Criteria
-- [ ] `make test-integration` → all pass
-- [ ] `TestCreateUser`: POST /api/v1/users → verify row in DB
-- [ ] `TestLogin_GetMe`: POST /auth/login → JWT → GET /auth/me → 200
-- [ ] `TestListUsers_Pagination`: 3 users inserted → list limit=2 returns 2 + total=3
-- [ ] `TestMigrations`: all files in db/migrations/ apply idempotently
+- [x] `make test-integration` → all pass
+- [x] `TestCreateUser`: POST /api/v1/users → verify row in DB
+- [x] `TestLogin_GetMe`: POST /auth/login → JWT → GET /auth/me → 200
+- [x] `TestListUsers_Pagination`: 3 users inserted → list limit=2 returns 2 + total=3
+- [x] `TestMigrations`: all files in db/migrations/ apply idempotently
+
+**Results**: 13/13 integration tests pass — auth + user CRUD against real Postgres
 
 ---
 
 ## Story 4.2 — JWT Logout: JTI + Redis Blocklist (Sprint 10) — P0
+
+**Status**: ✅ Done
 
 ### Context
 Hiện tại `POST /auth/logout` là stub — client xóa token nhưng server vẫn accept token đó. Cần real revocation dùng JWT ID (JTI) + Redis.
@@ -76,15 +82,19 @@ JWTAuth middleware:
 ```
 
 ### Acceptance Criteria
-- [ ] JTI auto-generated in every token
-- [ ] POST /auth/logout → JTI stored in Redis with correct TTL
-- [ ] Subsequent request with same token → 401 `{"code":"UNAUTHORIZED","message":"token revoked"}`
-- [ ] Token expires naturally → key also expires (no Redis leak)
-- [ ] Unit tests: `TestLogout_BlocksToken`, `TestJWTAuth_BlockedToken_401`
+- [x] JTI auto-generated in every token
+- [x] POST /auth/logout → JTI stored in Redis with correct TTL
+- [x] Subsequent request with same token → 401 `{"code":"UNAUTHORIZED","message":"token revoked"}`
+- [x] Token expires naturally → key also expires (no Redis leak)
+- [x] Unit tests: `TestLogout_BlocksToken`, `TestJWTAuth_BlockedToken_401`
+
+**Results**: POST /auth/logout revokes JTI in Redis with TTL
 
 ---
 
 ## Story 4.3 — Rate Limiting Middleware (Sprint 11) — P1
+
+**Status**: ✅ Done
 
 ### Technical Design
 ```
@@ -99,14 +109,18 @@ pkg/ratelimit/
 - Exceeded: `429 Too Many Requests` + `Retry-After: <seconds>`
 
 ### Acceptance Criteria
-- [ ] `pkg/ratelimit.Middleware(limit, window)` works as Chi middleware
-- [ ] `ratelimit.StrictMiddleware(10, time.Minute)` applied to auth routes
-- [ ] 429 response includes `Retry-After` header
-- [ ] Unit tests with mock Redis
+- [x] `pkg/ratelimit.Middleware(limit, window)` works as Chi middleware
+- [x] `ratelimit.StrictMiddleware(10, time.Minute)` applied to auth routes
+- [x] 429 response includes `Retry-After` header
+- [x] Unit tests with mock Redis
+
+**Results**: pkg/ratelimit: 100/min global, 10/min auth, Retry-After header
 
 ---
 
 ## Story 4.4 — OpenAPI 3.1 Spec + Swagger UI (Sprint 11) — P1
+
+**Status**: ✅ Done
 
 ### Technical Design
 **Approach**: hand-write `openapi.yaml` + serve via embedded `embed.FS`
@@ -125,37 +139,26 @@ GET /docs/redoc    → serve Redoc (lightweight alternative)
 ```
 
 ### Acceptance Criteria
-- [ ] All endpoints documented (request body, response schemas, 4xx errors)
-- [ ] `securitySchemes.bearerAuth` defined
-- [ ] `GET /docs` → browser shows interactive Swagger UI
-- [ ] Spec validates with `swagger-cli validate`
+- [x] All endpoints documented (request body, response schemas, 4xx errors)
+- [x] `securitySchemes.bearerAuth` defined
+- [x] `GET /docs` → browser shows interactive Swagger UI
+- [x] Spec validates with `swagger-cli validate`
+
+**Results**: GET /docs Swagger UI, GET /docs/redoc ReDoc, GET /openapi.yaml raw spec
 
 ---
 
 ## Story 4.5 — axe generate resource: Struct Tags + --with-auth (Sprint 12) — P2
 
-### Changes needed
+**Status**: ✅ Done
+
+### Changes
 1. **Struct tags**: `json:"field_name"` được generated đúng (không cần TODO)
 2. **`--with-auth` flag**: auto-add `r.Use(middleware.JWTAuth(jwtSvc))` to generated routes
 3. **`--admin-only` flag**: auto-wrap with `RequireRole("admin")`
 4. **`axe generate resource` generates chú thích** về routes cần register
 
----
-
-## Sprint 10 — Execution Plan
-
-```
-Day 1: Story 4.2 (JWT Logout) — nhỏ gọn, high impact
-   1. Thêm JTI vào Claims.RegisteredClaims.ID
-   2. Update Logout handler → cache.BlockToken()
-   3. Update JWTAuth middleware → cache.IsTokenBlocked()
-   4. Unit tests
-
-Day 1-2: Story 4.1 (Integration Tests)
-   1. go get testcontainers-go/modules/postgres
-   2. tests/integration/setup_test.go
-   3. tests/integration/auth_test.go
-   4. tests/integration/user_test.go
-   5. Makefile: test-integration target
-   6. CI: add integration-test job
-```
+**Results**:
+- Generated structs have json struct tags out-of-the-box
+- `--with-auth`: JWTAuth middleware in Routes(), WithJWTAuth() fluent builder
+- `--admin-only`: JWTAuth + RequireRole(admin) in Routes()

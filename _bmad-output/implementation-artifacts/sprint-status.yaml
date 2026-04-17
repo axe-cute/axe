@@ -4,7 +4,7 @@ version: 3
 phase: 2
 
 current_sprint: 20
-active_story: epic-8/story-8.3
+active_story: epic-8/story-8.6
 
 epics:
   - id: epic-1
@@ -152,9 +152,15 @@ epics:
         sprint: 19
         priority: P2
         notes: "pkg/plugin/storage/: FSStore (os pkg, works for local + JuiceFS POSIX mount), POST/GET/DELETE /upload, Prometheus metrics, zero external deps"
-      - { id: story-8.3, title: "axe-plugin-email (SendGrid)",   status: planned, sprint: 20, priority: P2 }
-      - { id: story-8.4, title: "Multi-Tenancy Foundation",      status: planned, sprint: 20, priority: P2 }
-      - { id: story-8.5, title: "Plugin Registry CLI",           status: planned, sprint: 21, priority: P3 }
+      - { id: story-8.3, title: "axe-plugin-email (SendGrid)",        status: planned, sprint: 21, priority: P2 }
+      - { id: story-8.4, title: "Multi-Tenancy Foundation",           status: planned, sprint: 22, priority: P2 }
+      - { id: story-8.5, title: "Plugin Registry CLI",                status: planned, sprint: 23, priority: P3 }
+      - id: story-8.6
+        title: "Storage Plugin Hardening (Auth + Security + Ops)"
+        status: done
+        sprint: 20
+        priority: P0
+        notes: "JWT auth on POST/DELETE (always), optional on GET via RequireAuth. safePath() blocks path traversal. CORS middleware. /ready storage health check. Metrics backend label."
 
 sprint_log:
   - sprint: 1
@@ -327,18 +333,24 @@ sprint_log:
       - "25/25 tests PASS (-race): 12 plugin + 13 storage; go vet clean; go build clean; make test 0 FAIL"
 
   - sprint: 20
-    goal: "Email Plugin + axe new CI test"
-    stories: [story-8.3, story-6.4]
-    status: planned
-    notes: "Story 6.4 carried over from Sprint 16 (was skipped)"
+    goal: "Storage Hardening (Security) + axe new CI test"
+    stories: [story-8.6, story-6.4]
+    status: in-progress
+    notes: "Story 8.6 (P0): JWT auth on upload/delete, path traversal fix, CORS, /ready health check, metrics labels. Story 6.4 carried from Sprint 16."
 
   - sprint: 21
+    goal: "Email Plugin (SendGrid/SMTP)"
+    stories: [story-8.3]
+    status: planned
+    notes: "Moved from Sprint 20 — storage hardening (P0) takes priority"
+
+  - sprint: 22
     goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
     stories: [story-8.4]
     status: planned
     notes: "Reduced scope: no schema-per-tenant (deferred to v2.0)"
 
-  - sprint: 22
+  - sprint: 23
     goal: "Plugin discovery CLI + ADR cleanup + v1.0 polish"
     stories: [story-8.5]
     status: planned

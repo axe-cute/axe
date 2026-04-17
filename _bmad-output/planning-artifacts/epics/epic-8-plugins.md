@@ -4,7 +4,7 @@
 
 **Business Value**: Tạo **ecosystem** — điều làm Laravel/Rails hùng mạnh. Plugins = composable, versioned, tested integrations.
 
-**Status**: 🔄 In Progress (Stories 8.1–8.2 done ✅)
+**Status**: 🔄 In Progress (Stories 8.1–8.2, 8.6 done ✅)
 
 **Priority**: P2
 
@@ -63,8 +63,34 @@ app.Start(ctx)
 - [x] Prometheus: `axe_storage_upload_bytes_total`, `axe_storage_operations_total`, `axe_storage_upload_errors_total`
 - [x] Config: `STORAGE_BACKEND`, `STORAGE_MOUNT_PATH`, `STORAGE_MAX_FILE_SIZE`, `STORAGE_URL_PREFIX`
 
+### Story 8.6 — Storage Plugin Hardening (Security + Ops)
+**Sprint**: 20 | **Priority**: P0 | **Status**: ✅ Done
+
+**Goal**: Harden storage plugin cho production: authentication, security, observability.
+
+> Completed 2026-04-17. All 6 gaps fixed, 18/18 tests PASS (-race).
+
+**Acceptance Criteria**:
+- [x] **Auth**: `POST /upload` + `DELETE /upload/*` yêu cầu JWT (GET serve public)
+- [x] **Path traversal**: `safePath()` helper prevent `../../etc/passwd` attacks
+- [x] **CORS**: `go-chi/cors` middleware configurable (support SPA browser upload)
+- [x] **Health check**: `/ready` kiểm tra storage mount point (`os.Stat`)
+- [x] **Metrics labels**: thêm `backend` label vào Prometheus counters (local vs juicefs)
+- [x] **Tests**: unit tests cho path traversal, auth-protected routes, health check
+
+**Files cần sửa**:
+```
+pkg/plugin/storage/fs_store.go    ← safePath() helper
+pkg/plugin/storage/plugin.go      ← RequireAuth config + JWT middleware
+pkg/plugin/storage/storage.go     ← Config.RequireAuth field
+pkg/plugin/storage/metrics.go     ← backend label
+pkg/plugin/storage/storage_test.go ← path traversal + auth tests
+cmd/api/main.go                    ← CORS middleware, storage health check in /ready
+config/config.go                   ← CORS config fields
+```
+
 ### Story 8.3 — `axe-plugin-email` (SendGrid/SMTP)
-**Sprint**: 20 | **Priority**: P2 | **Status**: Planned
+**Sprint**: 21 | **Priority**: P2 | **Status**: 🟡 Planned
 
 **Goal**: Email sending plugin với template support.
 
@@ -77,7 +103,7 @@ app.Start(ctx)
 - [ ] Dev mode: log emails thay vì gửi (MailHog compatible)
 
 ### Story 8.4 — Multi-Tenancy Middleware (v1.0 scope)
-**Sprint**: 21 | **Priority**: P2 | **Status**: Planned
+**Sprint**: 22 | **Priority**: P2 | **Status**: 🟡 Planned
 
 **Goal**: Tenant context middleware — lightweight multi-tenancy cho v1.0.
 
@@ -97,7 +123,7 @@ app.Start(ctx)
 - Cross-tenant migration runner
 
 ### Story 8.5 — Plugin Discovery CLI
-**Sprint**: 22 | **Priority**: P3 | **Status**: Planned
+**Sprint**: 23 | **Priority**: P3 | **Status**: 🟡 Planned
 
 **Goal**: `axe plugin list` liệt kê available plugins.
 
@@ -115,6 +141,7 @@ app.Start(ctx)
 | Plugin | Location | Status | Priority |
 |---|---|---|---|
 | `storage` (FSStore/JuiceFS) | `pkg/plugin/storage/` | ✅ Done | P2 |
+| `storage-hardening` (Auth/Security) | `pkg/plugin/storage/` | ✅ Done (Sprint 20) | P0 |
 | `email` (SendGrid/SMTP) | `pkg/plugin/email/` | Planned | P2 |
 | `payment` (Stripe) | `pkg/plugin/payment/` | Planned | P2 |
 | `search` (Elasticsearch/Typesense) | `pkg/plugin/search/` | Planned | P3 |
@@ -145,3 +172,5 @@ Monorepo layout:
 ## Risks
 - **Dependency bloat**: khi thêm email (SendGrid SDK) + payment (Stripe SDK), `go get axe` sẽ nặng hơn → monitor, tách repo nếu cần
 - Template drift: email templates có thể outdated → versioning cần thiết
+- ~~**Storage security**: upload/delete routes không có auth~~ → Fixed by Story 8.6
+- ~~**Path traversal**: `../../etc/passwd` potential~~ → Fixed by Story 8.6
