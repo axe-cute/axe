@@ -107,20 +107,22 @@ plugin.Provide[MyService](app, "my-service", svc)
 svc := plugin.MustResolve[MyService](app, "my-service")
 ```
 
-### 4.2 Storage Plugin (Sprint 19–20) ✅
+### 4.2 Storage Plugin (Sprint 19–21) ✅
 
 - FSStore (POSIX filesystem — local + JuiceFS)
 - HTTP handler (upload/serve/delete)
 - Prometheus metrics
 - `axe new --with-storage` + `axe plugin add storage`
+- **Sprint 21 hardening**: `f.Sync()` flush FUSE buffers, `FSStore.HealthCheck()` write→read→delete sentinel, `wrapFSError()` map `ENOTCONN/EROFS/ENOSPC` → human-readable errors
+- **Tài liệu**: `docs/guides/juicefs-storage.md` — hướng dẫn tích hợp JuiceFS (mới)
 
 ### 4.3 Upcoming
 
 | Plugin | Sprint | Status |
 |---|---|---|
-| Email (SendGrid/SMTP) | 21 | 🟡 Planned |
-| Multi-tenancy middleware | 21 | 🟡 Planned |
-| Plugin Registry CLI | 22 | 🟡 Planned |
+| Email (SendGrid/SMTP) | 22 | 🟡 Planned |
+| Multi-tenancy middleware | 23 | 🟡 Planned |
+| Plugin Registry CLI | 24 | 🟡 Planned |
 
 ---
 

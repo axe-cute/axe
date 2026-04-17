@@ -4,7 +4,7 @@
 
 **Business Value**: Tạo **ecosystem** — điều làm Laravel/Rails hùng mạnh. Plugins = composable, versioned, tested integrations.
 
-**Status**: 🔄 In Progress (Stories 8.1–8.2, 8.6 done ✅)
+**Status**: 🔄 In Progress (Stories 8.1–8.2, 8.6, 9.3–9.6 done ✅)
 
 **Priority**: P2
 
@@ -90,7 +90,7 @@ config/config.go                   ← CORS config fields
 ```
 
 ### Story 8.3 — `axe-plugin-email` (SendGrid/SMTP)
-**Sprint**: 21 | **Priority**: P2 | **Status**: 🟡 Planned
+**Sprint**: 22 | **Priority**: P2 | **Status**: 🟡 Planned (moved to Story 10.1)
 
 **Goal**: Email sending plugin với template support.
 
@@ -142,7 +142,8 @@ config/config.go                   ← CORS config fields
 |---|---|---|---|
 | `storage` (FSStore/JuiceFS) | `pkg/plugin/storage/` | ✅ Done | P2 |
 | `storage-hardening` (Auth/Security) | `pkg/plugin/storage/` | ✅ Done (Sprint 20) | P0 |
-| `email` (SendGrid/SMTP) | `pkg/plugin/email/` | Planned | P2 |
+| `storage-ops` (fsync + healthcheck + FUSE errors) | `pkg/plugin/storage/` | ✅ Done (Sprint 21) | P0 |
+| `email` (SendGrid/SMTP) | `pkg/plugin/email/` | 🟡 Planned (Sprint 22) | P2 |
 | `payment` (Stripe) | `pkg/plugin/payment/` | Planned | P2 |
 | `search` (Elasticsearch/Typesense) | `pkg/plugin/search/` | Planned | P3 |
 | `push` (FCM/APNs) | `pkg/plugin/push/` | Planned | P3 |
@@ -174,3 +175,5 @@ Monorepo layout:
 - Template drift: email templates có thể outdated → versioning cần thiết
 - ~~**Storage security**: upload/delete routes không có auth~~ → Fixed by Story 8.6
 - ~~**Path traversal**: `../../etc/passwd` potential~~ → Fixed by Story 8.6
+- ~~**FUSE silent failure**: stale mount passes os.Stat but fails writes~~ → Fixed by Stories 9.3–9.4
+- ~~**Raw syscall errors leaking**: ENOTCONN etc. in HTTP responses~~ → Fixed by Story 9.4

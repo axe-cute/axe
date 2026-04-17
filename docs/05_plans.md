@@ -149,7 +149,7 @@ plugin.Provide[MyService](app, "my-service", svc)
 svc := plugin.MustResolve[MyService](app, "my-service")
 ```
 
-### 4.2 Storage Plugin Integration (Sprint 20) ✅
+### 4.2 Storage Plugin Integration (Sprints 19–21) ✅
 
 ```bash
 axe new blog-api                    # Create project first
@@ -159,13 +159,20 @@ axe plugin add storage              # Add storage plugin to existing project
 Auto-creates: `pkg/storage/` (Store, FSStore, Handler, metrics), config fields, env vars, route wiring.
 Security defaults: JWT auth on POST/DELETE, path traversal protection, CORS middleware.
 
+**Sprint 21 hardening (stories 9.3–9.5)**:
+- `f.Sync()` in `Upload()` — flushes FUSE buffers before returning (prevents silent data loss)
+- `FSStore.HealthCheck()` — write→read→delete sentinel cycle (detects stale JuiceFS mounts)
+- `wrapFSError()` — translates `ENOTCONN`, `EIO`, `EROFS`, `ENOSPC`, `EACCES` into human-readable errors
+- `docs/guides/juicefs-storage.md` — step-by-step JuiceFS integration guide (new)
+- `docs/adr/010-fsstore-posix-over-s3.md` — documents POSIX vs S3 SDK decision
+
 ### 4.3 Upcoming Plugins
 
 | Plugin | Sprint | Status |
 |---|---|---|
-| Email (SendGrid/SMTP) | 21 | 🟡 Planned |
-| Multi-tenancy middleware | 22 | 🟡 Planned |
-| Plugin Registry CLI | 23 | 🟡 Planned |
+| Email (SendGrid/SMTP) | 22 | 🟡 Planned |
+| Multi-tenancy middleware | 23 | 🟡 Planned |
+| Plugin Registry CLI | 24 | 🟡 Planned |
 
 ---
 
@@ -180,8 +187,9 @@ Week 9-10:  Documentation + ADRs + DX polish           [Phase 2]  ✅
 Week 11-12: Observability + Auth + Cache               [Phase 3]  ✅
 Week 13-14: Background jobs + Deployment pipeline      [Phase 3]  ✅
 Week 15-16: Plugin system + Storage plugin             [Phase 4]  ✅
-Week 17-18: Storage integration + Email plugin         [Phase 4]  🔄
-Week 19-20: Multi-tenancy + Plugin Registry CLI        [Phase 4]  🟡
+Week 17-18: Storage hardening + JuiceFS guide + ADR    [Phase 4]  ✅
+Week 19-20: Email plugin + Test coverage               [Phase 4]  🔄
+Week 21-22: Multi-tenancy + Plugin Registry CLI        [Phase 4]  🟡
 ```
 
 ---

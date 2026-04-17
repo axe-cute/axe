@@ -13,7 +13,7 @@
 - CLI generator (`axe generate resource`) tạo CRUD endpoint < 10 phút
 - Production-grade từ ngày đầu: transactions, observability, error handling
 
-**Status**: Phase 2 (Plugin Ecosystem) — Sprint 20
+**Status**: Phase 2 (Plugin Ecosystem) — Sprint 21
 
 ---
 

@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: 3
 phase: 2
 
-current_sprint: 20
-active_story: null  # Sprint 20 complete
+current_sprint: 21
+active_story: story-9.1  # Unit tests for pkg/cache, pkg/ratelimit, pkg/outbox
 
 epics:
   - id: epic-1
@@ -348,9 +348,14 @@ sprint_log:
       - "Story 6.4: Docker job now depends on scaffold-test passing"
 
   - sprint: 21
-    goal: "Email Plugin + Test Coverage (pkg/cache, pkg/ratelimit, pkg/outbox) + Fix generated repo stubs"
-    stories: [story-8.3, story-9.1, story-9.2]
+    goal: "Storage Hardening (fsync + health-check + FUSE error wrap) + ADR-010 + Fix generated repo stubs + Test Coverage"
+    stories: [story-9.1, story-9.2, story-9.3, story-9.4, story-9.5]
     status: in-progress
+    results:
+      - "Story 9.2: Rate-limit scaffold TODO → real redis_rate impl; go-redis/redis_rate in tmplGoMod; docs/05_plans.md fixed"
+      - "Story 9.3: FSStore.HealthCheck() write→read→delete sentinel; f.Sync() before close in Upload()"
+      - "Story 9.4: wrapFSError() maps ENOTCONN/EIO/EROFS/ENOSPC/EACCES/EPERM → human-readable AppError; 11 new tests"
+      - "Story 9.5: docs/adr/010-fsstore-posix-over-s3.md created; ADR README updated with full 001-010 index"
 
   - sprint: 22
     goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
@@ -374,7 +379,7 @@ epics_continued:
         status: in-progress
         sprint: 21
         priority: P1
-        notes: "PRD success metric: test coverage ≥ 80% — 14 packages had zero tests"
+        notes: "PRD success metric: test coverage ≥ 80% — 14 packages had zero tests; storage_test.go +11 new FUSE-error tests done (11 tests in story-9.4)"
       - id: story-9.2
         title: "Fix generated repo stubs → compile-ready Ent bodies"
         status: done
@@ -406,3 +411,20 @@ epics_continued:
         sprint: 21
         priority: P1
         notes: "docs/adr/010-fsstore-posix-over-s3.md created. ADR README updated with full 001-010 index and pending-file note for 002,004-009."
+      - id: story-9.6
+        title: "JuiceFS Storage Integration Guide"
+        status: done
+        sprint: 21
+        priority: P1
+        notes: "docs/guides/juicefs-storage.md created — covers install, mount, env config, health-check, ops checklist, Docker deployment, Prometheus dashboards."
+
+  - id: epic-10
+    title: "Communication Plugins"
+    status: planned
+    stories:
+      - id: story-10.1
+        title: "axe-plugin-email (SendGrid/SMTP)"
+        status: planned
+        sprint: 22
+        priority: P2
+        notes: "Replaces story-8.3; pkg/plugin/email/ — EmailPlugin, Send(), SendGrid adapter + SMTP fallback, go:embed HTML templates, Asynq async send, MailHog dev mode"
