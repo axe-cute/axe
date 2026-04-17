@@ -28,6 +28,9 @@ type Options struct {
 	// NoCache removes Redis cache infrastructure.
 	NoCache bool
 
+	// WithStorage includes file storage plugin (pkg/storage).
+	WithStorage bool
+
 	// Yes skips all interactive prompts and uses defaults / flag values.
 	Yes bool
 }
@@ -102,6 +105,7 @@ in under 5 minutes.`,
 	cmd.Flags().StringVar(&opts.DB, "db", "postgres", `Database driver: postgres | mysql | sqlite`)
 	cmd.Flags().BoolVar(&opts.NoWorker, "no-worker", false, "Omit Asynq background worker infrastructure")
 	cmd.Flags().BoolVar(&opts.NoCache, "no-cache", false, "Omit Redis cache infrastructure")
+	cmd.Flags().BoolVar(&opts.WithStorage, "with-storage", false, "Include file storage plugin (pkg/storage with upload endpoints)")
 	cmd.Flags().BoolVar(&opts.Yes, "yes", false, "Skip interactive prompts; use flag values / defaults (CI-friendly)")
 
 	return cmd

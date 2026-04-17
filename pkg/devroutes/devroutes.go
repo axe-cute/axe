@@ -16,8 +16,9 @@ import (
 
 // RouteInfo holds metadata about a single registered route.
 type RouteInfo struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
+	Method   string `json:"method"`
+	Path     string `json:"path"`
+	Category string `json:"category"` // "api", "ws", "system"
 }
 
 // Collect walks a chi.Router and returns all registered routes sorted by path.
@@ -30,15 +31,27 @@ func Collect(routers ...chi.Router) []RouteInfo {
 			key := method + " " + route
 			if !seen[key] {
 				seen[key] = true
-				routes = append(routes, RouteInfo{Method: method, Path: route})
+				// Skip noisy catch-all methods on non-API paths.
+				if isNoisyMethod(method) && !isAPIPath(route) {
+					return nil
+				}
+				routes = append(routes, RouteInfo{
+					Method:   method,
+					Path:     route,
+					Category: categorize(route),
+				})
 			}
 			return nil
 		})
 	}
 
 	sort.Slice(routes, func(i, j int) bool {
+		ci, cj := categoryOrder(routes[i].Category), categoryOrder(routes[j].Category)
+		if ci != cj {
+			return ci < cj
+		}
 		if routes[i].Path == routes[j].Path {
-			return routes[i].Method < routes[j].Method
+			return methodOrder(routes[i].Method) < methodOrder(routes[j].Method)
 		}
 		return routes[i].Path < routes[j].Path
 	})
@@ -106,10 +119,83 @@ func PrintRoutes(routers ...chi.Router) {
 	fmt.Printf("\n   🪓 Registered routes:\n")
 	fmt.Printf("   %-*s  %s\n", methodW, "METHOD", "PATH")
 	fmt.Printf("   %-*s  %s\n", methodW, strings.Repeat("─", methodW), strings.Repeat("─", pathW))
+
+	lastCat := ""
 	for _, ri := range routes {
+		if ri.Category != lastCat {
+			label := categoryLabel(ri.Category)
+			fmt.Printf("\n   %s\n", label)
+			lastCat = ri.Category
+		}
 		fmt.Printf("   %-*s  %s\n", methodW, ri.Method, ri.Path)
 	}
 	fmt.Println()
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+func categorize(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/ws/") || strings.HasPrefix(path, "/ws"):
+		return "ws"
+	case strings.HasPrefix(path, "/api/"):
+		return "api"
+	default:
+		return "system"
+	}
+}
+
+func categoryOrder(cat string) int {
+	switch cat {
+	case "api":
+		return 0
+	case "ws":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func categoryLabel(cat string) string {
+	switch cat {
+	case "api":
+		return "── API ──────────────────────────────"
+	case "ws":
+		return "── WebSocket ────────────────────────"
+	case "system":
+		return "── System ───────────────────────────"
+	default:
+		return ""
+	}
+}
+
+func methodOrder(m string) int {
+	switch m {
+	case "GET":
+		return 0
+	case "POST":
+		return 1
+	case "PUT":
+		return 2
+	case "PATCH":
+		return 3
+	case "DELETE":
+		return 4
+	default:
+		return 5
+	}
+}
+
+func isAPIPath(path string) bool {
+	return strings.HasPrefix(path, "/api/")
+}
+
+func isNoisyMethod(method string) bool {
+	switch method {
+	case "CONNECT", "TRACE", "OPTIONS", "HEAD":
+		return true
+	}
+	return false
 }
 
 func renderHTML(method, path string, routes []RouteInfo) string {
@@ -122,11 +208,17 @@ func renderHTML(method, path string, routes []RouteInfo) string {
 	}
 
 	var rows strings.Builder
+	lastCat := ""
 	for _, ri := range routes {
+		if ri.Category != lastCat {
+			label := categoryHTMLLabel(ri.Category)
+			rows.WriteString(fmt.Sprintf(`<tr><td colspan="2" style="padding:16px 16px 4px;color:#71717a;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;border-bottom:none">%s</td></tr>`, label))
+			lastCat = ri.Category
+		}
 		color := methodColor(ri.Method)
 		rows.WriteString(fmt.Sprintf(`<tr>
-			<td style="padding:8px 16px;font-weight:700;color:%s;font-size:13px;letter-spacing:0.5px">%s</td>
-			<td style="padding:8px 16px;color:#e4e4e7;font-family:'JetBrains Mono',monospace;font-size:14px">%s</td>
+			<td style="padding:6px 16px;font-weight:700;color:%s;font-size:13px;letter-spacing:0.5px;white-space:nowrap">%s</td>
+			<td style="padding:6px 16px;color:#e4e4e7;font-family:'JetBrains Mono',monospace;font-size:14px">%s</td>
 		</tr>`, color, ri.Method, ri.Path))
 	}
 
@@ -162,7 +254,7 @@ func renderHTML(method, path string, routes []RouteInfo) string {
     display: inline-block; padding: 2px 8px;
     border-radius: 4px; font-size: 11px;
     background: #27272a; color: #a1a1aa;
-    margin-top: 8px;
+    margin-top: 16px;
   }
 </style>
 </head><body>
@@ -175,6 +267,19 @@ func renderHTML(method, path string, routes []RouteInfo) string {
   <div class="badge">🪓 axe • development mode</div>
 </div>
 </body></html>`, heading, rows.String())
+}
+
+func categoryHTMLLabel(cat string) string {
+	switch cat {
+	case "api":
+		return "📡 API"
+	case "ws":
+		return "🔌 WebSocket"
+	case "system":
+		return "⚙️ System"
+	default:
+		return ""
+	}
 }
 
 func methodColor(method string) string {

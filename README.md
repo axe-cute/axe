@@ -74,6 +74,9 @@ axe new shop --db=mysql --module=github.com/acme/shop
 # Lightweight (SQLite, no worker, no cache — no Docker needed)
 axe new lite --db=sqlite --no-worker --no-cache --yes
 
+# With file storage plugin (upload/download/delete endpoints)
+axe new media-api --with-storage
+
 # Interactive wizard (prompts for all options)
 axe new
 ```
@@ -150,7 +153,8 @@ axe/
 │       ├── main.go                    #   axe new / generate / migrate
 │       ├── new/                       #   Project scaffolding
 │       ├── generate/                  #   Resource code generator
-│       └── migrate/                   #   DB migration runner
+│       ├── migrate/                   #   DB migration runner
+│       └── plugin/                    #   Plugin manager (axe plugin add)
 ├── internal/
 │   ├── domain/                        # Entities + Interfaces ONLY (no infra imports)
 │   ├── handler/                       # HTTP layer (Chi)
@@ -174,6 +178,7 @@ axe/
 │   ├── txmanager/                     # Transaction manager (context-injected tx)
 │   ├── validator/                     # Input validation
 │   ├── worker/                        # Asynq background worker
+│   ├── devroutes/                     # Rails-like route listing on 404 (dev mode)
 │   └── ws/                            # WebSocket hub, client, room, auth
 │       ├── hub.go                     #   Hub with Room-based broadcasting
 │       ├── client.go                  #   Per-connection client
@@ -267,7 +272,7 @@ axe generate resource Order \
   --with-auth
 
 # Admin-only (implies --with-auth)
-axe generate resource Config \
+axe generate resource Setting \
   --fields="key:string,value:text" \
   --admin-only
 
@@ -278,6 +283,33 @@ axe generate resource Chat \
 ```
 
 **Supported field types**: `string`, `text`, `int`, `float`, `bool`, `uuid`, `time`
+
+> **Reserved names**: The following names are reserved by Ent and **cannot** be used as resource names:
+>
+> `Config`, `Client`, `Query`, `Tx`, `Mutation`, `Hook`, `Policy`, `Value`,
+> `Predicate`, `Runtime`, `Context`, plus Go keywords (`type`, `func`, `var`, …)
+>
+> If you try, `axe` will stop before generating any files:
+> ```
+> Error: resource name "Config" is reserved (conflicts with ent/Go internals).
+>   Try a more specific name, e.g.: AppConfig, SiteConfig, Setting
+> ```
+
+### `axe plugin` — Plugin Manager
+
+Add optional plugins to an existing project without re-scaffolding:
+
+```bash
+# Add file storage to an existing project
+axe plugin add storage
+```
+
+This automatically:
+- Creates `pkg/storage/` (Store, FSStore, Handler, Prometheus metrics)
+- Injects config fields into `config/config.go`
+- Wires handler + routes into `cmd/api/main.go`
+- Adds env vars to `.env.example`
+- Adds `uploads/` to `.gitignore`
 
 ### `axe migrate` — Migration Runner
 
@@ -311,6 +343,18 @@ HUB_ADAPTER=memory   # or "redis" for multi-instance
 ## File Storage Plugin
 
 Zero-dependency file storage via POSIX filesystem. Works identically on local dev directories and JuiceFS mount points (no SDK needed).
+
+**Two ways to enable:**
+
+```bash
+# Option 1: Include at project creation
+axe new blog-api --with-storage
+
+# Option 2: Add to an existing project
+axe plugin add storage
+```
+
+**Usage:**
 
 ```bash
 # Upload
@@ -375,9 +419,36 @@ Lifecycle: FIFO registration, LIFO shutdown, automatic rollback on failure.
 | `GET /health` | Liveness probe |
 | `GET /ready` | Readiness probe (DB + Redis) |
 | `GET /metrics` | Prometheus scrape endpoint |
+| `GET /debug/routes` | Route listing — categorized by API / WebSocket / System (dev mode only) |
 | `GET /docs` | Swagger UI |
 | `GET /docs/redoc` | Redoc |
 | `GET /openapi.yaml` | OpenAPI 3.0 spec |
+
+### Development Route Listing
+
+In development mode, hitting a non-existent route returns a **Rails-like route listing page** grouped by category:
+
+```
+Routing Error
+No route matches [GET] "/api/v1/does-not-exist"
+
+── API ─────────────────────────────
+GET     /api/v1/posts/
+POST    /api/v1/posts/
+GET     /api/v1/posts/{id}
+PUT     /api/v1/posts/{id}
+DELETE  /api/v1/posts/{id}
+
+── WebSocket ───────────────────────
+GET     /ws/chats/
+
+── System ──────────────────────────
+GET     /health
+GET     /metrics
+GET     /debug/routes
+```
+
+Also printed to the terminal on startup. In production, returns `{"error":"not found"}`.
 
 ---
 

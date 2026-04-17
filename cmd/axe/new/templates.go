@@ -95,6 +95,9 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+
+# Uploads (storage plugin)
+uploads/
 `
 
 const tmplAirToml = `root = "."
@@ -123,8 +126,8 @@ tmp_dir = "tmp"
   pre_cmd = []
   rerun = false
   rerun_delay = 500
-  send_interrupt = false
-  stop_on_error = false
+  send_interrupt = true
+  stop_on_error = true
 
 [color]
   app = ""
@@ -326,6 +329,17 @@ ASYNQ_QUEUE_CRITICAL=critical
 `
 	}
 
+	storageSection := ""
+	if data.WithStorage {
+		storageSection = `
+# Storage (file uploads)
+STORAGE_BACKEND=local
+STORAGE_MOUNT_PATH=./uploads
+STORAGE_MAX_FILE_SIZE=10485760
+STORAGE_URL_PREFIX=/upload
+`
+	}
+
 	return fmt.Sprintf(`# =============================================================================
 # %s — Environment Configuration
 # Copy this to .env and fill in your values
@@ -342,11 +356,11 @@ LOG_LEVEL=debug           # debug | info | warn | error
 JWT_SECRET=your-256-bit-secret-change-in-production
 JWT_ACCESS_TOKEN_EXPIRY_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
-%s
+%s%s
 # Observability (optional for local dev)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 OTEL_SERVICE_NAME=%s
-`, data.Name, dbSection, redisSection, asynqSection, data.Name)
+`, data.Name, dbSection, redisSection, asynqSection, storageSection, data.Name)
 }
 
 // tmplDockerCompose builds docker-compose.yml dynamically based on DB and feature flags.
@@ -488,6 +502,10 @@ func tmplMainAPIGo(data TemplateData) string {
 		imports += `
 	"{{.Module}}/pkg/worker"`
 	}
+	if data.WithStorage {
+		imports += `
+	"{{.Module}}/pkg/storage"`
+	}
 	imports += `
 	"{{.Module}}/pkg/jwtauth"
 	"{{.Module}}/pkg/metrics"
@@ -556,6 +574,28 @@ func tmplMainAPIGo(data TemplateData) string {
 `
 	}
 
+	storageInit := ""
+	if data.WithStorage {
+		storageInit = `
+	// ── File Storage ──────────────────────────────────────────────────────────
+	storageHandler := storage.NewHandler(storage.Config{
+		Backend:     cfg.StorageBackend,
+		MountPath:   cfg.StorageMountPath,
+		MaxFileSize: cfg.StorageMaxFileSize,
+		URLPrefix:   cfg.StorageURLPrefix,
+	}, log)
+	log.Info("storage enabled", "backend", cfg.StorageBackend, "mount", cfg.StorageMountPath, "prefix", cfg.StorageURLPrefix)
+`
+	}
+
+	storageRoute := ""
+	if data.WithStorage {
+		storageRoute = `
+	restRouter.Handle(cfg.StorageURLPrefix+"/*", storageHandler)
+	restRouter.Handle(cfg.StorageURLPrefix, storageHandler)
+`
+	}
+
 	workerStart := ""
 	workerStop := ""
 	if data.WithWorker {
@@ -600,7 +640,7 @@ func main() {
 	log := logger.New(cfg.Environment)
 	slog.SetDefault(log)
 	log.Info("%s starting", "port", cfg.ServerPort, "env", cfg.Environment)
-%s%s
+%s%s%s
 	_ = log
 
 	// ── Database ─────────────────────────────────────────────────────────────
@@ -641,7 +681,7 @@ func main() {
 
 	// axe:wire:repo
 	// axe:wire:handler
-
+%s
 	restRouter.Get("/health", healthHandler)
 	restRouter.Handle("/metrics", metrics.Handler())
 
@@ -742,7 +782,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	_ = enc.Encode(v)
 }
-`, imports, data.Name, cacheInit, workerInit, sqlDriverName, workerStart, workerStop)
+`, imports, data.Name, cacheInit, workerInit, storageInit, sqlDriverName, storageRoute, workerStart, workerStop)
 }
 
 
@@ -948,6 +988,14 @@ type Config struct {
 	// Observability
 	OTELEndpoint    string ` + "`" + `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""` + "`" + `
 	OTELServiceName string ` + "`" + `env:"OTEL_SERVICE_NAME"           env-default:"app"` + "`" + `
+
+	// Storage
+	StorageBackend     string ` + "`" + `env:"STORAGE_BACKEND"       env-default:"local"` + "`" + `
+	StorageMountPath   string ` + "`" + `env:"STORAGE_MOUNT_PATH"    env-default:"./uploads"` + "`" + `
+	StorageMaxFileSize int64  ` + "`" + `env:"STORAGE_MAX_FILE_SIZE" env-default:"10485760"` + "`" + `
+	StorageURLPrefix   string ` + "`" + `env:"STORAGE_URL_PREFIX"    env-default:"/upload"` + "`" + `
+
+	// axe:plugin:config
 }
 
 // Load reads configuration from environment variables.
@@ -2384,11 +2432,12 @@ import (
 
 // RouteInfo holds metadata about a single registered route.
 type RouteInfo struct {
-	Method string ` + "`" + `json:"method"` + "`" + `
-	Path   string ` + "`" + `json:"path"` + "`" + `
+	Method   string ` + "`" + `json:"method"` + "`" + `
+	Path     string ` + "`" + `json:"path"` + "`" + `
+	Category string ` + "`" + `json:"category"` + "`" + `
 }
 
-// Collect walks chi.Routers and returns all registered routes sorted by path.
+// Collect walks chi.Routers and returns all registered routes sorted by category then path.
 func Collect(routers ...chi.Router) []RouteInfo {
 	var routes []RouteInfo
 	seen := make(map[string]bool)
@@ -2397,22 +2446,23 @@ func Collect(routers ...chi.Router) []RouteInfo {
 			key := method + " " + route
 			if !seen[key] {
 				seen[key] = true
-				routes = append(routes, RouteInfo{Method: method, Path: route})
+				if isNoisyMethod(method) && !isAPIPath(route) {
+					return nil
+				}
+				routes = append(routes, RouteInfo{Method: method, Path: route, Category: categorize(route)})
 			}
 			return nil
 		})
 	}
 	sort.Slice(routes, func(i, j int) bool {
-		if routes[i].Path == routes[j].Path {
-			return routes[i].Method < routes[j].Method
-		}
+		ci, cj := categoryOrder(routes[i].Category), categoryOrder(routes[j].Category)
+		if ci != cj { return ci < cj }
+		if routes[i].Path == routes[j].Path { return methodOrder(routes[i].Method) < methodOrder(routes[j].Method) }
 		return routes[i].Path < routes[j].Path
 	})
 	return routes
 }
 
-// NotFoundHandler returns a 404 handler that shows a route listing in
-// development mode, or a JSON error in production.
 func NotFoundHandler(isDev bool, routers ...chi.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isDev {
@@ -2428,7 +2478,6 @@ func NotFoundHandler(isDev bool, routers ...chi.Router) http.HandlerFunc {
 	}
 }
 
-// DebugRoutesHandler returns a handler for /debug/routes.
 func DebugRoutesHandler(isDev bool, routers ...chi.Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isDev {
@@ -2446,12 +2495,9 @@ func DebugRoutesHandler(isDev bool, routers ...chi.Router) http.HandlerFunc {
 	}
 }
 
-// PrintRoutes prints all registered routes to stdout.
 func PrintRoutes(routers ...chi.Router) {
 	routes := Collect(routers...)
-	if len(routes) == 0 {
-		return
-	}
+	if len(routes) == 0 { return }
 	methodW, pathW := 6, 4
 	for _, ri := range routes {
 		if len(ri.Method) > methodW { methodW = len(ri.Method) }
@@ -2460,10 +2506,64 @@ func PrintRoutes(routers ...chi.Router) {
 	fmt.Printf("\n   Registered routes:\n")
 	fmt.Printf("   %-*s  %s\n", methodW, "METHOD", "PATH")
 	fmt.Printf("   %-*s  %s\n", methodW, strings.Repeat("-", methodW), strings.Repeat("-", pathW))
+	lastCat := ""
 	for _, ri := range routes {
+		if ri.Category != lastCat {
+			fmt.Printf("\n   %s\n", categoryLabel(ri.Category))
+			lastCat = ri.Category
+		}
 		fmt.Printf("   %-*s  %s\n", methodW, ri.Method, ri.Path)
 	}
 	fmt.Println()
+}
+
+func categorize(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/ws/") || strings.HasPrefix(path, "/ws"):
+		return "ws"
+	case strings.HasPrefix(path, "/api/"):
+		return "api"
+	default:
+		return "system"
+	}
+}
+
+func categoryOrder(cat string) int {
+	switch cat {
+	case "api": return 0
+	case "ws": return 1
+	default: return 2
+	}
+}
+
+func categoryLabel(cat string) string {
+	switch cat {
+	case "api": return "-- API -------------------------"
+	case "ws": return "-- WebSocket -------------------"
+	case "system": return "-- System ----------------------"
+	default: return ""
+	}
+}
+
+func methodOrder(m string) int {
+	switch m {
+	case "GET": return 0
+	case "POST": return 1
+	case "PUT": return 2
+	case "PATCH": return 3
+	case "DELETE": return 4
+	default: return 5
+	}
+}
+
+func isAPIPath(path string) bool { return strings.HasPrefix(path, "/api/") }
+
+func isNoisyMethod(method string) bool {
+	switch method {
+	case "CONNECT", "TRACE", "OPTIONS", "HEAD":
+		return true
+	}
+	return false
 }
 
 func renderHTML(method, path string, routes []RouteInfo) string {
@@ -2474,11 +2574,26 @@ func renderHTML(method, path string, routes []RouteInfo) string {
 		heading = "<h2 style=\"color:#22d3ee;margin:0 0 24px\">Registered Routes</h2>"
 	}
 	var rows strings.Builder
+	lastCat := ""
 	for _, ri := range routes {
+		if ri.Category != lastCat {
+			label := categoryHTMLLabel(ri.Category)
+			rows.WriteString(fmt.Sprintf("<tr><td colspan=\"2\" style=\"padding:16px 16px 4px;color:#71717a;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px\">%s</td></tr>", label))
+			lastCat = ri.Category
+		}
 		color := methodColor(ri.Method)
-		rows.WriteString(fmt.Sprintf("<tr><td style=\"padding:8px 16px;font-weight:700;color:%s;font-size:13px;letter-spacing:0.5px\">%s</td><td style=\"padding:8px 16px;color:#e4e4e7;font-family:monospace;font-size:14px\">%s</td></tr>", color, ri.Method, ri.Path))
+		rows.WriteString(fmt.Sprintf("<tr><td style=\"padding:6px 16px;font-weight:700;color:%s;font-size:13px;letter-spacing:0.5px;white-space:nowrap\">%s</td><td style=\"padding:6px 16px;color:#e4e4e7;font-family:monospace;font-size:14px\">%s</td></tr>", color, ri.Method, ri.Path))
 	}
-	return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Routes</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#09090b;color:#fafafa;margin:0;padding:40px;min-height:100vh}.card{max-width:800px;margin:0 auto;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:32px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5)}table{width:100%;border-collapse:collapse}thead th{text-align:left;padding:8px 16px;color:#71717a;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #27272a}tbody tr{border-bottom:1px solid #1e1e22}tbody tr:hover{background:#1f1f23}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:#27272a;color:#a1a1aa;margin-top:8px}</style></head><body><div class=\"card\">" + heading + "<table><thead><tr><th>Method</th><th>Path</th></tr></thead><tbody>" + rows.String() + "</tbody></table><div class=\"badge\">axe development mode</div></div></body></html>"
+	return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Routes</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#09090b;color:#fafafa;margin:0;padding:40px;min-height:100vh}.card{max-width:800px;margin:0 auto;background:#18181b;border:1px solid #27272a;border-radius:12px;padding:32px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5)}table{width:100%;border-collapse:collapse}thead th{text-align:left;padding:8px 16px;color:#71717a;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #27272a}tbody tr{border-bottom:1px solid #1e1e22}tbody tr:hover{background:#1f1f23}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:#27272a;color:#a1a1aa;margin-top:16px}</style></head><body><div class=\"card\">" + heading + "<table><thead><tr><th>Method</th><th>Path</th></tr></thead><tbody>" + rows.String() + "</tbody></table><div class=\"badge\">axe development mode</div></div></body></html>"
+}
+
+func categoryHTMLLabel(cat string) string {
+	switch cat {
+	case "api": return "API"
+	case "ws": return "WebSocket"
+	case "system": return "System"
+	default: return ""
+	}
 }
 
 func methodColor(method string) string {
@@ -2490,4 +2605,334 @@ func methodColor(method string) string {
 	default: return "#a1a1aa"
 	}
 }
+`
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Storage plugin templates
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TmplStorageCore = `package storage
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// Config configures the storage package.
+type Config struct {
+	Backend     string   // "local" or "juicefs" (both use FSStore — distinction is for logging)
+	MountPath   string   // base directory, e.g. "./uploads" or "/mnt/jfs/uploads"
+	MaxFileSize int64    // max upload size in bytes (default: 10MB)
+	AllowedTypes []string // restrict MIME types, empty = allow all
+	URLPrefix   string   // HTTP route prefix, e.g. "/upload"
+}
+
+func (c *Config) defaults() {
+	if c.MountPath == "" { c.MountPath = "./uploads" }
+	if c.MaxFileSize <= 0 { c.MaxFileSize = 10 * 1024 * 1024 }
+	if c.URLPrefix == "" { c.URLPrefix = "/upload" }
+	if c.Backend == "" { c.Backend = "local" }
+}
+
+// Store abstracts file storage operations.
+type Store interface {
+	Upload(ctx context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error)
+	Delete(ctx context.Context, key string) error
+	Open(ctx context.Context, key string) (io.ReadCloser, error)
+	Exists(ctx context.Context, key string) (bool, error)
+	URL(key string) string
+}
+
+// Result holds metadata about a stored file.
+type Result struct {
+	Key         string ` + "`" + `json:"key"` + "`" + `
+	URL         string ` + "`" + `json:"url"` + "`" + `
+	Size        int64  ` + "`" + `json:"size"` + "`" + `
+	ContentType string ` + "`" + `json:"content_type"` + "`" + `
+}
+
+// KeyForFile generates a storage key: YYYY/MM/DD/{name}
+func KeyForFile(name string) string {
+	return time.Now().UTC().Format("2006/01/02") + "/" + name
+}
+
+// ── FSStore ──────────────────────────────────────────────────────────────────
+
+// FSStore implements Store using standard filesystem operations.
+// Works identically on local directories and JuiceFS mount points.
+type FSStore struct {
+	basePath  string
+	maxSize   int64
+	allowed   map[string]bool
+	urlPrefix string
+}
+
+// NewFSStore creates a filesystem-backed store.
+func NewFSStore(cfg Config) (*FSStore, error) {
+	cfg.defaults()
+	if err := os.MkdirAll(cfg.MountPath, 0o755); err != nil {
+		return nil, fmt.Errorf("storage: create base dir %q: %w", cfg.MountPath, err)
+	}
+	allowed := make(map[string]bool, len(cfg.AllowedTypes))
+	for _, t := range cfg.AllowedTypes {
+		allowed[strings.ToLower(t)] = true
+	}
+	return &FSStore{basePath: cfg.MountPath, maxSize: cfg.MaxFileSize, allowed: allowed, urlPrefix: cfg.URLPrefix}, nil
+}
+
+func (s *FSStore) Upload(_ context.Context, key string, r io.Reader, size int64, contentType string) (*Result, error) {
+	if len(s.allowed) > 0 && !s.allowed[strings.ToLower(contentType)] {
+		return nil, fmt.Errorf("storage: content type %q not allowed", contentType)
+	}
+	if size > s.maxSize {
+		return nil, fmt.Errorf("storage: file size %d exceeds max %d bytes", size, s.maxSize)
+	}
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return nil, fmt.Errorf("storage: mkdir: %w", err)
+	}
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("storage: create file: %w", err)
+	}
+	defer f.Close()
+	limited := io.LimitReader(r, s.maxSize+1)
+	written, err := io.Copy(f, limited)
+	if err != nil {
+		_ = os.Remove(fullPath)
+		return nil, fmt.Errorf("storage: write: %w", err)
+	}
+	if written > s.maxSize {
+		_ = os.Remove(fullPath)
+		return nil, fmt.Errorf("storage: file size exceeds max %d bytes", s.maxSize)
+	}
+	return &Result{Key: key, URL: s.URL(key), Size: written, ContentType: contentType}, nil
+}
+
+func (s *FSStore) Delete(_ context.Context, key string) error {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	if err := os.Remove(fullPath); err != nil {
+		if os.IsNotExist(err) { return fmt.Errorf("storage: file %q not found", key) }
+		return fmt.Errorf("storage: delete: %w", err)
+	}
+	return nil
+}
+
+func (s *FSStore) Open(_ context.Context, key string) (io.ReadCloser, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	f, err := os.Open(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) { return nil, fmt.Errorf("storage: file %q not found", key) }
+		return nil, fmt.Errorf("storage: open: %w", err)
+	}
+	return f, nil
+}
+
+func (s *FSStore) Exists(_ context.Context, key string) (bool, error) {
+	fullPath := filepath.Join(s.basePath, filepath.FromSlash(key))
+	_, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) { return false, nil }
+		return false, fmt.Errorf("storage: stat: %w", err)
+	}
+	return true, nil
+}
+
+func (s *FSStore) URL(key string) string { return s.urlPrefix + "/" + key }
+`
+
+const TmplStorageHandler = `package storage
+
+import (
+	"fmt"
+	"io"
+	"log/slog"
+	"mime"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+// Handler provides HTTP endpoints for file operations.
+type Handler struct {
+	store Store
+	cfg   Config
+	log   *slog.Logger
+}
+
+// NewHandler creates a storage HTTP handler.
+func NewHandler(cfg Config, log *slog.Logger) *Handler {
+	cfg.defaults()
+	store, err := NewFSStore(cfg)
+	if err != nil {
+		log.Error("storage: failed to create store", "error", err)
+	}
+	return &Handler{store: store, cfg: cfg, log: log}
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.handleUpload(w, r)
+	case http.MethodGet:
+		h.handleServe(w, r)
+	case http.MethodDelete:
+		h.handleDelete(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxFileSize+1024*1024)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		metricsUploadErrors.WithLabelValues("parse_error").Inc()
+		writeError(w, http.StatusBadRequest, "failed to parse multipart form: "+err.Error())
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		metricsUploadErrors.WithLabelValues("missing_file").Inc()
+		writeError(w, http.StatusBadRequest, "missing 'file' field in form data")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" || contentType == "application/octet-stream" {
+		ext := filepath.Ext(header.Filename)
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			contentType = ct
+		} else {
+			buf := make([]byte, 512)
+			n, _ := file.Read(buf)
+			contentType = http.DetectContentType(buf[:n])
+			if seeker, ok := file.(io.ReadSeeker); ok {
+				_, _ = seeker.Seek(0, io.SeekStart)
+			}
+		}
+	}
+
+	ext := filepath.Ext(header.Filename)
+	key := KeyForFile(uuid.New().String() + ext)
+
+	result, err := h.store.Upload(r.Context(), key, file, header.Size, contentType)
+	if err != nil {
+		h.log.Warn("upload failed", "error", err, "filename", header.Filename)
+		metricsUploadErrors.WithLabelValues("store_error").Inc()
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not allowed") {
+			status = http.StatusUnsupportedMediaType
+		} else if strings.Contains(err.Error(), "exceeds max") {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	metricsUploadBytes.Add(float64(result.Size))
+	metricsOps.WithLabelValues("upload", "ok").Inc()
+	h.log.Info("file uploaded", "key", result.Key, "size", result.Size, "content_type", result.ContentType)
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, ` + "`" + `{"key":%q,"url":%q,"size":%d,"content_type":%q}` + "`" + `, result.Key, result.URL, result.Size, result.ContentType)
+}
+
+func (h *Handler) handleServe(w http.ResponseWriter, r *http.Request) {
+	key := h.extractKey(r)
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+	reader, err := h.store.Open(r.Context(), key)
+	if err != nil {
+		metricsOps.WithLabelValues("serve", "error").Inc()
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "file not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to open file")
+		}
+		return
+	}
+	defer reader.Close()
+	ext := filepath.Ext(key)
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	metricsOps.WithLabelValues("serve", "ok").Inc()
+	if _, err := io.Copy(w, reader); err != nil {
+		h.log.Warn("serve file copy error", "key", key, "error", err)
+	}
+}
+
+func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
+	key := h.extractKey(r)
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "missing file key")
+		return
+	}
+	if err := h.store.Delete(r.Context(), key); err != nil {
+		metricsOps.WithLabelValues("delete", "error").Inc()
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "file not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to delete file")
+		}
+		return
+	}
+	metricsOps.WithLabelValues("delete", "ok").Inc()
+	h.log.Info("file deleted", "key", key)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) extractKey(r *http.Request) string {
+	prefix := h.cfg.URLPrefix + "/"
+	key := strings.TrimPrefix(r.URL.Path, prefix)
+	if key == r.URL.Path { return "" }
+	return key
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, ` + "`" + `{"error":%q}` + "`" + `, msg)
+}
+`
+
+const TmplStorageMetrics = `package storage
+
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	metricsUploadBytes = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "upload_bytes_total",
+		Help:      "Total bytes uploaded.",
+	})
+	metricsUploadErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "upload_errors_total",
+		Help:      "Total upload errors by reason.",
+	}, []string{"reason"})
+	metricsOps = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "axe",
+		Subsystem: "storage",
+		Name:      "operations_total",
+		Help:      "Total storage operations by operation and status.",
+	}, []string{"operation", "status"})
+)
 `

@@ -187,21 +187,105 @@ CI/CD (GitHub Actions):
 
 ---
 
+## Phase 4: Plugin Ecosystem (3–4 tuần)
+> Mục tiêu: Plugins dễ dùng, plug-and-play
+
+### 4.1 Plugin System (Sprint 19) ✅
+
+```go
+// Plugin interface
+type Plugin interface {
+    Name() string
+    Register(ctx context.Context, app *App) error
+    Shutdown(ctx context.Context) error
+}
+
+// Typed service locator
+plugin.Provide[MyService](app, "my-service", svc)
+svc := plugin.MustResolve[MyService](app, "my-service")
+```
+
+### 4.2 Storage Plugin Integration (Sprint 20) 🔄
+
+**Hai cách sử dụng:**
+
+```bash
+# Cách 1: Include khi tạo project
+axe new blog-api --with-storage
+
+# Cách 2: Thêm vào project có sẵn
+axe plugin add storage
+```
+
+**Tự động tạo:**
+- `pkg/storage/` — Store interface, FSStore, HTTP handler, Prometheus metrics
+- Config fields trong `config/config.go`
+- Env vars trong `.env.example`
+- Route wiring trong `cmd/api/main.go`
+
+**Thiết kế:**
+- Standalone package (không phụ thuộc framework `plugin.App`)
+- Direct chi handler mount → đơn giản hơn cho end users
+- POSIX filesystem → hoạt động giống nhau trên local & JuiceFS
+
+### 4.3 Email Plugin (Sprint 21) 🟡
+
+```
+pkg/plugin/email/:
+  - SendGrid + SMTP backends
+  - Asynq queue integration (async send)
+  - Development mode: log to console
+  - Template support (html/template)
+```
+
+### 4.4 Multi-Tenancy (Sprint 21) 🟡
+
+```
+Middleware approach:
+  - Tenant ID from JWT claims / subdomain / header
+  - Row-level security via Ent runtime hooks
+  - Per-tenant rate limiting
+```
+
+### 4.5 Plugin Registry CLI (Sprint 22) 🟡
+
+```bash
+axe plugin list              # Show available plugins
+axe plugin add storage       # Add storage to project
+axe plugin add email         # Add email to project
+axe plugin remove storage    # Remove plugin
+```
+
+### 4.6 Deliverables Phase 4
+
+- [x] Plugin system (`plugin.Plugin` interface + typed service locator)
+- [x] Storage plugin (FSStore, HTTP handler, Prometheus metrics)
+- [ ] Storage easy integration (`--with-storage` + `axe plugin add storage`)
+- [ ] Email plugin
+- [ ] Multi-tenancy middleware
+- [ ] Plugin Registry CLI
+
+---
+
 ## Milestone Timeline
 
 ```
 Week 1-2:   pkg/apperror + pkg/txmanager + config  [Phase 1]
 Week 3-4:   Chi setup + User domain CRUD           [Phase 1]
-Week 5-6:   Docker Compose + Makefile + tests      [Phase 1]
-Week 7-8:   axe CLI generator v1                   [Phase 2]
-Week 9-10:  Documentation + ADRs + DX polish       [Phase 2]
-Week 11-12: Observability + Auth + Cache           [Phase 3]
-Week 13-14: Background jobs + Deployment pipeline  [Phase 3]
+Week 5-6:   Docker Compose + Makefile + tests       [Phase 1]
+Week 7-8:   axe CLI generator v1                    [Phase 2]
+Week 9-10:  Documentation + ADRs + DX polish        [Phase 2]
+Week 11-12: Observability + Auth + Cache             [Phase 3]
+Week 13-14: Background jobs + Deployment pipeline    [Phase 3]
+Week 15-16: Plugin system + Storage plugin           [Phase 4]
+Week 17-18: Storage integration + Email plugin       [Phase 4]
+Week 19-20: Multi-tenancy + Plugin Registry CLI      [Phase 4]
 ```
 
 ---
 
 ## Rủi Ro và Mitigation
+
 
 | Rủi ro | Khả năng | Mitigation |
 |---|---|---|
