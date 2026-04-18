@@ -49,6 +49,15 @@ func insertEvent(t *testing.T, db *sql.DB, id, eventType, aggregate string) {
 	require.NoError(t, err)
 }
 
+// countUnprocessed returns the number of unprocessed events with retries < 5.
+func countUnprocessed(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE processed_at IS NULL AND retries < 5`).Scan(&count)
+	require.NoError(t, err)
+	return count
+}
+
 // ── Config defaults ───────────────────────────────────────────────────────────
 
 func TestConfig_DefaultsApplied(t *testing.T) {
@@ -56,6 +65,20 @@ func TestConfig_DefaultsApplied(t *testing.T) {
 	db := openTestDB(t)
 	// We use a non-reachable Redis addr — New only creates the client, doesn't ping
 	p := outbox.New(db, "localhost:6399", outbox.Config{}, slog.Default())
+	require.NotNil(t, p)
+}
+
+func TestConfig_DriverDefault(t *testing.T) {
+	db := openTestDB(t)
+	// Empty Driver should default to "postgres"
+	p := outbox.New(db, "localhost:6399", outbox.Config{}, slog.Default())
+	require.NotNil(t, p)
+}
+
+func TestConfig_CustomDriverSqlite(t *testing.T) {
+	db := openTestDB(t)
+	// Should accept sqlite3 driver without panicking
+	p := outbox.New(db, "localhost:6399", outbox.Config{Driver: "sqlite3"}, slog.Default())
 	require.NotNil(t, p)
 }
 
@@ -68,6 +91,17 @@ func TestNew_WithCustomConfig(t *testing.T) {
 		BatchSize: 100,
 	}, slog.Default())
 	require.NotNil(t, p, "New() should return a non-nil Poller")
+}
+
+func TestNew_WithAllDrivers(t *testing.T) {
+	drivers := []string{"postgres", "mysql", "sqlite3"}
+	for _, drv := range drivers {
+		t.Run(drv, func(t *testing.T) {
+			db := openTestDB(t)
+			p := outbox.New(db, "localhost:6399", outbox.Config{Driver: drv}, slog.Default())
+			require.NotNil(t, p)
+		})
+	}
 }
 
 // ── poll via Start — short context ───────────────────────────────────────────
@@ -90,6 +124,31 @@ func TestStart_CancelImmediately(t *testing.T) {
 		// expected
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start() did not return after context cancel")
+	}
+}
+
+func TestStart_CancelDuringPoll(t *testing.T) {
+	db := openTestDB(t)
+	// Very short interval to trigger at least one poll before cancel.
+	p := outbox.New(db, "localhost:63999", outbox.Config{
+		Interval: 50 * time.Millisecond,
+		Driver:   "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		p.Start(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// expected — should exit after context timeout
+	case <-time.After(3 * time.Second):
+		t.Fatal("Start() did not return after context timeout")
 	}
 }
 
@@ -135,13 +194,7 @@ func TestOutboxTable_MarkProcessed(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should not appear in unprocessed query
-	var count int
-	err = db.QueryRow(`
-		SELECT COUNT(*) FROM outbox_events
-		WHERE id = 'evt-proc-1' AND processed_at IS NULL
-	`).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count, "processed event should not appear in unprocessed query")
+	assert.Equal(t, 0, countUnprocessed(t, db))
 }
 
 // ── retries cap ───────────────────────────────────────────────────────────────
@@ -154,15 +207,17 @@ func TestOutboxTable_RetryCapExcludes(t *testing.T) {
 	_, err := db.Exec(`UPDATE outbox_events SET retries = 5 WHERE id = ?`, "evt-retry-1")
 	require.NoError(t, err)
 
-	var count int
-	err = db.QueryRow(`
-		SELECT COUNT(*) FROM outbox_events
-		WHERE id = 'evt-retry-1'
-		  AND processed_at IS NULL
-		  AND retries < 5
-	`).Scan(&count)
+	assert.Equal(t, 0, countUnprocessed(t, db), "event with retries >= 5 should be excluded from poll query")
+}
+
+func TestOutboxTable_RetryUnderCapIncluded(t *testing.T) {
+	db := openTestDB(t)
+	insertEvent(t, db, "evt-retry-ok", "RetryableEvent", "payment")
+
+	_, err := db.Exec(`UPDATE outbox_events SET retries = 4 WHERE id = ?`, "evt-retry-ok")
 	require.NoError(t, err)
-	assert.Equal(t, 0, count, "event with retries >= 5 should be excluded from poll query")
+
+	assert.Equal(t, 1, countUnprocessed(t, db), "event with retries=4 (< 5) should still appear")
 }
 
 // ── payload round-trip ────────────────────────────────────────────────────────
@@ -226,4 +281,60 @@ func TestOutboxTable_FIFOOrdering(t *testing.T) {
 	require.Len(t, ids, 2)
 	assert.Equal(t, "evt-old", ids[0], "older event should come first (FIFO)")
 	assert.Equal(t, "evt-new", ids[1])
+}
+
+// ── batch limit ──────────────────────────────────────────────────────────────
+
+func TestOutboxTable_BatchLimit(t *testing.T) {
+	db := openTestDB(t)
+
+	// Insert 10 events
+	for i := 0; i < 10; i++ {
+		insertEvent(t, db, "evt-batch-"+string(rune('a'+i)), "BatchEvent", "batch")
+	}
+
+	// Query with LIMIT 3 — should return exactly 3
+	rows, err := db.QueryContext(context.Background(), `
+		SELECT id FROM outbox_events
+		WHERE processed_at IS NULL AND retries < 5
+		ORDER BY created_at ASC LIMIT ?
+	`, 3)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+		count++
+	}
+	assert.Equal(t, 3, count, "LIMIT should cap batch size")
+}
+
+// ── empty table ──────────────────────────────────────────────────────────────
+
+func TestOutboxTable_EmptyTable(t *testing.T) {
+	db := openTestDB(t)
+	assert.Equal(t, 0, countUnprocessed(t, db), "empty table should have 0 unprocessed events")
+}
+
+// ── multiple events lifecycle ─────────────────────────────────────────────────
+
+func TestOutboxTable_MixedProcessedAndUnprocessed(t *testing.T) {
+	db := openTestDB(t)
+
+	insertEvent(t, db, "evt-a", "EventA", "agg")
+	insertEvent(t, db, "evt-b", "EventB", "agg")
+	insertEvent(t, db, "evt-c", "EventC", "agg")
+
+	// Mark evt-b as processed
+	_, err := db.Exec(`UPDATE outbox_events SET processed_at = CURRENT_TIMESTAMP WHERE id = ?`, "evt-b")
+	require.NoError(t, err)
+
+	// Mark evt-c as exhausted retries
+	_, err = db.Exec(`UPDATE outbox_events SET retries = 5 WHERE id = ?`, "evt-c")
+	require.NoError(t, err)
+
+	// Only evt-a should remain
+	assert.Equal(t, 1, countUnprocessed(t, db))
 }
