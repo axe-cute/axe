@@ -130,11 +130,35 @@ jobs:
           # Note: some tests may need DB/Redis — we verify compilation,
           # not full integration. Failures from missing infra are tolerated.
 
+  # ── Generator Integration Tests ──────────────────────────────────────────────
+  # Verifies that `axe generate resource` and `axe plugin add storage`
+  # produce code that actually compiles. Catches wrong import paths,
+  # missing packages, and template regressions (BUG-5, BUG-6, BUG-7, BUG-8).
+  scaffold-integration:
+    name: "Generator Integration Tests"
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run scaffold integration tests
+        run: |
+          go test \
+            -tags scaffold_integration \
+            -v \
+            -timeout 15m \
+            ./tests/scaffold/...
+
   # ── Docker Build ─────────────────────────────────────────────────────────────
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [lint, test, build, scaffold-test]
+    needs: [lint, test, build, scaffold-test, scaffold-integration]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4

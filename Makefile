@@ -69,6 +69,13 @@ test-ws-integration: ## Run WebSocket Redis integration tests (requires Docker)
 test-plugin: ## Run plugin unit tests
 	$(GO) test ./pkg/plugin/... -v -race -timeout 30s
 
+.PHONY: test-scaffold
+test-scaffold: ## Run scaffold integration tests (verify generators produce compilable code)
+	$(GO) test -tags scaffold_integration -v -timeout 10m ./tests/scaffold/...
+
+.PHONY: test-scaffold-fast
+test-scaffold-fast: ## Run scaffold integration tests (single full-workflow test only)
+	$(GO) test -tags scaffold_integration -v -timeout 5m ./tests/scaffold/... -run TestScaffold_FullWorkflow
 
 # ─── Code Quality ─────────────────────────────────────────────────────────────
 .PHONY: lint
