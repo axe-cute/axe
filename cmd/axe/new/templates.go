@@ -3089,11 +3089,16 @@ func tmplSetupPlugin(data TemplateData) string {
 		storageImport = fmt.Sprintf("\n\t\"%s/pkg/storage\"", data.Module)
 	}
 
+	// "fmt" is only needed when storage block is included (uses fmt.Errorf).
+	fmtImport := ""
+	if data.WithStorage {
+		fmtImport = "\n\t\"fmt\"\n"
+	}
+
 	return fmt.Sprintf(`package setup
 
 import (
-	"context"
-	"fmt"
+	"context"%s
 
 	"%s/config"
 	"github.com/axe-cute/axe/pkg/plugin"%s
@@ -3108,7 +3113,7 @@ func RegisterPlugins(_ context.Context, app *plugin.App, cfg *config.Config) err
 	// axe:wire:plugin
 	return nil
 }
-`, data.Module, storageImport, storageBlock)
+`, fmtImport, data.Module, storageImport, storageBlock)
 }
 
 // tmplHookLeader generates internal/handler/hook/hook.go for the scaffolded project.

@@ -272,10 +272,17 @@ func (m *mock{{.Name}}Svc) List{{.Name}}s(_ context.Context, _ domain.Pagination
 	return []*domain.{{.Name}}{}, 0, nil
 }
 
+// setup{{.Name}}Router mounts the handler on a bare chi router — no JWT middleware.
+// Unit tests exercise handler logic in isolation; auth is tested separately.
 func setup{{.Name}}Router() *chi.Mux {
 	h := handler.New{{.Name}}Handler(&mock{{.Name}}Svc{})
 	r := chi.NewRouter()
-	r.Mount("/api/v1/{{.NamePlural}}", h.Routes())
+	// Mount handlers directly (bypass JWTAuth — tested separately in middleware tests)
+	r.Get("/api/v1/{{.NamePlural}}/{id}", h.Get{{.Name}})
+	r.Put("/api/v1/{{.NamePlural}}/{id}", h.Update{{.Name}})
+	r.Delete("/api/v1/{{.NamePlural}}/{id}", h.Delete{{.Name}})
+	r.Get("/api/v1/{{.NamePlural}}", h.List{{.Name}}s)
+	r.Post("/api/v1/{{.NamePlural}}", h.Create{{.Name}})
 	return r
 }
 
