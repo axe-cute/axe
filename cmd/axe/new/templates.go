@@ -108,9 +108,11 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ./cmd/api"
+  # Show build errors directly in terminal — do NOT redirect to a log file.
+  # This makes air DX comparable to Rails: errors are visible immediately.
+  cmd = "go build -o ./tmp/main ./cmd/api 2>&1"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "node_modules", ".git"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "node_modules", ".git", "uploads"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
@@ -120,7 +122,7 @@ tmp_dir = "tmp"
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
   kill_delay = "0s"
-  log = "build-errors.log"
+  log = ""
   poll = false
   poll_interval = 0
   post_cmd = []
@@ -132,7 +134,7 @@ tmp_dir = "tmp"
 
 [color]
   app = ""
-  build = "yellow"
+  build = "red"
   main = "magenta"
   runner = "green"
   watcher = "cyan"

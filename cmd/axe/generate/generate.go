@@ -331,6 +331,19 @@ func generateResource(data ResourceData) error {
 		fmt.Println("   ✓ go.mod and go.sum updated")
 	}
 
+	fmt.Println("\n   ⏳ Verifying build...")
+	buildCmd := exec.Command(goBin, "build", "./...") //nolint:gosec
+	buildCmd.Stdout = os.Stdout
+	buildCmd.Stderr = os.Stderr
+	if err := buildCmd.Run(); err != nil {
+		fmt.Println()
+		fmt.Println("   ❌ BUILD FAILED — see errors above.")
+		fmt.Println("   The generated files have been written. Fix the errors above, then run:")
+		fmt.Println("      go build ./...")
+		return fmt.Errorf("go build failed after code generation")
+	}
+	fmt.Println("   ✓ Build OK — no compile errors")
+
 	fmt.Println("\n📋 Remaining manual step:")
 	fmt.Println("   make migrate-up    # apply the new migration (requires running database)")
 	fmt.Println("   make test          # run all tests")

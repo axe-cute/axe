@@ -12,6 +12,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -19,6 +20,14 @@ import (
 
 	axenew "github.com/axe-cute/axe/cmd/axe/new"
 )
+
+// goCommand returns the path to the Go binary.
+func goCommand() string {
+	if p, err := exec.LookPath("go"); err == nil {
+		return p
+	}
+	return "/usr/local/go/bin/go"
+}
 
 // registry is the hardcoded list of official axe plugins.
 // No GitHub API required — monorepo approach.
@@ -556,6 +565,20 @@ func addStorage() error {
 		fmt.Printf("   ✓ .gitignore (uploads/ added)\n")
 	}
 	_ = os.MkdirAll("uploads", 0o755)
+
+	// Verify the injected code actually compiles — catch import errors immediately.
+	goBin := goCommand()
+	fmt.Println("\n   ⏳ Verifying build...")
+	buildCmd := exec.Command(goBin, "build", "./...") //nolint:gosec
+	buildCmd.Stdout = os.Stdout
+	buildCmd.Stderr = os.Stderr
+	if err := buildCmd.Run(); err != nil {
+		fmt.Println()
+		fmt.Println("   ❌ BUILD FAILED — see errors above.")
+		fmt.Println("   Please fix the errors above. You may need to revert cmd/api/main.go manually.")
+		return fmt.Errorf("go build failed after plugin wiring")
+	}
+	fmt.Println("   ✓ Build OK — no compile errors")
 
 	fmt.Println("\n✅ Storage plugin added!")
 	return nil
