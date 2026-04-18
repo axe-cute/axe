@@ -411,7 +411,12 @@ sprint_log:
   - sprint: 25
     goal: "Plugin Discovery CLI + Maturity (oauth2, email hardening)"
     stories: [story-8.5, story-9.16, story-9.17, story-8.4, story-10.2]
-    status: planned
+    status: in-progress
+    results:
+      - "Story 8.5 — axe plugin list --installed, --maturity flags + axe plugin info <name>"
+      - "Story 9.16 — pkg/plugin/oauth2: 18.3% → 60.2% (36 tests, mock providers, handler tests)"
+      - "Story 9.17 — pkg/plugin/email: 46.9% → 67.9% (30 tests, sender factory, HTTP helpers)"
+    remaining: [story-8.4, story-10.2]
 
 
 epics_continued:
