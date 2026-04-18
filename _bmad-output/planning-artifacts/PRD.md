@@ -1,9 +1,9 @@
 # PRD — axe Go Web Framework
 
 **Status**: Approved  
-**Version**: 2.0  
-**Date**: 2026-04-16  
-**Changelog**: v2.0 — cập nhật Phase 2 (Epic 4-8), fix workflow, cập nhật Non-Goals
+**Version**: 3.0  
+**Date**: 2026-04-17  
+**Changelog**: v3.0 — Admin UI promoted to optional plugin; added Epic 9 (Long-term Plugin Ecosystem); full plugin taxonomy (short-term vs long-term)
 
 ---
 
@@ -39,9 +39,10 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 ## Non-Goals
 
 - Không build full-stack (chỉ backend API)
-- Không có admin UI riêng (dùng Asynqmon cho jobs)
-- Không distributed tracing phức tạp ở Phase 1
+- Không có **built-in** admin UI — nhưng `axe-plugin-admin` là optional plugin (Epic 8.7)
+- Không distributed tracing phức tạp ở Phase 1 (OpenTelemetry defer sang Epic 9)
 - Không schema-per-tenant multi-tenancy ở v1.0 (chỉ tenant middleware)
+- Không lock-in cloud provider — storage/messaging/AI đều pluggable
 
 ---
 
@@ -76,7 +77,8 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - **Epic 5**: Multi-Database Support — PostgreSQL + MySQL + SQLite (Sprint 13–14) ✅
 - **Epic 6**: `axe new` — Project Scaffolding CLI (Sprint 15–16) ✅
 - **Epic 7**: WebSocket Hub — real-time support (Sprint 17–18) ✅
-- **Epic 8**: Plugin System & Ecosystem (Sprint 19–21) 🔄 In Progress
+- **Epic 8**: Plugin System & Ecosystem — short-term plugins (Sprint 19–24) 🔄 In Progress
+- **Epic 9**: Long-term Plugin Ecosystem — AI, Cloud, Observability (Sprint 25+) 🟡 Planned
 
 ---
 
@@ -90,3 +92,8 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - [x] Multi-DB: PostgreSQL + MySQL + SQLite integration tests pass
 - [x] WebSocket hub hoạt động với Redis pub/sub
 - [x] Plugin system: `app.Use(plugin)` lifecycle hoạt động
+- [ ] **Short-term**: ≥ 6 official plugins shipped (storage, email, auth, ratelimit, tenant, admin)
+- [ ] **Short-term**: `axe plugin add email` tự động inject code vào main.go
+- [ ] **Short-term**: Plugin infrastructure shipped before new plugins — correctness gates (8.10) + event bus (8.12) + observability contract (8.13) done in Sprint 21–23
+- [ ] **Long-term**: ≥ 3 AI plugins (openai, gemini, ollama)
+- [ ] **Long-term**: Web project configurator (start.axe.io) generates main.go scaffold

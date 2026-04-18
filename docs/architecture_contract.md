@@ -52,32 +52,41 @@ at compile-time**. A developer reading the code should never wonder
 ## 2. Layer Architecture
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                    cmd/api/main.go                        │
-│              Composition Root (wiring only)               │
-│  Creates: config, DB, cache, JWT, WS Hub, plugins, router │
-└──────────────────────────┬────────────────────────────────┘
-                           │
-           ┌───────────────▼──────────────────┐
-           │       internal/handler/          │  HTTP Layer
-           │  Parse → Validate → Call → Write │
-           └───────────────┬──────────────────┘
-                           │ via interface
-           ┌───────────────▼──────────────────┐
-           │       internal/service/          │  Business Logic
-           │  Rules, auth, tx, outbox         │
-           └───────────────┬──────────────────┘
-                           │ via interface
-           ┌───────────────▼──────────────────┐
-           │      internal/repository/        │  Data Access
-           │    Ent (writes) + sqlc (reads)   │
-           └───────────────┬──────────────────┘
-                           │
-           ┌───────────────▼──────────────────┐
-           │    PostgreSQL / MySQL / SQLite    │
-           │     (pluggable via pkg/db)       │
-           └──────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                      cmd/api/main.go                          │
+│            Orchestrator (infra setup + Leader calls)           │
+│  Creates: config, DB, cache, JWT, WS Hub │ then delegates:    │
+└──────────────┬─────────────────┬─────────────────┬────────────┘
+               │                 │                 │
+    ┌──────────▼───────┐ ┌──────▼────────┐ ┌──────▼────────────┐
+    │ setup/plugin.go  │ │ hook/hook.go  │ │ handler/router.go │
+    │  Plugin Leader   │ │  Hook Leader  │ │  Router Leader    │
+    │  RegisterPlugins │ │  RegisterAll  │ │  Controllers{}    │
+    └──────────────────┘ └───────────────┘ └───────┬───────────┘
+         🔌 plugins           🎣 events            │
+                                        ┌──────────▼──────────────┐
+                                        │    internal/handler/    │  HTTP Layer
+                                        │ Parse → Validate → Call │
+                                        └───────────┬─────────────┘
+                                                    │ via interface
+                                        ┌───────────▼─────────────┐
+                                        │    internal/service/    │  Business Logic
+                                        │ Rules, auth, tx, outbox │
+                                        └───────────┬─────────────┘
+                                                    │ via interface
+                                        ┌───────────▼─────────────┐
+                                        │   internal/repository/  │  Data Access
+                                        │  Ent (writes) + sqlc    │
+                                        └───────────┬─────────────┘
+                                                    │
+                                        ┌───────────▼─────────────┐
+                                        │ PostgreSQL/MySQL/SQLite │
+                                        └─────────────────────────┘
 ```
+
+**Leaders are independent.** No Leader imports another. `main.go` is the sole
+orchestrator that connects them. This prevents composition root bloat as the
+plugin ecosystem grows.
 
 **The dependency arrow always points downward.** A lower layer must never
 import or reference a higher layer. Interfaces are defined in `domain/`
