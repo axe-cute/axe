@@ -6,9 +6,9 @@
 
 Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · File Storage
 
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/v0.1.6-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
+[![Release](https://img.shields.io/badge/v0.2.0-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
 
 </div>
 
@@ -350,10 +350,12 @@ GET     /metrics
 <summary><strong>Make Commands</strong></summary>
 
 ```bash
-make run                     # Hot-reload dev server
+make run                     # Hot-reload dev server (build errors shown inline)
 make build                   # Binary → ./bin/axe
 make test                    # Unit tests (< 30s)
 make test-race               # Race detector
+make test-scaffold           # Generator integration tests (verify axe generate compiles)
+make test-scaffold-fast      # Fast version (full-workflow only)
 make test-integration        # Postgres (Docker)
 make test-integration-mysql  # MySQL (Docker)
 make test-integration-sqlite # SQLite
@@ -384,14 +386,16 @@ axe/
 │   ├── jwtauth/                 # JWT tokens
 │   ├── metrics/                 # Prometheus
 │   ├── outbox/                  # Event outbox → Asynq
-│   ├── plugin/storage/          # File storage plugin
+│   ├── plugin/                  # Plugin system + typed service locator
 │   ├── ratelimit/               # Rate limiter
+│   ├── storage/                 # File storage (local + JuiceFS)
 │   ├── worker/                  # Background jobs
 │   ├── ws/                      # WebSocket hub
 │   └── devroutes/               # Dev route listing
 ├── ent/schema/                  # ORM schemas
 ├── db/{schema.sql,queries}/     # sqlc schema + queries
 ├── config/config.go             # Env-based config
+├── tests/scaffold/              # Generator integration tests (axe generate / plugin add)
 └── benchmarks/                  # Framework benchmarks
 ```
 
