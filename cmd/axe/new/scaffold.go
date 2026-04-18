@@ -57,7 +57,7 @@ func scaffold(name, target string, opts Options) error {
 
 	data := TemplateData{
 		Name:        name,
-		NameTitle:   strings.ReplaceAll(strings.Title(strings.ReplaceAll(name, "-", " ")), " ", "-"), //nolint:staticcheck
+		NameTitle:   titleWords(strings.ReplaceAll(name, "-", " "), " ", "-"),
 		NameUpper:   strings.ToUpper(strings.ReplaceAll(name, "-", "_")),
 		Module:      opts.Module,
 		DB:          opts.DB,
@@ -160,6 +160,23 @@ func scaffold(name, target string, opts Options) error {
 
 	printSuccess(name, opts)
 	return nil
+}
+
+// titleWords capitalises the first letter of each word in s (split by sep)
+// and rejoins them with joinSep.
+// It replaces the deprecated strings.Title without any external dependencies.
+// Example: titleWords("blog-api", "-", "-") → "Blog-Api"
+func titleWords(s, sep, joinSep string) string {
+	words := strings.Split(s, sep)
+	for i, w := range words {
+		if len(w) == 0 {
+			continue
+		}
+		runes := []rune(w)
+		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+		words[i] = string(runes)
+	}
+	return strings.Join(words, joinSep)
 }
 
 // fileEntry pairs a relative path with its template string.

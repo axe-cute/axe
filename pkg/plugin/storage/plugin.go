@@ -114,7 +114,7 @@ func (p *Plugin) Shutdown(_ context.Context) error {
 // Performs a write→read→delete probe on the storage mount to verify it is
 // fully operational. Passes to /ready aggregation automatically.
 // Returns an error status if the mount is stale, read-only, or unreachable.
-func (p *Plugin) HealthCheck(_ context.Context) plugin.HealthStatus {
+func (p *Plugin) HealthCheck(ctx context.Context) plugin.HealthStatus {
 	start := time.Now()
 	if p.store == nil {
 		return plugin.HealthStatus{
@@ -124,7 +124,7 @@ func (p *Plugin) HealthCheck(_ context.Context) plugin.HealthStatus {
 			Latency: time.Since(start),
 		}
 	}
-	if err := p.store.HealthCheck(); err != nil {
+	if err := p.store.HealthCheck(ctx); err != nil {
 		return plugin.HealthStatus{
 			Plugin:  p.Name(),
 			OK:      false,

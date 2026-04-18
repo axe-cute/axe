@@ -279,13 +279,13 @@ func TestHealthCheck_ReachableBucket(t *testing.T) {
 	defer srv.Close()
 
 	p := mustNewPlugin(t, srv.URL)
-	err := p.HealthCheck()
+	err := p.HealthCheck(t.Context())
 	require.NoError(t, err, "404 on sentinel means bucket is reachable → healthy")
 }
 
 func TestHealthCheck_UnreachableBucket(t *testing.T) {
 	p := mustNewPlugin(t, "http://127.0.0.1:1") // refuses connection
-	err := p.HealthCheck()
+	err := p.HealthCheck(t.Context())
 	require.Error(t, err)
 }
 

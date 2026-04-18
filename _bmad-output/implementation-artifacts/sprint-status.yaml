@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: 3
 phase: 2
 
-current_sprint: 21
-active_story: story-9.1  # Unit tests for pkg/cache, pkg/ratelimit, pkg/outbox
+current_sprint: 23
+active_story: story-9.9  # BMAD audit fixes — race, /ready, outbox multi-DB, HealthCheck ctx
 
 epics:
   - id: epic-1
@@ -350,12 +350,27 @@ sprint_log:
   - sprint: 21
     goal: "Storage Hardening (fsync + health-check + FUSE error wrap) + ADR-010 + Fix generated repo stubs + Test Coverage"
     stories: [story-9.1, story-9.2, story-9.3, story-9.4, story-9.5]
-    status: in-progress
+    status: done
+    completed_at: "2026-04-17"
     results:
       - "Story 9.2: Rate-limit scaffold TODO → real redis_rate impl; go-redis/redis_rate in tmplGoMod; docs/05_plans.md fixed"
       - "Story 9.3: FSStore.HealthCheck() write→read→delete sentinel; f.Sync() before close in Upload()"
       - "Story 9.4: wrapFSError() maps ENOTCONN/EIO/EROFS/ENOSPC/EACCES/EPERM → human-readable AppError; 11 new tests"
       - "Story 9.5: docs/adr/010-fsstore-posix-over-s3.md created; ADR README updated with full 001-010 index"
+
+  - sprint: 22
+    goal: "Scaffold hygiene + plugin.App decoupling from ent"
+    stories: [story-9.7, story-9.8]
+    status: done
+    completed_at: "2026-04-18"
+    results:
+      - "Story 9.7: pkg/plugin/plugin.go — removed EntClient (*ent.Client) from AppConfig/App; ent is a host-project concern, not a framework transport"
+      - "Story 9.7: cmd/api/main.go — removed EntClient from plugin.NewApp() call"
+      - "Story 9.7: go build ./... + go test ./... clean after decoupling"
+      - "Story 9.8: 001_init.sql scaffold template — removed hardcoded users table; only trigger_set_updated_at() infrastructure remains"
+      - "Story 9.8: db/migrations/ deleted from axe repo (framework ≠ demo app); schema now in db/schema.sql (for sqlc only)"
+      - "Story 9.8: tests/integration/setup_test.go + mysql_test.go — runMigrations() now embeds SQL inline instead of reading deleted files"
+      - "Story 9.8: sqlc.yaml schema updated from './db/migrations' → './db/schema.sql'"
 
   - sprint: 22
     goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
@@ -364,6 +379,21 @@ sprint_log:
     notes: "Reduced scope: no schema-per-tenant (deferred to v2.0)"
 
   - sprint: 23
+    goal: "BMAD audit fixes — code correctness & interface consistency"
+    stories: [story-9.9]
+    status: done
+    completed_at: "2026-04-18"
+    results:
+      - "BUG-1 (P0): Fixed DATA RACE in pkg/ws/hub_test.go:285 — mu.Lock() missing on clientRef read"
+      - "BUG-2 (P0): Mount /ready endpoint in generated project (tmplMainAPIGo) — was defined but never registered; Kubernetes readiness probe now works"
+      - "BUG-3 (P1): outbox/poller.go — added Driver field to Config; placeholder() selects $1 (PG) vs ? (MySQL/SQLite); lockClause() omits FOR UPDATE SKIP LOCKED on sqlite3"
+      - "BUG-4 (P1): generated JWTAuth middleware (tmplMiddlewareAuth) — synced blocklist check with framework code; now fail-open + logs Redis errors instead of silently ignoring"
+      - "IMPROVE-5 (P1): Store.HealthCheck() — added context.Context param to interface, FSStore, S3 plugin, all tests, cmd/api/main.go"
+      - "IMPROVE-7 (P2): Replaced deprecated strings.Title in scaffold.go with custom titleWords() helper (Unicode-safe, no external dep)"
+      - "outbox: Propagated cfg.DBDriver to outbox.Config.Driver in cmd/api/main.go"
+      - "go build ./...  ✅ | go vet ./... ✅ | go test -race ./... ✅ (0 failures, 0 data races)"
+
+  - sprint: 24
     goal: "Plugin discovery CLI + ADR cleanup + v1.0 polish"
     stories: [story-8.5]
     status: planned
@@ -417,6 +447,45 @@ epics_continued:
         sprint: 21
         priority: P1
         notes: "docs/guides/juicefs-storage.md created — covers install, mount, env config, health-check, ops checklist, Docker deployment, Prometheus dashboards."
+      - id: story-9.7
+        title: "plugin.App — remove EntClient coupling to ent generated code"
+        status: done
+        sprint: 22
+        priority: P0
+        notes: |
+          pkg/plugin/plugin.go: removed EntClient *ent.Client from AppConfig and App.
+          Ent is host-project generated code; framework pkg/plugin must not import it.
+          cmd/api/main.go: EntClient removed from plugin.NewApp() call.
+          go build ./... + go test ./...: clean.
+          Root cause: axe new failed (go mod tidy error) because published v0.1.7 did not include ent/user, ent/predicate.
+      - id: story-9.8
+        title: "Scaffold hygiene — no default domain model in generated project"
+        status: done
+        sprint: 22
+        priority: P1
+        notes: |
+          001_init.sql scaffold template: removed hardcoded users table + trigger.
+          Now only contains trigger_set_updated_at() infrastructure function.
+          db/migrations/ deleted from axe repo (framework ≠ demo app).
+          db/schema.sql created as dedicated sqlc schema source.
+          sqlc.yaml: schema path updated from ./db/migrations → ./db/schema.sql.
+          tests/integration/setup_test.go + mysql_test.go: runMigrations() embeds SQL inline.
+          User table generated via: axe generate resource User --fields="..."
+
+      - id: story-9.9
+        title: "BMAD Audit — Bug fixes & interface consistency"
+        status: done
+        sprint: 23
+        priority: P0
+        notes: |
+          Full BMAD audit of sprint-22 codebase identified 5 bugs and 2 improvements.
+          BUG-1: DATA RACE in pkg/ws/hub_test.go — missing mu.Lock() on clientRef read.
+          BUG-2: /ready endpoint defined but not mounted in generated project — Kubernetes readiness probe 404.
+          BUG-3: outbox/poller.go hardcoded $1 (PG) placeholder — MySQL/SQLite fail; fixed with Driver-aware helpers.
+          BUG-4: generated JWTAuth template ignored Redis blocklist errors silently — synced to fail-open pattern.
+          IMPROVE-5: Store.HealthCheck() now takes context.Context (Storage interface, FSStore, S3, all callers).
+          IMPROVE-7: strings.Title deprecated — replaced with titleWords() helper in scaffold.go.
+          Result: go test -race ./... 100% PASS, 0 data races.
 
   - id: epic-10
     title: "Communication Plugins"

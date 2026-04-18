@@ -282,7 +282,9 @@ func TestHub_Leave_CleanupRoom(t *testing.T) {
 		t.Errorf("after leave: RoomSize = %d, want 0", hub.RoomSize(room))
 	}
 
+	mu.Lock()
 	_ = clientRef
+	mu.Unlock()
 }
 
 // ── UserConnTracker tests ─────────────────────────────────────────────────────

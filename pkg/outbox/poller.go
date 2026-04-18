@@ -21,17 +21,22 @@ import (
 
 // Poller reads unprocessed outbox_events and dispatches them as Asynq tasks.
 type Poller struct {
-	db       *sql.DB
-	client   *asynq.Client
-	log      *slog.Logger
-	interval time.Duration
+	db        *sql.DB
+	client    *asynq.Client
+	log       *slog.Logger
+	interval  time.Duration
 	batchSize int
+	driver    string // "postgres", "mysql", "sqlite3"
 }
 
 // Config holds poller settings.
 type Config struct {
 	Interval  time.Duration // polling interval, default 5s
 	BatchSize int           // rows per poll, default 50
+	// Driver is the database driver name: "postgres", "mysql", or "sqlite3".
+	// Used to select the correct SQL placeholder and locking strategy.
+	// Defaults to "postgres".
+	Driver string
 }
 
 // New creates a new Poller.
@@ -42,6 +47,9 @@ func New(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *Poller {
 	if cfg.BatchSize == 0 {
 		cfg.BatchSize = 50
 	}
+	if cfg.Driver == "" {
+		cfg.Driver = "postgres"
+	}
 
 	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
 	return &Poller{
@@ -50,6 +58,28 @@ func New(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *Poller {
 		log:       log,
 		interval:  cfg.Interval,
 		batchSize: cfg.BatchSize,
+		driver:    cfg.Driver,
+	}
+}
+
+// placeholder returns the correct positional placeholder for the driver.
+// PostgreSQL uses $N; MySQL and SQLite use ?.
+func (p *Poller) placeholder() string {
+	if p.driver == "postgres" {
+		return "$1"
+	}
+	return "?"
+}
+
+// lockClause returns the row-level lock hint for the driver.
+// FOR UPDATE SKIP LOCKED is supported by PostgreSQL and MySQL 8+.
+// SQLite uses file-level locking — this clause is omitted.
+func (p *Poller) lockClause() string {
+	switch p.driver {
+	case "postgres", "mysql":
+		return "FOR UPDATE SKIP LOCKED"
+	default:
+		return "" // sqlite3
 	}
 }
 
@@ -75,16 +105,21 @@ func (p *Poller) Start(ctx context.Context) {
 
 // poll reads a batch of unprocessed events and enqueues them.
 func (p *Poller) poll(ctx context.Context) error {
-	// Select unprocessed events with a row-level lock to prevent double processing
-	rows, err := p.db.QueryContext(ctx, `
+	// Select unprocessed events.
+	// Use driver-specific placeholder and lock clause.
+	lockSQL := p.lockClause()
+	if lockSQL != "" {
+		lockSQL = "\n\t\t" + lockSQL
+	}
+	query := `
 		SELECT id, event_type, aggregate
 		FROM outbox_events
 		WHERE processed_at IS NULL
 		  AND retries < 5
 		ORDER BY created_at ASC
-		LIMIT $1
-		FOR UPDATE SKIP LOCKED
-	`, p.batchSize)
+		LIMIT ` + p.placeholder() + lockSQL + `
+	`
+	rows, err := p.db.QueryContext(ctx, query, p.batchSize)
 	if err != nil {
 		return err
 	}
@@ -110,11 +145,8 @@ func (p *Poller) poll(ctx context.Context) error {
 		}
 
 		// Mark as processed
-		if _, err := p.db.ExecContext(ctx, `
-			UPDATE outbox_events
-			SET processed_at = NOW(), retries = retries + 1
-			WHERE id = $1
-		`, id); err != nil {
+		updateQuery := `UPDATE outbox_events SET processed_at = NOW(), retries = retries + 1 WHERE id = ` + p.placeholder()
+		if _, err := p.db.ExecContext(ctx, updateQuery, id); err != nil {
 			p.log.Error("mark outbox processed", "event_id", id, "error", err)
 			continue
 		}

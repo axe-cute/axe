@@ -179,10 +179,10 @@ func (s *FSStore) URL(key string) string {
 }
 
 // HealthCheck performs a write→read→delete cycle on the storage mount.
-// This verifies the path is writable — os.Stat alone is insufficient because
+// It verifies the path is writable — os.Stat alone is insufficient because
 // a stale or read-only FUSE mount (e.g. JuiceFS with exceeded quota) passes
 // Stat but fails on writes.
-func (s *FSStore) HealthCheck() error {
+func (s *FSStore) HealthCheck(_ context.Context) error {
 	sentinel := filepath.Join(s.basePath, ".axe-health-check")
 
 	if err := os.WriteFile(sentinel, []byte("ok"), 0o644); err != nil {

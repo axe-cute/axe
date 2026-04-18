@@ -127,6 +127,7 @@ func main() {
 	outboxPoller := outbox.New(sqlDB, cfg.RedisAddr(), outbox.Config{
 		Interval:  5 * time.Second,
 		BatchSize: 50,
+		Driver:    cfg.DBDriver,
 	}, log)
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────────
@@ -218,13 +219,12 @@ func main() {
 
 	// ── Plugin Leader ────────────────────────────────────────────────────────
 	pluginApp := plugin.NewApp(plugin.AppConfig{
-		Router:    r,
-		Config:    cfg,
-		Logger:    log,
-		DB:        sqlDB,
-		EntClient: entClient,
-		Cache:     cacheClient,
-		Hub:       wsHub,
+		Router: r,
+		Config: cfg,
+		Logger: log,
+		DB:     sqlDB,
+		Cache:  cacheClient,
+		Hub:    wsHub,
 	})
 
 	if err := setup.RegisterPlugins(context.Background(), pluginApp, cfg); err != nil {
@@ -243,9 +243,11 @@ func main() {
 	// Resolve FSStore for /ready health check AFTER plugins are started.
 	// Uses write-verify cycle (write+read+delete sentinel file) instead of
 	// os.Stat — catches stale/read-only FUSE mounts that Stat would miss.
-	var storageHealthFn func() error
+	var storageHealthFn func(context.Context) error
 	if fsStore, ok := plugin.Resolve[storage.Store](pluginApp, storage.ServiceKey); ok {
-		if hc, ok := fsStore.(interface{ HealthCheck() error }); ok {
+		if hc, ok := fsStore.(interface {
+			HealthCheck(context.Context) error
+		}); ok {
 			storageHealthFn = hc.HealthCheck
 		}
 	}
@@ -325,7 +327,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storageHealthFn func() error) http.HandlerFunc {
+func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storageHealthFn func(context.Context) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{"status": "ok"}
 
@@ -350,7 +352,7 @@ func readyHandler(sqlDB *sql.DB, cacheClient *cache.Client, storageHealthFn func
 		// Storage mount health check — write-verify cycle (not just os.Stat).
 		// Catches stale FUSE mounts and read-only JuiceFS conditions.
 		if storageHealthFn != nil {
-			if err := storageHealthFn(); err != nil {
+			if err := storageHealthFn(r.Context()); err != nil {
 				resp["storage"] = "error: " + err.Error()
 				resp["status"] = "degraded"
 			} else {

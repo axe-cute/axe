@@ -316,7 +316,7 @@ func TestHealthCheck_WritableMount(t *testing.T) {
 	store, err := NewFSStore(cfg)
 	require.NoError(t, err)
 
-	err = store.HealthCheck()
+	err = store.HealthCheck(context.Background())
 	assert.NoError(t, err, "HealthCheck should succeed on a writable temp directory")
 }
 
@@ -325,7 +325,7 @@ func TestHealthCheck_SentinelFileCleanedUp(t *testing.T) {
 	store, err := NewFSStore(cfg)
 	require.NoError(t, err)
 
-	err = store.HealthCheck()
+	err = store.HealthCheck(context.Background())
 	require.NoError(t, err)
 
 	// Sentinel file must be removed after successful check
@@ -346,7 +346,7 @@ func TestHealthCheck_ReadOnlyDir(t *testing.T) {
 
 	store := &FSStore{basePath: dir, maxSize: 10 * 1024 * 1024, urlPrefix: "/upload"}
 
-	err := store.HealthCheck()
+	err := store.HealthCheck(context.Background())
 	assert.Error(t, err, "HealthCheck should fail on read-only directory")
 	assert.Contains(t, err.Error(), "storage:")
 }

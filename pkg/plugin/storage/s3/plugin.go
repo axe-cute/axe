@@ -318,8 +318,8 @@ func (p *Plugin) URL(key string) string {
 
 // HealthCheck performs a lightweight check against the S3 bucket.
 // It executes a HEAD request on a sentinel object — no data is written.
-func (p *Plugin) HealthCheck() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (p *Plugin) HealthCheck(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	objectURL := fmt.Sprintf("%s/%s/.axe-health", p.cfg.Endpoint, p.cfg.Bucket)

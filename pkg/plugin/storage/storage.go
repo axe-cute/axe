@@ -45,7 +45,7 @@ type Store interface {
 
 	// HealthCheck performs a write→read→delete probe to verify the mount is
 	// fully operational. Used by [plugin.HealthChecker] aggregation (/ready).
-	HealthCheck() error
+	HealthCheck(ctx context.Context) error
 }
 
 
