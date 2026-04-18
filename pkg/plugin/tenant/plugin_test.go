@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,3 +191,122 @@ func TestRegister_ProvidesMiddleware(t *testing.T) {
 	// Middleware was provided to service locator.
 	// Plugin also registered app.Router middleware — router itself now uses it.
 }
+
+// ── Extraction — JWT ──────────────────────────────────────────────────────────
+
+func TestExtract_JWT_NoClaimsInContext(t *testing.T) {
+	p, _ := New(Config{Source: SourceJWT})
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	assert.Equal(t, "", p.extract(r))
+}
+
+// ── Router helper ─────────────────────────────────────────────────────────────
+
+func TestRouter_WithTenant_Passes(t *testing.T) {
+	p, _ := New(Config{Source: SourceHeader})
+	mw := p.middleware()
+
+	called := false
+	r := chi.NewRouter()
+	r.Use(mw)
+	Router(r, func(r chi.Router) {
+		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			id, ok := FromCtx(r.Context())
+			assert.True(t, ok)
+			assert.Equal(t, "acme", id)
+			w.WriteHeader(http.StatusOK)
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req.Header.Set("X-Tenant-ID", "acme")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestRouter_WithoutTenant_Rejects(t *testing.T) {
+	r := chi.NewRouter()
+	// No tenant middleware → no tenant in context.
+	Router(r, func(r chi.Router) {
+		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("handler should not be called")
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "tenant required")
+}
+
+// ── MustFromCtx with tenant ──────────────────────────────────────────────────
+
+func TestMustFromCtx_WithTenant(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxKey{}, "acme")
+	assert.NotPanics(t, func() {
+		id := MustFromCtx(ctx)
+		assert.Equal(t, "acme", id)
+	})
+}
+
+// ── Plugin metadata ──────────────────────────────────────────────────────────
+
+func TestPlugin_Name(t *testing.T) {
+	p, _ := New(Config{})
+	assert.Equal(t, "tenant", p.Name())
+	assert.Equal(t, ServiceKey, p.Name())
+}
+
+func TestShutdown_NoError(t *testing.T) {
+	p, _ := New(Config{})
+	require.NoError(t, p.Shutdown(t.Context()))
+}
+
+// ── ErrNoTenant ──────────────────────────────────────────────────────────────
+
+func TestErrNoTenant_HasMessage(t *testing.T) {
+	assert.Contains(t, ErrNoTenant.Error(), "no tenant")
+}
+
+// ── DefaultTenant ────────────────────────────────────────────────────────────
+
+func TestMiddleware_DefaultTenant_Empty(t *testing.T) {
+	p, _ := New(Config{Source: SourceHeader, Required: false})
+	mw := p.middleware()
+
+	var gotTenant string
+	var gotOK bool
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotTenant, gotOK = FromCtx(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.False(t, gotOK, "should return false when tenant is empty string")
+	assert.Equal(t, "", gotTenant)
+}
+
+// ── Config defaults ──────────────────────────────────────────────────────────
+
+func TestConfig_DefaultSource(t *testing.T) {
+	cfg := Config{}
+	cfg.defaults()
+	assert.Equal(t, SourceAuto, cfg.Source)
+}
+
+func TestConfig_KeepsExplicitSource(t *testing.T) {
+	cfg := Config{Source: SourceHeader}
+	cfg.defaults()
+	assert.Equal(t, SourceHeader, cfg.Source)
+}
+
