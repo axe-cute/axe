@@ -69,6 +69,13 @@ type Config struct {
 	// Observability (optional)
 	OTELEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""`
 	OTELServiceName string `env:"OTEL_SERVICE_NAME"           env-default:"axe"`
+
+	// axe:plugin:config
+
+	// Stripe Payment
+	StripeSecretKey     string `env:"STRIPE_SECRET_KEY"`
+	StripeWebhookSecret string `env:"STRIPE_WEBHOOK_SECRET"`
+
 }
 
 // Load reads configuration from environment variables and validates it.

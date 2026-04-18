@@ -33,6 +33,8 @@ import (
 	"github.com/axe-cute/axe/pkg/outbox"
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/storage"
+	"github.com/axe-cute/axe/internal/handler/hook"
+	"github.com/axe-cute/axe/internal/setup"
 	"github.com/axe-cute/axe/pkg/ratelimit"
 	"github.com/axe-cute/axe/pkg/worker"
 	"github.com/axe-cute/axe/pkg/ws"
@@ -214,7 +216,7 @@ func main() {
 	})
 	// axe:wire:ws-route
 
-	// ── Plugin System ────────────────────────────────────────────────────────
+	// ── Plugin Leader ────────────────────────────────────────────────────────
 	pluginApp := plugin.NewApp(plugin.AppConfig{
 		Router:    r,
 		Config:    cfg,
@@ -225,13 +227,8 @@ func main() {
 		Hub:       wsHub,
 	})
 
-	if err := pluginApp.Use(storage.New(storage.Config{
-		Backend:     cfg.StorageBackend,
-		MountPath:   cfg.StorageMountPath,
-		MaxFileSize: cfg.StorageMaxFileSize,
-		URLPrefix:   cfg.StorageURLPrefix,
-	})); err != nil {
-		log.Error("plugin registration failed", "error", err)
+	if err := setup.RegisterPlugins(context.Background(), pluginApp, cfg); err != nil {
+		log.Error("plugin setup failed", "error", err)
 		os.Exit(1)
 	}
 
@@ -239,6 +236,9 @@ func main() {
 		log.Error("plugin startup failed", "error", err)
 		os.Exit(1)
 	}
+
+	// ── Hook Leader ─────────────────────────────────────────────────────────
+	hook.RegisterAll(pluginApp.Events)
 
 	// Resolve FSStore for /ready health check AFTER plugins are started.
 	// Uses write-verify cycle (write+read+delete sentinel file) instead of

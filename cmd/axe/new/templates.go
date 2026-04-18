@@ -3070,3 +3070,77 @@ var (
 	}, []string{"operation", "status"})
 )
 `
+
+// ── Leader Templates ──────────────────────────────────────────────────────────
+
+// tmplSetupPlugin generates internal/setup/plugin.go for the scaffolded project.
+func tmplSetupPlugin(data TemplateData) string {
+	var storageBlock string
+	if data.WithStorage {
+		storageBlock = `
+	// ── Storage plugin ────────────────────────────────────────────────────
+	storagePlug, err := storage.New(storage.Config{
+		Backend:     cfg.StorageBackend,
+		MountPath:   cfg.StorageMountPath,
+		MaxFileSize: cfg.StorageMaxFileSize,
+		URLPrefix:   cfg.StorageURLPrefix,
+	})
+	if err != nil {
+		return fmt.Errorf("storage plugin: %w", err)
+	}
+	if err := app.Use(storagePlug); err != nil {
+		return fmt.Errorf("storage plugin: %w", err)
+	}
+`
+	}
+
+	storageImport := ""
+	if data.WithStorage {
+		storageImport = fmt.Sprintf("\n\t\"%s/pkg/storage\"", data.Module)
+	}
+
+	return fmt.Sprintf(`package setup
+
+import (
+	"context"
+	"fmt"
+
+	"%s/config"
+	"github.com/axe-cute/axe/pkg/plugin"%s
+	// axe:wire:import
+)
+
+// RegisterPlugins loads all configured plugins into the app.
+//
+// This is the Plugin Leader — it knows how to initialize plugins and nothing else.
+// Decoupled from: Routes, Hooks, Services.
+func RegisterPlugins(_ context.Context, app *plugin.App, cfg *config.Config) error {%s
+	// axe:wire:plugin
+	return nil
+}
+`, data.Module, storageImport, storageBlock)
+}
+
+// tmplHookLeader generates internal/handler/hook/hook.go for the scaffolded project.
+const tmplHookLeader = `package hook
+
+// axe:wire:import
+
+// RegisterAll subscribes all domain/external event handlers.
+//
+// This is the Hook Leader — it knows about event topics and nothing else.
+// Decoupled from: Plugins, Routes, Services.
+func RegisterAll( /* bus events.Bus */ ) {
+	// axe:wire:hook
+}
+`
+
+// tmplRouterLeader generates internal/handler/router.go for the scaffolded project.
+const tmplRouterLeader = `package handler
+
+// Controllers holds all HTTP handlers for the application.
+// axe generate resource adds new fields here via the axe:wire:controller marker.
+type Controllers struct {
+	// axe:wire:controller
+}
+`

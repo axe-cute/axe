@@ -85,6 +85,8 @@ func scaffold(name, target string, opts Options) error {
 		"ent/schema",
 		"internal/domain",
 		"internal/handler/middleware",
+		"internal/handler/hook",
+		"internal/setup",
 		"internal/repository",
 		"internal/service",
 		"pkg/apperror",
@@ -223,6 +225,11 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		{"internal/service/.gitkeep", ""},
 		{"ent/generate.go", tmplEntGenerate},
 		{"ent/schema/.gitkeep", ""},
+
+		// Leaders — setup + hook
+		{"internal/setup/plugin.go", tmplSetupPlugin(data)},
+		{"internal/handler/hook/hook.go", tmplHookLeader},
+		{"internal/handler/router.go", tmplRouterLeader},
 
 		// WebSocket hub — always scaffolded (used by cmd/api/main.go)
 		{"pkg/ws/adapter.go", tmplWSAdapter},

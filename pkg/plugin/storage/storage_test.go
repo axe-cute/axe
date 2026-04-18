@@ -275,7 +275,8 @@ func TestSafePath_ExistsTraversalBlocked(t *testing.T) {
 func TestPluginRegister(t *testing.T) {
 	cfg := testConfig(t)
 
-	p := New(cfg)
+	p, err := New(cfg)
+	require.NoError(t, err)
 	assert.Equal(t, "storage", p.Name())
 
 	r := chi.NewRouter()
@@ -289,7 +290,7 @@ func TestPluginRegister(t *testing.T) {
 		},
 	})
 
-	err := p.Register(context.Background(), app)
+	err = p.Register(context.Background(), app)
 	require.NoError(t, err)
 
 	// Verify Store is provided to service locator
@@ -300,10 +301,11 @@ func TestPluginRegister(t *testing.T) {
 
 func TestPluginShutdown(t *testing.T) {
 	cfg := testConfig(t)
-	p := New(cfg)
+	p, err := New(cfg)
+	require.NoError(t, err)
 
 	// Shutdown before register should not panic
-	err := p.Shutdown(context.Background())
+	err = p.Shutdown(context.Background())
 	require.NoError(t, err)
 }
 

@@ -2,13 +2,16 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/axe-cute/axe/internal/handler/middleware"
 	"github.com/axe-cute/axe/pkg/jwtauth"
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
 )
+
 
 // Plugin implements [plugin.Plugin] for file storage.
 type Plugin struct {
@@ -20,10 +23,15 @@ type Plugin struct {
 }
 
 // New creates a storage plugin with the given configuration.
-func New(cfg Config) *Plugin {
+// Returns an error if required configuration is missing (Layer 4: fail-fast in New).
+func New(cfg Config) (*Plugin, error) {
 	cfg.defaults()
-	return &Plugin{cfg: cfg}
+	if cfg.MountPath == "" {
+		return nil, errors.New("storage: MountPath is required")
+	}
+	return &Plugin{cfg: cfg}, nil
 }
+
 
 // Name returns the plugin identifier.
 func (p *Plugin) Name() string { return "storage" }
@@ -101,3 +109,34 @@ func (p *Plugin) Shutdown(_ context.Context) error {
 	}
 	return nil
 }
+
+// HealthCheck implements [plugin.HealthChecker].
+// Performs a write→read→delete probe on the storage mount to verify it is
+// fully operational. Passes to /ready aggregation automatically.
+// Returns an error status if the mount is stale, read-only, or unreachable.
+func (p *Plugin) HealthCheck(_ context.Context) plugin.HealthStatus {
+	start := time.Now()
+	if p.store == nil {
+		return plugin.HealthStatus{
+			Plugin:  p.Name(),
+			OK:      false,
+			Message: "store not initialized (Register not yet called)",
+			Latency: time.Since(start),
+		}
+	}
+	if err := p.store.HealthCheck(); err != nil {
+		return plugin.HealthStatus{
+			Plugin:  p.Name(),
+			OK:      false,
+			Message: err.Error(),
+			Latency: time.Since(start),
+		}
+	}
+	return plugin.HealthStatus{
+		Plugin:  p.Name(),
+		OK:      true,
+		Message: "mount accessible",
+		Latency: time.Since(start),
+	}
+}
+

@@ -42,7 +42,12 @@ type Store interface {
 
 	// URL returns the serving URL/path for a given key.
 	URL(key string) string
+
+	// HealthCheck performs a write→read→delete probe to verify the mount is
+	// fully operational. Used by [plugin.HealthChecker] aggregation (/ready).
+	HealthCheck() error
 }
+
 
 // Result holds metadata about a stored file.
 type Result struct {
