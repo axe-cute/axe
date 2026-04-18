@@ -73,6 +73,7 @@ func Command() *cobra.Command {
 	}
 
 	cmd.AddCommand(listCmd())
+	cmd.AddCommand(infoCmd())
 	cmd.AddCommand(addCmd())
 	cmd.AddCommand(newCmd())
 	cmd.AddCommand(validateCmd())
@@ -83,42 +84,153 @@ func Command() *cobra.Command {
 // ── axe plugin list ───────────────────────────────────────────────────────────
 
 func listCmd() *cobra.Command {
-	return &cobra.Command{
+	var filterInstalled bool
+	var filterMaturity string
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all official axe plugins",
+		Example: `  axe plugin list                     # all plugins
+  axe plugin list --installed          # only installed in current project
+  axe plugin list --maturity=production # only production-ready plugins`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Println()
-			fmt.Println("🔌 Official axe plugins:")
-			fmt.Println()
-
-			fmt.Printf("  %-12s  %-16s  %s\n", "NAME", "STATUS", "DESCRIPTION")
-			fmt.Println("  " + strings.Repeat("─", 68))
-
 			module := ""
 			if mod, err := readModule("go.mod"); err == nil {
 				module = mod
 			}
 
+			type entry struct {
+				registryEntry
+				installed bool
+			}
+
+			var entries []entry
+			var installedCount int
 			for _, e := range registry {
+				inst := module != "" && isInstalled(module, e.ImportSuffix)
+				if inst {
+					installedCount++
+				}
+				// Apply filters.
+				if filterInstalled && !inst {
+					continue
+				}
+				if filterMaturity != "" && e.Maturity != filterMaturity {
+					continue
+				}
+				entries = append(entries, entry{e, inst})
+			}
+
+			fmt.Println()
+			if filterInstalled {
+				fmt.Printf("🔌 Installed plugins (%d/%d):\n", installedCount, len(registry))
+			} else {
+				fmt.Println("🔌 Official axe plugins:")
+			}
+			fmt.Println()
+
+			if len(entries) == 0 {
+				if filterInstalled {
+					fmt.Println("  No plugins installed. Run: axe plugin add <name>")
+				} else {
+					fmt.Println("  No plugins match the filter.")
+				}
+				fmt.Println()
+				return nil
+			}
+
+			fmt.Printf("  %-12s  %-16s  %s\n", "NAME", "STATUS", "DESCRIPTION")
+			fmt.Println("  " + strings.Repeat("─", 68))
+
+			for _, e := range entries {
 				status := maturityLabel(e.Maturity)
-				if module != "" && isInstalled(module, e.ImportSuffix) {
+				if e.installed {
 					status = "✅ installed"
 				}
 				fmt.Printf("  %-12s  %-16s  %s\n", e.Name, status, e.Description)
 			}
 
 			fmt.Println()
-			fmt.Println("  ✅ production  = tested, real SDK, ready to use")
-			fmt.Println("  🔧 scaffold    = interface only, needs real SDK integration")
-			fmt.Println("  📋 planned     = not yet implemented")
+			if !filterInstalled {
+				fmt.Println("  ✅ production  = tested, real SDK, ready to use")
+				fmt.Println("  🔧 scaffold    = interface only, needs real SDK integration")
+				fmt.Println("  📋 planned     = not yet implemented")
+				fmt.Println()
+			}
+			fmt.Println("  Add a plugin:  axe plugin add <name>")
+			fmt.Println("  Plugin info:   axe plugin info <name>")
+			fmt.Println("  Scaffold new:  axe plugin new <name>")
 			fmt.Println()
-			fmt.Println("  Add a plugin: axe plugin add <name>")
-			fmt.Println("  Scaffold new: axe plugin new <name>")
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&filterInstalled, "installed", false, "Show only installed plugins")
+	cmd.Flags().StringVar(&filterMaturity, "maturity", "", "Filter by maturity level (production, scaffold, planned)")
+
+	return cmd
+}
+
+// ── axe plugin info ──────────────────────────────────────────────────────────
+
+func infoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "info <plugin-name>",
+		Short:   "Show detailed information about a plugin",
+		Example: "  axe plugin info storage\n  axe plugin info stripe",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := strings.ToLower(args[0])
+
+			var found *registryEntry
+			for i := range registry {
+				if registry[i].Name == name {
+					found = &registry[i]
+					break
+				}
+			}
+
+			if found == nil {
+				return fmt.Errorf("unknown plugin %q — run `axe plugin list` to see available plugins", name)
+			}
+
+			module := ""
+			if mod, err := readModule("go.mod"); err == nil {
+				module = mod
+			}
+
+			installed := module != "" && isInstalled(module, found.ImportSuffix)
+
+			fmt.Println()
+			fmt.Printf("  🔌 %s\n", found.Name)
+			fmt.Println("  " + strings.Repeat("─", 40))
+			fmt.Printf("  Description:  %s\n", found.Description)
+			fmt.Printf("  Maturity:     %s\n", maturityLabel(found.Maturity))
+			if installed {
+				fmt.Println("  Status:       ✅ installed in current project")
+			} else {
+				fmt.Println("  Status:       not installed")
+			}
+			fmt.Printf("  Import:       github.com/axe-cute/axe/%s\n", found.ImportSuffix)
+			fmt.Println()
+
+			if found.Installable {
+				fmt.Println("  Install:")
+				fmt.Printf("    axe plugin add %s\n", found.Name)
+			} else if found.Maturity != "planned" {
+				fmt.Println("  Manual install:")
+				fmt.Printf("    go get github.com/axe-cute/axe/%s\n", found.ImportSuffix)
+				fmt.Printf("    // then in cmd/api/main.go:\n")
+				fmt.Printf("    app.Use(%s.New(%s.Config{...}))\n", found.Name, found.Name)
+			} else {
+				fmt.Println("  ⏳ Not yet implemented — contributions welcome!")
+			}
 			fmt.Println()
 			return nil
 		},
 	}
 }
+
 
 func maturityLabel(m string) string {
 	switch m {
