@@ -1,10 +1,10 @@
 project: axe
 module: github.com/axe-cute/axe
-version: v0.2.0
+version: v0.2.2
 phase: 2
 
-current_sprint: 24
-active_story: story-9.10  # Sprint 24: Test Hardening — outbox, worker, jwtauth coverage
+current_sprint: 25
+active_story: story-8.5  # Sprint 25: Plugin Discovery CLI + Maturity
 
 epics:
   - id: epic-1
@@ -396,15 +396,17 @@ sprint_log:
   - sprint: 24
     goal: "Test Hardening — coverage 63% → 78%+ (P0: outbox, worker, jwtauth)"
     stories: [story-9.10, story-9.11, story-9.12, story-9.13, story-9.14, story-9.15]
-    status: in-progress
-    notes: |
-      Release v0.2.0 completed. BMAD audit identified coverage gaps:
-      - pkg/outbox: 30.2% (P0 — silent data loss risk)
-      - pkg/worker: 0.0% (P0 — no tests at all)
-      - pkg/jwtauth: 63.3% (P0 — security critical)
-      - internal/handler auth: 0.0% (P1)
-      - pkg/txmanager: 22.2% (P1)
-      - cmd/axe/generate: 0 unit tests (P1, integration tests exist but slow)
+    status: done
+    completed_at: "2026-04-18"
+    results:
+      - "Story 9.10 — pkg/outbox: 30.2% → 62.3% (19 tests, batch limits, retry boundary, FIFO, cancel)"
+      - "Story 9.11 — pkg/worker: 0% → 54.5% (16 tests, task factories, handler ProcessTask, JSON roundtrip)"
+      - "Story 9.12 — pkg/jwtauth: 63.3% → 90.0% (22 tests, lifecycle, wrong secret, none-alg attack, Claims helpers)"
+      - "Story 9.13 — internal/handler auth: 0% → 63.3% (16 tests, Login/Refresh/Logout/Me, mock blocklist)"
+      - "Story 9.14 — pkg/txmanager: 22.2% → 88.9% (12 tests, real SQLite, commit/rollback/partial-fail)"
+      - "Story 9.15 — cmd/axe/generate: 0% → 22.3% (25 tests, parseFields, toSnake, validateResourceName)"
+      - "Total: 110 new tests, all pass with -race, 0 data races"
+      - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
 
   - sprint: 25
     goal: "Plugin Discovery CLI + Maturity (oauth2, email hardening)"
