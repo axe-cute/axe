@@ -21,7 +21,7 @@ Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · F
 ```bash
 go install github.com/axe-cute/axe/cmd/axe@latest
 
-axe new blog-api --module=github.com/you/blog-api
+axe new blog-api
 cd blog-api && make setup && make run
 
 # Generate a full CRUD resource (10 files across all layers)
@@ -390,7 +390,7 @@ axe/
 │   ├── ws/                      # WebSocket hub
 │   └── devroutes/               # Dev route listing
 ├── ent/schema/                  # ORM schemas
-├── db/{migrations,queries}/     # SQL files
+├── db/{schema.sql,queries}/     # sqlc schema + queries
 ├── config/config.go             # Env-based config
 └── benchmarks/                  # Framework benchmarks
 ```

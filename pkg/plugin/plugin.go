@@ -45,7 +45,6 @@ import (
 	"time"
 
 	"github.com/axe-cute/axe/config"
-	ent "github.com/axe-cute/axe/ent"
 	"github.com/axe-cute/axe/pkg/cache"
 	"github.com/axe-cute/axe/pkg/plugin/events"
 	"github.com/axe-cute/axe/pkg/ws"
@@ -117,7 +116,6 @@ type AppConfig struct {
 	Config    *config.Config
 	Logger    *slog.Logger
 	DB        *sql.DB
-	EntClient *ent.Client
 	Cache     *cache.Client // may be nil if Redis is unavailable
 	Hub       *ws.Hub       // may be nil if WebSocket is disabled
 }
@@ -135,10 +133,7 @@ type App struct {
 	// Logger is the structured logger. Tag with plugin name:
 	//   p.log = app.Logger.With("plugin", p.Name())
 	Logger *slog.Logger
-	// DB is the shared *sql.DB connection pool.
 	DB *sql.DB
-	// EntClient is the Ent ORM client.
-	EntClient *ent.Client
 	// Cache is the Redis cache client (may be nil).
 	Cache *cache.Client
 	// Hub is the WebSocket hub (may be nil).
@@ -165,7 +160,6 @@ func NewApp(cfg AppConfig) *App {
 		Config:    cfg.Config,
 		Logger:    log,
 		DB:        cfg.DB,
-		EntClient: cfg.EntClient,
 		Cache:     cfg.Cache,
 		Hub:       cfg.Hub,
 		Events:    events.NewInProcessBus(log),

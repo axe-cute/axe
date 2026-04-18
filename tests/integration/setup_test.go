@@ -250,69 +250,57 @@ func hexVal(c byte) byte {
 
 
 
-// runMigrations applies all SQL files from db/migrations/ in order.
+// runMigrations creates the schema needed for the axe framework integration tests.
+// The schema is embedded here because the axe repo is a framework — it does not
+// ship domain migration files. User-facing projects own their own db/migrations/.
 func runMigrations(ctx context.Context, db *sql.DB) error {
-	// Ensure tracking table exists
-	if _, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			filename   TEXT        PRIMARY KEY,
-			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`); err != nil {
-		return fmt.Errorf("ensure schema_migrations: %w", err)
+	schema := `
+-- Infrastructure: trigger function used by all resource tables
+CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Users table (reference implementation for integration tests)
+CREATE TABLE IF NOT EXISTS users (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    name          VARCHAR(255) NOT NULL,
+    password_hash TEXT        NOT NULL,
+    role          VARCHAR(20)  NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    active        BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX  IF NOT EXISTS idx_users_active_created ON users(active, created_at DESC);
+
+CREATE OR REPLACE TRIGGER set_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Outbox events (used by pkg/outbox integration tests)
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    aggregate    TEXT        NOT NULL,
+    event_type   TEXT        NOT NULL,
+    payload      JSONB       NOT NULL DEFAULT '{}',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ,
+    retries      INT         NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed
+    ON outbox_events(created_at ASC)
+    WHERE processed_at IS NULL;
+`
+	if _, err := db.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("apply schema: %w", err)
 	}
-
-	entries, err := os.ReadDir("../../db/migrations")
-	if err != nil {
-		return fmt.Errorf("read migrations dir: %w", err)
-	}
-
-	for _, e := range entries {
-		if e.IsDir() || len(e.Name()) < 4 || e.Name()[len(e.Name())-4:] != ".sql" {
-			continue
-		}
-		filename := e.Name()
-
-		// Skip MySQL-specific migration files (handled by MySQL integration tests)
-		if len(filename) > 10 && filename[len(filename)-10:] == "_mysql.sql" {
-			continue
-		}
-
-		// Skip SQLite-specific migration files (handled by SQLite integration tests)
-		if len(filename) > 11 && filename[len(filename)-11:] == "_sqlite.sql" {
-			continue
-		}
-
-		// Check if already applied
-		var count int
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE filename = $1`, filename).Scan(&count)
-		if count > 0 {
-			continue
-		}
-
-		content, err := os.ReadFile("../../db/migrations/" + filename)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", filename, err)
-		}
-
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-
-		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("apply %s: %w", filename, err)
-		}
-
-		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (filename) VALUES ($1)`, filename); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-		fmt.Printf("  → applied: %s\n", filename)
-	}
+	fmt.Println("  → schema applied (embedded)")
 	return nil
 }

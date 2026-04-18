@@ -305,50 +305,45 @@ func normalizeDSN(dsn string) string {
 	return dsn
 }
 
-// runMigrations applies all _mysql.sql migration files from db/migrations/.
+// runMigrations creates the schema needed for MySQL integration tests.
+// Embedded inline — axe is a framework and does not ship domain migration files.
 func runMigrations(ctx context.Context, db *sql.DB) error {
-	entries, err := os.ReadDir("../../../db/migrations")
-	if err != nil {
-		return fmt.Errorf("read migrations dir: %w", err)
+	stmts := []string{
+		// Users table
+		`CREATE TABLE IF NOT EXISTS users (
+			id            CHAR(36)     NOT NULL DEFAULT (UUID()),
+			email         VARCHAR(255) NOT NULL,
+			name          VARCHAR(255) NOT NULL,
+			password_hash TEXT         NOT NULL,
+			role          VARCHAR(20)  NOT NULL DEFAULT 'user',
+			active        TINYINT(1)   NOT NULL DEFAULT 1,
+			created_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+			updated_at    DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+			PRIMARY KEY (id),
+			CONSTRAINT chk_users_role CHECK (role IN ('user', 'admin'))
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_active_created ON users (active, created_at DESC)`,
+		// Outbox events
+		`CREATE TABLE IF NOT EXISTS outbox_events (
+			id           CHAR(36)    NOT NULL DEFAULT (UUID()),
+			aggregate    TEXT        NOT NULL,
+			event_type   TEXT        NOT NULL,
+			payload      LONGTEXT    NOT NULL,
+			created_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+			processed_at DATETIME(6) NULL,
+			retries      INT         NOT NULL DEFAULT 0,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON outbox_events (created_at ASC)`,
 	}
 
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, "_mysql.sql") {
-			continue
+	for _, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("execute schema stmt: %w\nSQL:\n%s", err, stmt)
 		}
-
-		content, err := os.ReadFile("../../../db/migrations/" + name)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
-		}
-
-		// MySQL does not support multi-statement Exec — split by ";"
-		stmts := strings.Split(string(content), ";")
-		for _, stmt := range stmts {
-			stmt = strings.TrimSpace(stmt)
-			// Skip blank lines and comment-only blocks
-			if stmt == "" {
-				continue
-			}
-			nonComment := false
-			for _, line := range strings.Split(stmt, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-					nonComment = true
-					break
-				}
-			}
-			if !nonComment {
-				continue
-			}
-
-			if _, err := db.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("execute stmt in %s: %w\nSQL:\n%s", name, err, stmt)
-			}
-		}
-		fmt.Printf("  → applied (mysql): %s\n", name)
 	}
+	fmt.Println("  → schema applied (embedded, mysql)")
 	return nil
 }
 
