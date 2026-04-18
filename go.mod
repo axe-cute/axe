@@ -141,3 +141,10 @@ require (
 	nhooyr.io/websocket v1.8.17 // indirect
 	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
 )
+
+// Retract invalid versions that were mistakenly published.
+retract (
+	v0.9.2 // Dummy retraction tag used to force proxy refresh
+	v0.9.1 // Missing ent client decoupling
+	v0.9.0 // Ghost version
+)
