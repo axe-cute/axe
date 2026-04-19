@@ -124,7 +124,7 @@ func main() {
 	workerSrv.Register(worker.TypeProcessOutboxEvent, worker.NewOutboxEventHandler(log))
 
 	// ── Outbox Poller ─────────────────────────────────────────────────────────
-	outboxPoller := outbox.New(sqlDB, cfg.RedisAddr(), outbox.Config{
+	outboxPoller := outbox.NewWithRedis(sqlDB, cfg.RedisAddr(), outbox.Config{
 		Interval:  5 * time.Second,
 		BatchSize: 50,
 		Driver:    cfg.DBDriver,

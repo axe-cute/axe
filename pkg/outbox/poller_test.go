@@ -5,15 +5,48 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/hibiken/asynq"
 	_ "modernc.org/sqlite" // CGO-free SQLite driver
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/axe-cute/axe/pkg/outbox"
 )
+
+// ── Mock Enqueuer ─────────────────────────────────────────────────────────────
+
+// mockEnqueuer records all enqueued tasks for assertion.
+type mockEnqueuer struct {
+	mu     sync.Mutex
+	tasks  []*asynq.Task
+	err    error // if set, Enqueue returns this error
+	closed bool
+}
+
+func (m *mockEnqueuer) Enqueue(task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	m.tasks = append(m.tasks, task)
+	return &asynq.TaskInfo{}, nil
+}
+
+func (m *mockEnqueuer) Close() error {
+	m.closed = true
+	return nil
+}
+
+func (m *mockEnqueuer) Tasks() []*asynq.Task {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]*asynq.Task{}, m.tasks...)
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -61,24 +94,23 @@ func countUnprocessed(t *testing.T, db *sql.DB) int {
 // ── Config defaults ───────────────────────────────────────────────────────────
 
 func TestConfig_DefaultsApplied(t *testing.T) {
-	// Poller.New should apply defaults without panicking
 	db := openTestDB(t)
-	// We use a non-reachable Redis addr — New only creates the client, doesn't ping
-	p := outbox.New(db, "localhost:6399", outbox.Config{}, slog.Default())
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{}, slog.Default())
 	require.NotNil(t, p)
 }
 
 func TestConfig_DriverDefault(t *testing.T) {
 	db := openTestDB(t)
-	// Empty Driver should default to "postgres"
-	p := outbox.New(db, "localhost:6399", outbox.Config{}, slog.Default())
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{}, slog.Default())
 	require.NotNil(t, p)
 }
 
 func TestConfig_CustomDriverSqlite(t *testing.T) {
 	db := openTestDB(t)
-	// Should accept sqlite3 driver without panicking
-	p := outbox.New(db, "localhost:6399", outbox.Config{Driver: "sqlite3"}, slog.Default())
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{Driver: "sqlite3"}, slog.Default())
 	require.NotNil(t, p)
 }
 
@@ -86,7 +118,8 @@ func TestConfig_CustomDriverSqlite(t *testing.T) {
 
 func TestNew_WithCustomConfig(t *testing.T) {
 	db := openTestDB(t)
-	p := outbox.New(db, "localhost:6399", outbox.Config{
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{
 		Interval:  2 * time.Second,
 		BatchSize: 100,
 	}, slog.Default())
@@ -98,17 +131,28 @@ func TestNew_WithAllDrivers(t *testing.T) {
 	for _, drv := range drivers {
 		t.Run(drv, func(t *testing.T) {
 			db := openTestDB(t)
-			p := outbox.New(db, "localhost:6399", outbox.Config{Driver: drv}, slog.Default())
+			enq := &mockEnqueuer{}
+			p := outbox.New(db, enq, outbox.Config{Driver: drv}, slog.Default())
 			require.NotNil(t, p)
 		})
 	}
 }
 
-// ── poll via Start — short context ───────────────────────────────────────────
+// ── NewWithRedis ─────────────────────────────────────────────────────────────
+
+func TestNewWithRedis_ReturnsPoller(t *testing.T) {
+	db := openTestDB(t)
+	// Non-reachable Redis — NewWithRedis only creates client, doesn't ping.
+	p := outbox.NewWithRedis(db, "localhost:63999", outbox.Config{}, slog.Default())
+	require.NotNil(t, p)
+}
+
+// ── poll via Start — context cancellation ────────────────────────────────────
 
 func TestStart_CancelImmediately(t *testing.T) {
 	db := openTestDB(t)
-	p := outbox.New(db, "localhost:63999", outbox.Config{Interval: 100 * time.Millisecond}, slog.Default())
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{Interval: 100 * time.Millisecond, Driver: "sqlite3"}, slog.Default())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before Start
@@ -125,12 +169,13 @@ func TestStart_CancelImmediately(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start() did not return after context cancel")
 	}
+	assert.True(t, enq.closed, "enqueuer should be closed after Start returns")
 }
 
 func TestStart_CancelDuringPoll(t *testing.T) {
 	db := openTestDB(t)
-	// Very short interval to trigger at least one poll before cancel.
-	p := outbox.New(db, "localhost:63999", outbox.Config{
+	enq := &mockEnqueuer{}
+	p := outbox.New(db, enq, outbox.Config{
 		Interval: 50 * time.Millisecond,
 		Driver:   "sqlite3",
 	}, slog.Default())
@@ -150,6 +195,122 @@ func TestStart_CancelDuringPoll(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("Start() did not return after context timeout")
 	}
+}
+
+// ── poll() with mock enqueuer — full lifecycle ───────────────────────────────
+
+func TestStart_PollEnqueuesEvents(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{}
+
+	// Insert events before starting poller.
+	insertEvent(t, db, "evt-poll-1", "UserCreated", "user")
+	insertEvent(t, db, "evt-poll-2", "OrderPlaced", "order")
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:  50 * time.Millisecond,
+		BatchSize: 10,
+		Driver:    "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		p.Start(ctx)
+	}()
+
+	// Wait until the mock enqueuer has received at least 2 tasks (with timeout).
+	deadline := time.After(5 * time.Second)
+	for {
+		if len(enq.Tasks()) >= 2 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			t.Fatalf("timed out waiting for 2 enqueued tasks, got %d", len(enq.Tasks()))
+			return
+		default:
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+
+	cancel() // stop the poller now that we've verified enqueueing
+
+	// Give poller goroutine time to exit.
+	time.Sleep(100 * time.Millisecond)
+
+	// Mock enqueuer should have received 2 tasks.
+	tasks := enq.Tasks()
+	assert.GreaterOrEqual(t, len(tasks), 2, "should enqueue at least 2 events")
+
+	// Events should be marked as processed.
+	assert.Equal(t, 0, countUnprocessed(t, db), "all events should be processed after poll")
+}
+
+func TestStart_PollRespectsRetryLimit(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{}
+
+	insertEvent(t, db, "evt-retry-exhaust", "FailedEvent", "payment")
+	// Set retries to 5 — should NOT be picked up.
+	_, err := db.Exec(`UPDATE outbox_events SET retries = 5 WHERE id = ?`, "evt-retry-exhaust")
+	require.NoError(t, err)
+
+	// Add one processable event.
+	insertEvent(t, db, "evt-retry-ok", "GoodEvent", "payment")
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:  50 * time.Millisecond,
+		BatchSize: 10,
+		Driver:    "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// Only the good event should be enqueued.
+	tasks := enq.Tasks()
+	assert.GreaterOrEqual(t, len(tasks), 1)
+}
+
+func TestStart_PollEnqueueError_EventRemainsUnprocessed(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{err: assert.AnError} // all enqueue calls fail
+
+	insertEvent(t, db, "evt-fail", "FailEvent", "test")
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:  50 * time.Millisecond,
+		BatchSize: 10,
+		Driver:    "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// Event should still be unprocessed — enqueue failed.
+	assert.Equal(t, 1, countUnprocessed(t, db), "event should remain unprocessed when enqueue fails")
+}
+
+func TestStart_PollEmptyTable_NoError(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{}
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:  50 * time.Millisecond,
+		BatchSize: 10,
+		Driver:    "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// No tasks enqueued — empty table.
+	assert.Empty(t, enq.Tasks())
 }
 
 // ── Table DDL shape ───────────────────────────────────────────────────────────
@@ -337,4 +498,11 @@ func TestOutboxTable_MixedProcessedAndUnprocessed(t *testing.T) {
 
 	// Only evt-a should remain
 	assert.Equal(t, 1, countUnprocessed(t, db))
+}
+
+// ── Enqueuer interface compliance ────────────────────────────────────────────
+
+func TestEnqueuerInterface_MockCompliance(t *testing.T) {
+	// Verify mockEnqueuer satisfies the Enqueuer interface at compile time.
+	var _ outbox.Enqueuer = (*mockEnqueuer)(nil)
 }

@@ -19,10 +19,17 @@ import (
 	"github.com/axe-cute/axe/pkg/worker"
 )
 
+// Enqueuer abstracts task enqueueing so the poller can be tested without Redis.
+// *asynq.Client satisfies this interface.
+type Enqueuer interface {
+	Enqueue(task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error)
+	Close() error
+}
+
 // Poller reads unprocessed outbox_events and dispatches them as Asynq tasks.
 type Poller struct {
 	db        *sql.DB
-	client    *asynq.Client
+	enqueuer  Enqueuer
 	log       *slog.Logger
 	interval  time.Duration
 	batchSize int
@@ -39,8 +46,9 @@ type Config struct {
 	Driver string
 }
 
-// New creates a new Poller.
-func New(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *Poller {
+// New creates a new Poller with the given Enqueuer (typically an *asynq.Client).
+// Use [NewWithRedis] for the common case of connecting to Redis directly.
+func New(db *sql.DB, enqueuer Enqueuer, cfg Config, log *slog.Logger) *Poller {
 	if cfg.Interval == 0 {
 		cfg.Interval = 5 * time.Second
 	}
@@ -51,15 +59,21 @@ func New(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *Poller {
 		cfg.Driver = "postgres"
 	}
 
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
 	return &Poller{
 		db:        db,
-		client:    client,
+		enqueuer:  enqueuer,
 		log:       log,
 		interval:  cfg.Interval,
 		batchSize: cfg.BatchSize,
 		driver:    cfg.Driver,
 	}
+}
+
+// NewWithRedis creates a Poller that connects to Redis for task enqueueing.
+// This is the most common constructor — equivalent to New(db, asynq.NewClient(...), cfg, log).
+func NewWithRedis(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *Poller {
+	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
+	return New(db, client, cfg, log)
 }
 
 // placeholder returns the correct positional placeholder for the driver.
@@ -88,7 +102,7 @@ func (p *Poller) Start(ctx context.Context) {
 	p.log.Info("outbox poller starting", "interval", p.interval, "batch_size", p.batchSize)
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
-	defer p.client.Close()
+	defer p.enqueuer.Close()
 
 	for {
 		select {
@@ -123,33 +137,54 @@ func (p *Poller) poll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	var enqueued int
+	// Collect all rows first, then close cursor before writing.
+	// This avoids table-lock contention (critical for SQLite, good practice for all drivers).
+	type event struct{ id, eventType, aggregate string }
+	var events []event
 	for rows.Next() {
-		var id, eventType, aggregate string
-		if err := rows.Scan(&id, &eventType, &aggregate); err != nil {
+		var e event
+		if err := rows.Scan(&e.id, &e.eventType, &e.aggregate); err != nil {
 			p.log.Error("scan outbox row", "error", err)
 			continue
 		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
 
-		task, err := worker.NewOutboxEventTask(id, eventType, aggregate)
+	// Now process collected events — cursor is closed, no lock contention.
+	var enqueued int
+	for _, e := range events {
+		task, err := worker.NewOutboxEventTask(e.id, e.eventType, e.aggregate)
 		if err != nil {
-			p.log.Error("create outbox task", "event_id", id, "error", err)
+			p.log.Error("create outbox task", "event_id", e.id, "error", err)
 			continue
 		}
 
-		if _, err := p.client.Enqueue(task, asynq.Queue("default")); err != nil {
-			p.log.Error("enqueue outbox task", "event_id", id, "error", err)
+		if _, err := p.enqueuer.Enqueue(task, asynq.Queue("default")); err != nil {
+			p.log.Error("enqueue outbox task", "event_id", e.id, "error", err)
 			continue
 		}
 
-		// Mark as processed
-		updateQuery := `UPDATE outbox_events SET processed_at = NOW(), retries = retries + 1 WHERE id = ` + p.placeholder()
-		if _, err := p.db.ExecContext(ctx, updateQuery, id); err != nil {
-			p.log.Error("mark outbox processed", "event_id", id, "error", err)
+		// Mark as processed — use driver-specific timestamp function.
+		// Use a short independent context so in-flight marks complete even if
+		// the parent poll context is cancelled (prevents duplicate delivery).
+		nowFn := "NOW()"
+		if p.driver == "sqlite3" {
+			nowFn = "CURRENT_TIMESTAMP"
+		}
+		updateQuery := `UPDATE outbox_events SET processed_at = ` + nowFn + `, retries = retries + 1 WHERE id = ` + p.placeholder()
+		markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if _, err := p.db.ExecContext(markCtx, updateQuery, e.id); err != nil {
+			p.log.Error("mark outbox processed", "event_id", e.id, "error", err)
+			markCancel()
 			continue
 		}
+		markCancel()
 
 		enqueued++
 	}
@@ -157,5 +192,5 @@ func (p *Poller) poll(ctx context.Context) error {
 	if enqueued > 0 {
 		p.log.Info("outbox poll", "enqueued", enqueued)
 	}
-	return rows.Err()
+	return nil
 }
