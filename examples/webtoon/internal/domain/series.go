@@ -3,6 +3,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,15 +11,67 @@ import (
 
 // Series is the Series domain entity.
 type Series struct {
-	ID uuid.UUID
-	Title string
+	ID          uuid.UUID
+	Title       string
 	Description string
-	Genre string
-	Author string
-	CoverUrl string
-	Status string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Genre       string
+	Author      string
+	CoverUrl    string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// ── Series status constants ─────────────────────────────────────────────────
+
+const (
+	SeriesStatusOngoing   = "ongoing"
+	SeriesStatusCompleted = "completed"
+	SeriesStatusHiatus    = "hiatus"
+)
+
+// ValidSeriesStatuses lists all allowed series status values.
+var ValidSeriesStatuses = map[string]bool{
+	SeriesStatusOngoing:   true,
+	SeriesStatusCompleted: true,
+	SeriesStatusHiatus:    true,
+}
+
+// ── Genre constants ─────────────────────────────────────────────────────────
+
+// ValidGenres lists all allowed genre values for the webtoon platform.
+var ValidGenres = map[string]bool{
+	"action":    true,
+	"romance":   true,
+	"comedy":    true,
+	"drama":     true,
+	"fantasy":   true,
+	"horror":    true,
+	"thriller":  true,
+	"slice-of-life": true,
+	"sci-fi":    true,
+	"sports":    true,
+	"historical": true,
+}
+
+// ValidateCreateSeries validates the inputs for series creation.
+func ValidateCreateSeries(input CreateSeriesInput) error {
+	if input.Title == "" {
+		return fmt.Errorf("title is required")
+	}
+	if input.Author == "" {
+		return fmt.Errorf("author is required")
+	}
+	if input.Genre != "" && !ValidGenres[input.Genre] {
+		return fmt.Errorf("invalid genre %q — allowed: action, romance, comedy, drama, fantasy, horror, thriller, slice-of-life, sci-fi, sports, historical", input.Genre)
+	}
+	if input.Status == "" {
+		input.Status = SeriesStatusOngoing // default
+	}
+	if !ValidSeriesStatuses[input.Status] {
+		return fmt.Errorf("invalid status %q — allowed: ongoing, completed, hiatus", input.Status)
+	}
+	return nil
 }
 
 // SeriesRepository defines data access for Series.
@@ -43,20 +96,20 @@ type SeriesService interface {
 
 // CreateSeriesInput holds fields required to create a Series.
 type CreateSeriesInput struct {
-	Title string
+	Title       string
 	Description string
-	Genre string
-	Author string
-	CoverUrl string
-	Status string
+	Genre       string
+	Author      string
+	CoverUrl    string
+	Status      string
 }
 
 // UpdateSeriesInput holds optional fields for partial update.
 type UpdateSeriesInput struct {
-	Title *string `json:"title,omitempty"`
+	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
-	Genre *string `json:"genre,omitempty"`
-	Author *string `json:"author,omitempty"`
-	CoverUrl *string `json:"cover_url,omitempty"`
-	Status *string `json:"status,omitempty"`
+	Genre       *string `json:"genre,omitempty"`
+	Author      *string `json:"author,omitempty"`
+	CoverUrl    *string `json:"cover_url,omitempty"`
+	Status      *string `json:"status,omitempty"`
 }

@@ -43,11 +43,18 @@ func (h *OrderHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	// Authentication required for all order routes
 	r.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+
+	// Standard CRUD
 	r.Post("/", h.CreateOrder)
 	r.Get("/", h.ListOrders)
 	r.Get("/{id}", h.GetOrder)
 	r.Put("/{id}", h.UpdateOrder)
 	r.Delete("/{id}", h.DeleteOrder)
+
+	// Business flows
+	r.Post("/place", h.PlaceOrder)          // the hero endpoint
+	r.Put("/{id}/status", h.UpdateStatus)   // status machine
+
 	return r
 }
 
@@ -59,18 +66,22 @@ type createOrderRequest struct {
 
 // orderResponse is the API response shape.
 type orderResponse struct {
-	ID        string `json:"id"`
-	Total float64 `json:"total"`
-	Status string `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID        string            `json:"id"`
+	UserID    string            `json:"user_id,omitempty"`
+	Total     float64           `json:"total"`
+	Status    string            `json:"status"`
+	Items     []domain.OrderItem `json:"items,omitempty"`
+	CreatedAt string            `json:"created_at"`
+	UpdatedAt string            `json:"updated_at"`
 }
 
 func toOrderResponse(e *domain.Order) *orderResponse {
 	return &orderResponse{
-		ID: e.ID.String(),
-		Total: e.Total,
-		Status: e.Status,
+		ID:        e.ID.String(),
+		UserID:    e.UserID,
+		Total:     e.Total,
+		Status:    e.Status,
+		Items:     e.Items,
 		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -150,4 +161,60 @@ func (h *OrderHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 		data[i] = toOrderResponse(e)
 	}
 	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": total})
+}
+
+// ── PlaceOrder — the hero endpoint ───────────────────────────────────────────
+
+type placeOrderRequest struct {
+	Items []domain.PlaceOrderItemInput `json:"items"`
+}
+
+// PlaceOrder handles POST /orders/place.
+// Validates stock, calculates total, creates order + items, deducts inventory.
+func (h *OrderHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
+	var req placeOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+		return
+	}
+
+	// Extract user ID from JWT claims (set by auth middleware).
+	userID := "anonymous" // fallback
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+
+	order, err := h.svc.PlaceOrder(r.Context(), userID, req.Items)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusCreated, toOrderResponse(order))
+}
+
+// ── UpdateStatus — status machine endpoint ───────────────────────────────────
+
+type updateStatusRequest struct {
+	Status string `json:"status"`
+}
+
+// UpdateStatus handles PUT /orders/{id}/status.
+// Validates state transitions: pending→confirmed→shipped→delivered.
+func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid UUID"))
+		return
+	}
+	var req updateStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+		return
+	}
+	order, err := h.svc.UpdateStatus(r.Context(), id, req.Status)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusOK, toOrderResponse(order))
 }

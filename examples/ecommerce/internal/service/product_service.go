@@ -23,11 +23,22 @@ func NewProductService(repo domain.ProductRepository) domain.ProductService {
 }
 
 func (s *ProductService) CreateProduct(ctx context.Context, input domain.CreateProductInput) (*domain.Product, error) {
+	// ── Business validation ────────────────────────────────────────────────
+	if input.Name == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("product name is required")
+	}
+	if input.Price <= 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("price must be greater than zero")
+	}
+	if input.Stock < 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("stock cannot be negative")
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("ProductService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("product created", "id", result.ID)
+	logger.FromCtx(ctx).Info("product created", "id", result.ID, "name", input.Name, "price", input.Price)
 	return result, nil
 }
 

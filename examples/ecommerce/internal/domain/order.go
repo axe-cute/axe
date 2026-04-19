@@ -3,6 +3,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,11 +11,63 @@ import (
 
 // Order is the Order domain entity.
 type Order struct {
-	ID uuid.UUID
-	Total float64
-	Status string
+	ID        uuid.UUID
+	UserID    string
+	Total     float64
+	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Items     []OrderItem `json:"items,omitempty"` // populated in PlaceOrder response
+}
+
+// OrderItem represents a line item within an order.
+type OrderItem struct {
+	ProductID   uuid.UUID `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	Quantity    int       `json:"quantity"`
+	UnitPrice   float64   `json:"unit_price"`
+}
+
+// ── Order status constants ──────────────────────────────────────────────────
+
+const (
+	OrderStatusPending   = "pending"
+	OrderStatusConfirmed = "confirmed"
+	OrderStatusShipped   = "shipped"
+	OrderStatusDelivered = "delivered"
+	OrderStatusCancelled = "cancelled"
+)
+
+// ValidOrderStatuses lists all allowed status values.
+var ValidOrderStatuses = map[string]bool{
+	OrderStatusPending:   true,
+	OrderStatusConfirmed: true,
+	OrderStatusShipped:   true,
+	OrderStatusDelivered: true,
+	OrderStatusCancelled: true,
+}
+
+// AllowedTransitions defines legal status transitions.
+var AllowedTransitions = map[string][]string{
+	OrderStatusPending:   {OrderStatusConfirmed, OrderStatusCancelled},
+	OrderStatusConfirmed: {OrderStatusShipped, OrderStatusCancelled},
+	OrderStatusShipped:   {OrderStatusDelivered},
+	OrderStatusDelivered: {},
+	OrderStatusCancelled: {},
+}
+
+// CanTransition checks whether a status transition is allowed.
+func CanTransition(from, to string) error {
+	allowed, ok := AllowedTransitions[from]
+	if !ok {
+		return fmt.Errorf("unknown current status %q", from)
+	}
+	for _, s := range allowed {
+		if s == to {
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot transition from %q to %q", from, to)
 }
 
 // OrderRepository defines data access for Order.
@@ -35,16 +88,30 @@ type OrderService interface {
 	UpdateOrder(ctx context.Context, id uuid.UUID, input UpdateOrderInput) (*Order, error)
 	DeleteOrder(ctx context.Context, id uuid.UUID) error
 	ListOrders(ctx context.Context, pagination Pagination) ([]*Order, int, error)
+
+	// PlaceOrder validates stock, creates order + items, and deducts inventory
+	// in a single transaction. This is the primary order creation flow.
+	PlaceOrder(ctx context.Context, userID string, items []PlaceOrderItemInput) (*Order, error)
+
+	// UpdateStatus transitions order status with validation.
+	UpdateStatus(ctx context.Context, id uuid.UUID, newStatus string) (*Order, error)
 }
 
 // CreateOrderInput holds fields required to create a Order.
 type CreateOrderInput struct {
-	Total float64
+	UserID string
+	Total  float64
 	Status string
 }
 
 // UpdateOrderInput holds optional fields for partial update.
 type UpdateOrderInput struct {
-	Total *float64 `json:"total,omitempty"`
-	Status *string `json:"status,omitempty"`
+	Total  *float64 `json:"total,omitempty"`
+	Status *string  `json:"status,omitempty"`
+}
+
+// PlaceOrderItemInput is a single item in a PlaceOrder request.
+type PlaceOrderItemInput struct {
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  int       `json:"quantity"`
 }

@@ -23,11 +23,22 @@ func NewBookmarkService(repo domain.BookmarkRepository) domain.BookmarkService {
 }
 
 func (s *BookmarkService) CreateBookmark(ctx context.Context, input domain.CreateBookmarkInput) (*domain.Bookmark, error) {
+	if input.SeriesID == uuid.Nil {
+		return nil, apperror.ErrInvalidInput.WithMessage("series_id is required")
+	}
+	if input.UserID == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("user_id is required")
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("BookmarkService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("bookmark created", "id", result.ID)
+	logger.FromCtx(ctx).Info("bookmark created",
+		"id", result.ID,
+		"user_id", input.UserID,
+		"series_id", input.SeriesID,
+	)
 	return result, nil
 }
 
@@ -58,4 +69,55 @@ func (s *BookmarkService) ListBookmarks(ctx context.Context, p domain.Pagination
 		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
 	}
 	return s.repo.List(ctx, p)
+}
+
+// ── ToggleBookmark — the hero feature ────────────────────────────────────────
+
+// ToggleBookmark adds a bookmark if it doesn't exist, or removes it if it does.
+// This is the primary user interaction for "favoriting" a series.
+//
+// In a real app, this would query by (user_id, series_id) to check existence.
+// Here we demonstrate the business logic pattern using the generic List API.
+func (s *BookmarkService) ToggleBookmark(ctx context.Context, userID string, seriesID uuid.UUID) (*domain.ToggleResult, error) {
+	if userID == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("user_id is required")
+	}
+	if seriesID == uuid.Nil {
+		return nil, apperror.ErrInvalidInput.WithMessage("series_id is required")
+	}
+
+	// Check if bookmark already exists by scanning the user's bookmarks.
+	// In production, this would be a dedicated repo method: FindByUserAndSeries.
+	bookmarks, _, err := s.repo.List(ctx, domain.Pagination{Limit: 100, Offset: 0})
+	if err != nil {
+		return nil, fmt.Errorf("BookmarkService.ToggleBookmark: list: %w", err)
+	}
+
+	for _, b := range bookmarks {
+		if b.UserID == userID && b.SeriesID == seriesID {
+			// Already bookmarked → remove it.
+			if err := s.repo.Delete(ctx, b.ID); err != nil {
+				return nil, fmt.Errorf("BookmarkService.ToggleBookmark: delete: %w", err)
+			}
+			logger.FromCtx(ctx).Info("bookmark removed",
+				"user_id", userID,
+				"series_id", seriesID,
+			)
+			return &domain.ToggleResult{Bookmarked: false, SeriesID: seriesID}, nil
+		}
+	}
+
+	// Not bookmarked → add it.
+	_, err = s.repo.Create(ctx, domain.CreateBookmarkInput{
+		UserID:   userID,
+		SeriesID: seriesID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("BookmarkService.ToggleBookmark: create: %w", err)
+	}
+	logger.FromCtx(ctx).Info("bookmark added",
+		"user_id", userID,
+		"series_id", seriesID,
+	)
+	return &domain.ToggleResult{Bookmarked: true, SeriesID: seriesID}, nil
 }

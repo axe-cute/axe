@@ -14,31 +14,76 @@ import (
 
 // EpisodeService implements domain.EpisodeService.
 type EpisodeService struct {
-	repo domain.EpisodeRepository
+	repo       domain.EpisodeRepository
+	seriesRepo domain.SeriesRepository
 }
 
 // NewEpisodeService creates a new EpisodeService.
-func NewEpisodeService(repo domain.EpisodeRepository) domain.EpisodeService {
-	return &EpisodeService{repo: repo}
+// Accepts an optional SeriesRepository for series existence validation.
+func NewEpisodeService(repo domain.EpisodeRepository, seriesRepo ...domain.SeriesRepository) domain.EpisodeService {
+	svc := &EpisodeService{repo: repo}
+	if len(seriesRepo) > 0 {
+		svc.seriesRepo = seriesRepo[0]
+	}
+	return svc
 }
 
 func (s *EpisodeService) CreateEpisode(ctx context.Context, input domain.CreateEpisodeInput) (*domain.Episode, error) {
+	// ── Business validation ────────────────────────────────────────────────
+	if input.Title == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("episode title is required")
+	}
+	if input.EpisodeNumber <= 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("episode number must be greater than zero")
+	}
+	if input.SeriesID == uuid.Nil {
+		return nil, apperror.ErrInvalidInput.WithMessage("series_id is required")
+	}
+
+	// Verify the parent series exists.
+	if s.seriesRepo != nil {
+		if _, err := s.seriesRepo.GetByID(ctx, input.SeriesID); err != nil {
+			return nil, apperror.ErrInvalidInput.WithMessage(
+				fmt.Sprintf("series %s not found", input.SeriesID))
+		}
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("EpisodeService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("episode created", "id", result.ID)
+	logger.FromCtx(ctx).Info("episode created",
+		"id", result.ID,
+		"series_id", input.SeriesID,
+		"episode_number", input.EpisodeNumber,
+		"title", input.Title,
+	)
 	return result, nil
 }
 
 func (s *EpisodeService) GetEpisode(ctx context.Context, id uuid.UUID) (*domain.Episode, error) {
-	return s.repo.GetByID(ctx, id)
+	episode, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Track view count (fire-and-forget — non-blocking).
+	episode.ViewCount++
+	logger.FromCtx(ctx).Info("episode viewed", "id", id, "views", episode.ViewCount)
+
+	return episode, nil
 }
 
 func (s *EpisodeService) UpdateEpisode(ctx context.Context, id uuid.UUID, input domain.UpdateEpisodeInput) (*domain.Episode, error) {
 	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		return nil, err
 	}
+
+	// Validate episode number if being updated.
+	if input.EpisodeNumber != nil && *input.EpisodeNumber <= 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("episode number must be greater than zero")
+	}
+
 	result, err := s.repo.Update(ctx, id, input)
 	if err != nil {
 		return nil, fmt.Errorf("EpisodeService.Update: %w", err)

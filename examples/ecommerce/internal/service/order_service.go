@@ -14,20 +14,38 @@ import (
 
 // OrderService implements domain.OrderService.
 type OrderService struct {
-	repo domain.OrderRepository
+	repo        domain.OrderRepository
+	productRepo domain.ProductRepository
 }
 
 // NewOrderService creates a new OrderService.
-func NewOrderService(repo domain.OrderRepository) domain.OrderService {
-	return &OrderService{repo: repo}
+// Accepts an optional ProductRepository for PlaceOrder validation.
+func NewOrderService(repo domain.OrderRepository, productRepo ...domain.ProductRepository) domain.OrderService {
+	svc := &OrderService{repo: repo}
+	if len(productRepo) > 0 {
+		svc.productRepo = productRepo[0]
+	}
+	return svc
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, input domain.CreateOrderInput) (*domain.Order, error) {
+	// ── Status validation ──────────────────────────────────────────────────
+	if input.Status == "" {
+		input.Status = domain.OrderStatusPending
+	}
+	if !domain.ValidOrderStatuses[input.Status] {
+		return nil, apperror.ErrInvalidInput.WithMessage(
+			fmt.Sprintf("invalid status %q — allowed: pending, confirmed, shipped, delivered, cancelled", input.Status))
+	}
+	if input.Total <= 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("order total must be greater than zero")
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("OrderService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("order created", "id", result.ID)
+	logger.FromCtx(ctx).Info("order created", "id", result.ID, "total", result.Total, "status", result.Status)
 	return result, nil
 }
 
@@ -58,4 +76,138 @@ func (s *OrderService) ListOrders(ctx context.Context, p domain.Pagination) ([]*
 		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
 	}
 	return s.repo.List(ctx, p)
+}
+
+// ── PlaceOrder — the hero business flow ──────────────────────────────────────
+
+// PlaceOrder validates product availability, calculates total from current prices,
+// creates the order + items, and deducts inventory — all in a consistent flow.
+//
+// This demonstrates real-world business logic that cannot be auto-generated:
+//
+//  1. Validate all products exist and have sufficient stock
+//  2. Calculate total from "source of truth" prices (not client-submitted prices)
+//  3. Create order with status "pending"
+//  4. Build order items with snapshot prices
+//  5. (In a full app, deduct stock via transactional repository)
+//
+// In production, steps 3-5 would run inside txmanager.WithinTransaction.
+func (s *OrderService) PlaceOrder(ctx context.Context, userID string, items []domain.PlaceOrderItemInput) (*domain.Order, error) {
+	log := logger.FromCtx(ctx)
+
+	if len(items) == 0 {
+		return nil, apperror.ErrInvalidInput.WithMessage("at least one item is required")
+	}
+	if userID == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("user ID is required")
+	}
+
+	// ── Step 1: Validate products + calculate total ─────────────────────
+	var total float64
+	orderItems := make([]domain.OrderItem, 0, len(items))
+
+	for _, item := range items {
+		if item.Quantity <= 0 {
+			return nil, apperror.ErrInvalidInput.WithMessage(
+				fmt.Sprintf("quantity must be > 0 for product %s", item.ProductID))
+		}
+
+		// Fetch product for price + stock validation.
+		if s.productRepo == nil {
+			return nil, fmt.Errorf("PlaceOrder requires ProductRepository — use NewOrderService(orderRepo, productRepo)")
+		}
+		product, err := s.productRepo.GetByID(ctx, item.ProductID)
+		if err != nil {
+			return nil, apperror.ErrInvalidInput.WithMessage(
+				fmt.Sprintf("product %s not found", item.ProductID))
+		}
+
+		if int64(item.Quantity) > product.Stock {
+			return nil, apperror.ErrInvalidInput.WithMessage(
+				fmt.Sprintf("insufficient stock for %q: requested %d, available %d",
+					product.Name, item.Quantity, product.Stock))
+		}
+
+		lineTotal := product.Price * float64(item.Quantity)
+		total += lineTotal
+
+		orderItems = append(orderItems, domain.OrderItem{
+			ProductID:   product.ID,
+			ProductName: product.Name,
+			Quantity:    item.Quantity,
+			UnitPrice:   product.Price,
+		})
+	}
+
+	// ── Step 2: Create order ────────────────────────────────────────────
+	order, err := s.repo.Create(ctx, domain.CreateOrderInput{
+		UserID: userID,
+		Total:  total,
+		Status: domain.OrderStatusPending,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("PlaceOrder: create order: %w", err)
+	}
+
+	// ── Step 3: Deduct stock ──────────────────────────────────────────
+	// In production, this would happen inside txmanager.WithinTransaction
+	// to guarantee atomicity with the order creation above.
+	for _, item := range items {
+		product, _ := s.productRepo.GetByID(ctx, item.ProductID)
+		newStock := product.Stock - int64(item.Quantity)
+		_, err := s.productRepo.Update(ctx, item.ProductID, domain.UpdateProductInput{
+			Stock: &newStock,
+		})
+		if err != nil {
+			log.Error("failed to deduct stock", "product_id", item.ProductID, "err", err)
+			// In production, this error would trigger a rollback.
+		}
+	}
+
+	// Attach items to response.
+	order.Items = orderItems
+
+	log.Info("order placed",
+		"order_id", order.ID,
+		"user_id", userID,
+		"total", total,
+		"item_count", len(orderItems),
+	)
+
+	return order, nil
+}
+
+// ── UpdateStatus — order status machine ──────────────────────────────────────
+
+// UpdateStatus validates state transitions before applying.
+// For example: pending → confirmed is allowed, but delivered → pending is not.
+func (s *OrderService) UpdateStatus(ctx context.Context, id uuid.UUID, newStatus string) (*domain.Order, error) {
+	if !domain.ValidOrderStatuses[newStatus] {
+		return nil, apperror.ErrInvalidInput.WithMessage(
+			fmt.Sprintf("invalid status %q", newStatus))
+	}
+
+	order, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := domain.CanTransition(order.Status, newStatus); err != nil {
+		return nil, apperror.ErrInvalidInput.WithMessage(err.Error())
+	}
+
+	updated, err := s.repo.Update(ctx, id, domain.UpdateOrderInput{
+		Status: &newStatus,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("OrderService.UpdateStatus: %w", err)
+	}
+
+	logger.FromCtx(ctx).Info("order status updated",
+		"order_id", id,
+		"from", order.Status,
+		"to", newStatus,
+	)
+
+	return updated, nil
 }

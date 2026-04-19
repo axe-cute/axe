@@ -132,7 +132,7 @@ func main() {
 	productRepo := repository.NewProductRepo(entClient)
 	productSvc := service.NewProductService(productRepo)
 	orderRepo := repository.NewOrderRepo(entClient)
-	orderSvc := service.NewOrderService(orderRepo)
+	orderSvc := service.NewOrderService(orderRepo, productRepo)
 	reviewRepo := repository.NewReviewRepo(entClient)
 	reviewSvc := service.NewReviewService(reviewRepo)
 	// axe:wire:repo

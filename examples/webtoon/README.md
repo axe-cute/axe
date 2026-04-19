@@ -1,172 +1,186 @@
 # 📖 Webtoon API — axe Example
 
-A **production-grade webtoon/manhwa platform API** built entirely with `axe new` + `axe generate resource`.
-
-Demonstrates: multi-resource CRUD, parent-child relationships (Series → Episode), user bookmarks, and JWT authentication.
+A **production-grade webtoon/manhwa platform API** built with `axe new` + `axe generate resource`, then customized with real business logic.
 
 ## Quick Start
 
 ```bash
-# 1. Start infrastructure
-docker-compose up -d     # PostgreSQL + Redis
-
-# 2. Setup
+docker-compose up -d          # PostgreSQL + Redis
 cp .env.example .env
 make migrate-up
-
-# 3. Run
-make run                 # API at :8080
+make run                      # API at :8080
 ```
 
 ## Domain Model
 
 ```
 Series (title, description, genre, author, cover_url, status)
-  └── Episode (title, episode_number, thumbnail_url, published) [belongs-to Series]
+  │  status: ongoing | completed | hiatus
+  │  genre: action, romance, comedy, drama, fantasy, horror, ...
+  │
+  └── Episode (title, episode_number, thumbnail_url, published, view_count)
+        [belongs-to Series]
 
-Bookmark (series_id) [auth required — user's reading list]
+Bookmark (user_id, series_id)
+  └── ToggleBookmark: one-click add/remove from reading list
 ```
 
 ## How This Was Built
 
 ```bash
-# Step 1: Scaffold project
+# Step 1: Scaffold (2 minutes)
 axe new webtoon --module github.com/axe-cute/examples-webtoon --db postgres --yes
 
 # Step 2: Generate resources
 axe generate resource Series   --fields="title:string,description:text,genre:string,author:string,cover_url:string,status:string" --with-auth
 axe generate resource Episode  --fields="title:string,episode_number:int,thumbnail_url:string,published:bool" --belongs-to=Series --with-auth
 axe generate resource Bookmark --fields="series_id:uuid" --with-auth
+
+# Step 3: Add business logic (manual — see below)
 ```
 
-**Total time: ~3 minutes.** Everything compiled and auto-wired.
+## Business Logic (Beyond CRUD)
 
-## API Endpoints
+### 1. Series Validation
+- Title and author required
+- Genre validated against whitelist: `action, romance, comedy, drama, fantasy, horror, thriller, slice-of-life, sci-fi, sports, historical`
+- Status validated: `ongoing`, `completed`, `hiatus` (defaults to `ongoing`)
 
-### Series (Public Read, Auth Write)
 ```bash
-# List all series (public — browsing catalog)
-curl http://localhost:8080/serieses
-
-# Get series detail
-curl http://localhost:8080/serieses/{id}
-
-# Create series (creator/admin)
-curl -X POST http://localhost:8080/serieses \
+# Create a series
+curl -X POST http://localhost:8080/api/v1/serieses \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Solo Leveling",
-    "description": "10 years since a portal appeared...",
+    "description": "10 years since a portal connecting worlds appeared...",
     "genre": "action",
     "author": "Chu-Gong",
     "cover_url": "/covers/solo-leveling.jpg",
     "status": "ongoing"
   }'
 
-# Update series status
-curl -X PUT http://localhost:8080/serieses/{id} \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "completed"}'
+# Invalid genre → 400
+curl -X POST http://localhost:8080/api/v1/serieses \
+  -d '{"title": "Test", "author": "Me", "genre": "invalid"}'
+# → "invalid genre \"invalid\" — allowed: action, romance, ..."
 ```
 
-### Episodes (belongs-to Series)
-```bash
-# List episodes for a series
-curl http://localhost:8080/episodes
+### 2. Episode Validation + View Tracking
+- Title required, episode_number > 0, series_id must exist
+- View count tracked on each read (incremented automatically)
 
+```bash
 # Create episode
-curl -X POST http://localhost:8080/episodes \
+curl -X POST http://localhost:8080/api/v1/episodes \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
   -d '{
     "title": "Chapter 1: Weakest Hunter",
     "episode_number": 1,
     "thumbnail_url": "/thumbnails/sl-ch1.jpg",
     "published": true,
-    "series_id": "..."
+    "series_id": "SERIES_UUID"
   }'
+
+# Get episode (view_count auto-increments)
+curl http://localhost:8080/api/v1/episodes/{id}
 ```
 
-### Bookmarks (Auth Required — User's Reading List)
+### 3. Bookmark Toggle — The Hero Feature
+`POST /api/v1/bookmarks/toggle` — one-click add/remove from reading list.
+
 ```bash
-# Add to reading list
-curl -X POST http://localhost:8080/bookmarks \
+# Add to reading list (first call)
+curl -X POST http://localhost:8080/api/v1/bookmarks/toggle \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"series_id": "..."}'
+  -d '{"series_id": "SERIES_UUID"}'
+# → {"bookmarked": true, "series_id": "..."}
 
-# Get my bookmarks
-curl http://localhost:8080/bookmarks \
-  -H "Authorization: Bearer $TOKEN"
-
-# Remove from reading list
-curl -X DELETE http://localhost:8080/bookmarks/{id} \
-  -H "Authorization: Bearer $TOKEN"
+# Remove from reading list (second call with same series_id)
+curl -X POST http://localhost:8080/api/v1/bookmarks/toggle \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"series_id": "SERIES_UUID"}'
+# → {"bookmarked": false, "series_id": "..."}
 ```
 
-### Health & Monitoring
-```bash
-curl http://localhost:8080/health   # liveness probe
-curl http://localhost:8080/ready    # readiness probe
-curl http://localhost:8080/metrics  # Prometheus
-```
+## API Endpoints
+
+### Series
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/serieses` | No | Browse catalog |
+| GET | `/api/v1/serieses/{id}` | No | Series detail |
+| POST | `/api/v1/serieses` | Yes | Create (validates genre + status) |
+| PUT | `/api/v1/serieses/{id}` | Yes | Update (validates on change) |
+| DELETE | `/api/v1/serieses/{id}` | Yes | Delete series |
+
+### Episodes
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/episodes` | No | List episodes |
+| GET | `/api/v1/episodes/{id}` | No | Read episode (view count ++) |
+| POST | `/api/v1/episodes` | Yes | Create (validates series exists) |
+| PUT | `/api/v1/episodes/{id}` | Yes | Update |
+| DELETE | `/api/v1/episodes/{id}` | Yes | Delete |
+
+### Bookmarks
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/v1/bookmarks/toggle` | Yes | **Toggle** bookmark (add/remove) |
+| GET | `/api/v1/bookmarks` | Yes | List my bookmarks |
+| POST | `/api/v1/bookmarks` | Yes | Create bookmark |
+| DELETE | `/api/v1/bookmarks/{id}` | Yes | Remove bookmark |
+
+### Infrastructure
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Liveness probe |
+| GET | `/ready` | Readiness probe |
+| GET | `/metrics` | Prometheus metrics |
 
 ## Architecture
 
 ```
 cmd/api/main.go              ← Composition root (auto-wired by axe)
 internal/
-├── domain/                  ← Pure structs + interfaces
-│   ├── series.go
-│   ├── episode.go
-│   └── bookmark.go
-├── handler/                 ← HTTP handlers (chi router)
-│   ├── series_handler.go
-│   ├── episode_handler.go
-│   └── bookmark_handler.go
-├── service/                 ← Business logic
-│   ├── series_service.go
-│   ├── episode_service.go
-│   └── bookmark_service.go
-└── repository/              ← Database queries (Ent ORM)
-    ├── series_repo.go
-    ├── episode_repo.go
-    └── bookmark_repo.go
-ent/schema/                  ← Ent ORM schemas
-db/migrations/               ← SQL migrations
+├── domain/                  ← Pure domain models + business rules
+│   ├── series.go            ← Genre whitelist + status validation
+│   ├── episode.go           ← Episode with ViewCount tracking
+│   └── bookmark.go          ← Bookmark + ToggleResult type
+├── handler/                 ← HTTP handlers
+│   ├── series_handler.go    ← Standard CRUD
+│   ├── episode_handler.go   ← CRUD with view tracking
+│   └── bookmark_handler.go  ← CRUD + ToggleBookmark endpoint
+├── service/                 ← Business logic layer
+│   ├── series_service.go    ← Genre/status validation on create+update
+│   ├── episode_service.go   ← Series existence check + view counting
+│   └── bookmark_service.go  ← ToggleBookmark (add if missing, remove if exists)
+└── repository/              ← Database access (Ent ORM)
 ```
 
 ## axe Features Demonstrated
 
-| Feature | How |
+| Feature | Implementation |
 |---|---|
-| `axe new` | Project scaffolded with full infrastructure |
-| `axe generate resource` | 3 resources × 9 files = 27 files generated |
-| `--with-auth` | JWT authentication on write operations |
-| `--belongs-to` | Episode → Series foreign key relationship |
-| Auto-wiring | `main.go` automatically updated with DI code |
+| `axe new` | Full project scaffold |
+| `axe generate resource` | 3 resources auto-generated + auto-wired |
+| `--with-auth` | JWT auth middleware |
+| `--belongs-to` | Episode → Series foreign key |
+| **Series validation** | Genre whitelist + status enum |
+| **Episode tracking** | View count on read |
+| **Bookmark toggle** | One-click add/remove pattern |
 | Clean Architecture | domain → handler → service → repository |
-| UUID primary keys | All entities use UUID (Ent + Google UUID) |
-| Background jobs | Asynq worker ready for notifications |
-| Caching | Redis cache ready for popular series |
-| WebSocket | Hub ready for real-time episode notifications |
 
 ## Extending This Example
 
-### Add real-time notifications
 ```bash
+# Add real-time new episode notifications
 axe generate resource Notification --fields="message:text,read:bool" --with-auth --with-ws
-```
 
-### Add payment for premium episodes
-```bash
+# Add payment for premium episodes
 axe plugin add stripe
-```
 
-### Add file storage for episode pages
-```bash
+# Add file storage for episode pages
 axe plugin add storage
 ```
 

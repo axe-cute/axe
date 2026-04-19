@@ -10,14 +10,15 @@ import (
 
 // Episode is the Episode domain entity.
 type Episode struct {
-	ID uuid.UUID
-	Title string
+	ID            uuid.UUID
+	Title         string
 	EpisodeNumber int64
-	ThumbnailUrl string
-	Published bool
-	SeriesID uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ThumbnailUrl  string
+	Published     bool
+	ViewCount     int64 // auto-incremented on read
+	SeriesID      uuid.UUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // EpisodeRepository defines data access for Episode.
@@ -42,17 +43,17 @@ type EpisodeService interface {
 
 // CreateEpisodeInput holds fields required to create a Episode.
 type CreateEpisodeInput struct {
-	Title string
+	Title         string
 	EpisodeNumber int64
-	ThumbnailUrl string
-	Published bool
-	SeriesID uuid.UUID
+	ThumbnailUrl  string
+	Published     bool
+	SeriesID      uuid.UUID
 }
 
 // UpdateEpisodeInput holds optional fields for partial update.
 type UpdateEpisodeInput struct {
-	Title *string `json:"title,omitempty"`
-	EpisodeNumber *int64 `json:"episode_number,omitempty"`
-	ThumbnailUrl *string `json:"thumbnail_url,omitempty"`
-	Published *bool `json:"published,omitempty"`
+	Title         *string `json:"title,omitempty"`
+	EpisodeNumber *int64  `json:"episode_number,omitempty"`
+	ThumbnailUrl  *string `json:"thumbnail_url,omitempty"`
+	Published     *bool   `json:"published,omitempty"`
 }

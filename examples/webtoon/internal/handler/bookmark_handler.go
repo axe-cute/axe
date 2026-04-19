@@ -16,8 +16,8 @@ import (
 
 // BookmarkHandler handles HTTP requests for the Bookmark domain.
 type BookmarkHandler struct {
-	svc domain.BookmarkService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.BookmarkService
+	jwtSvc    *jwtauth.Service
 	blocklist middleware.Blocklist
 }
 
@@ -27,47 +27,50 @@ func NewBookmarkHandler(svc domain.BookmarkService) *BookmarkHandler {
 }
 
 // WithJWTAuth sets the JWT service and optional blocklist for route protection.
-// Call before registering routes:
-//
-//	h := handler.NewBookmarkHandler(svc).WithJWTAuth(jwtSvc, cacheClient)
 func (h *BookmarkHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklist) *BookmarkHandler {
 	h.jwtSvc = svc
 	h.blocklist = bl
 	return h
 }
 
-
 // Routes returns a Chi router with all bookmark endpoints.
-// Register in main.go: r.Mount("/api/v1/bookmarks", bookmarkHandler.Routes())
 func (h *BookmarkHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	// Authentication required for all bookmark routes
 	r.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+
+	// Standard CRUD
 	r.Post("/", h.CreateBookmark)
 	r.Get("/", h.ListBookmarks)
 	r.Get("/{id}", h.GetBookmark)
 	r.Put("/{id}", h.UpdateBookmark)
 	r.Delete("/{id}", h.DeleteBookmark)
+
+	// Business flow
+	r.Post("/toggle", h.ToggleBookmark) // the hero endpoint
+
 	return r
 }
 
 // createBookmarkRequest is the POST request body.
 type createBookmarkRequest struct {
-	SeriesId uuid.UUID `json:"series_id"`
+	SeriesID uuid.UUID `json:"series_id"`
 }
 
 // bookmarkResponse is the API response shape.
 type bookmarkResponse struct {
-	ID        string `json:"id"`
-	SeriesId uuid.UUID `json:"series_id"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id,omitempty"`
+	SeriesID  uuid.UUID `json:"series_id"`
+	CreatedAt string    `json:"created_at"`
+	UpdatedAt string    `json:"updated_at"`
 }
 
 func toBookmarkResponse(e *domain.Bookmark) *bookmarkResponse {
 	return &bookmarkResponse{
-		ID: e.ID.String(),
-		SeriesId: e.SeriesId,
+		ID:        e.ID.String(),
+		UserID:    e.UserID,
+		SeriesID:  e.SeriesID,
 		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -79,8 +82,15 @@ func (h *BookmarkHandler) CreateBookmark(w http.ResponseWriter, r *http.Request)
 		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
 		return
 	}
+
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+
 	result, err := h.svc.CreateBookmark(r.Context(), domain.CreateBookmarkInput{
-		SeriesId: req.SeriesId,
+		UserID:   userID,
+		SeriesID: req.SeriesID,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)
@@ -146,4 +156,32 @@ func (h *BookmarkHandler) ListBookmarks(w http.ResponseWriter, r *http.Request) 
 		data[i] = toBookmarkResponse(e)
 	}
 	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": total})
+}
+
+// ── ToggleBookmark — the hero endpoint ───────────────────────────────────────
+
+type toggleBookmarkRequest struct {
+	SeriesID uuid.UUID `json:"series_id"`
+}
+
+// ToggleBookmark handles POST /bookmarks/toggle.
+// Adds the bookmark if not present, removes it if already bookmarked.
+func (h *BookmarkHandler) ToggleBookmark(w http.ResponseWriter, r *http.Request) {
+	var req toggleBookmarkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+		return
+	}
+
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+
+	result, err := h.svc.ToggleBookmark(r.Context(), userID, req.SeriesID)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusOK, result)
 }

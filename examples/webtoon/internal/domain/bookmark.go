@@ -8,10 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// Bookmark is the Bookmark domain entity.
+// Bookmark represents a user's bookmarked (favorited) series.
 type Bookmark struct {
-	ID uuid.UUID
-	SeriesId uuid.UUID
+	ID        uuid.UUID
+	UserID    string    // from JWT claims
+	SeriesID  uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -34,14 +35,24 @@ type BookmarkService interface {
 	UpdateBookmark(ctx context.Context, id uuid.UUID, input UpdateBookmarkInput) (*Bookmark, error)
 	DeleteBookmark(ctx context.Context, id uuid.UUID) error
 	ListBookmarks(ctx context.Context, pagination Pagination) ([]*Bookmark, int, error)
+
+	// ToggleBookmark adds or removes a bookmark. Returns the bookmark state.
+	ToggleBookmark(ctx context.Context, userID string, seriesID uuid.UUID) (*ToggleResult, error)
+}
+
+// ToggleResult indicates whether a bookmark was added or removed.
+type ToggleResult struct {
+	Bookmarked bool      `json:"bookmarked"`
+	SeriesID   uuid.UUID `json:"series_id"`
 }
 
 // CreateBookmarkInput holds fields required to create a Bookmark.
 type CreateBookmarkInput struct {
-	SeriesId uuid.UUID
+	UserID   string
+	SeriesID uuid.UUID
 }
 
 // UpdateBookmarkInput holds optional fields for partial update.
 type UpdateBookmarkInput struct {
-	SeriesId *uuid.UUID `json:"series_id,omitempty"`
+	SeriesID *uuid.UUID `json:"series_id,omitempty"`
 }

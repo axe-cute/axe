@@ -23,11 +23,19 @@ func NewReviewService(repo domain.ReviewRepository) domain.ReviewService {
 }
 
 func (s *ReviewService) CreateReview(ctx context.Context, input domain.CreateReviewInput) (*domain.Review, error) {
+	// ── Business validation ────────────────────────────────────────────────
+	if input.Body == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("review body is required")
+	}
+	if input.Rating < 1 || input.Rating > 5 {
+		return nil, apperror.ErrInvalidInput.WithMessage("rating must be between 1 and 5")
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("ReviewService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("review created", "id", result.ID)
+	logger.FromCtx(ctx).Info("review created", "id", result.ID, "product_id", input.ProductID, "rating", input.Rating)
 	return result, nil
 }
 

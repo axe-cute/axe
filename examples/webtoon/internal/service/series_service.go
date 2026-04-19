@@ -23,11 +23,26 @@ func NewSeriesService(repo domain.SeriesRepository) domain.SeriesService {
 }
 
 func (s *SeriesService) CreateSeries(ctx context.Context, input domain.CreateSeriesInput) (*domain.Series, error) {
+	// ── Business validation ────────────────────────────────────────────────
+	if err := domain.ValidateCreateSeries(input); err != nil {
+		return nil, apperror.ErrInvalidInput.WithMessage(err.Error())
+	}
+
+	// Default status to "ongoing" if not specified.
+	if input.Status == "" {
+		input.Status = domain.SeriesStatusOngoing
+	}
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("SeriesService.Create: %w", err)
 	}
-	logger.FromCtx(ctx).Info("series created", "id", result.ID)
+	logger.FromCtx(ctx).Info("series created",
+		"id", result.ID,
+		"title", input.Title,
+		"genre", input.Genre,
+		"author", input.Author,
+	)
 	return result, nil
 }
 
@@ -39,6 +54,19 @@ func (s *SeriesService) UpdateSeries(ctx context.Context, id uuid.UUID, input do
 	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		return nil, err
 	}
+
+	// Validate status if being updated.
+	if input.Status != nil && !domain.ValidSeriesStatuses[*input.Status] {
+		return nil, apperror.ErrInvalidInput.WithMessage(
+			fmt.Sprintf("invalid status %q — allowed: ongoing, completed, hiatus", *input.Status))
+	}
+
+	// Validate genre if being updated.
+	if input.Genre != nil && *input.Genre != "" && !domain.ValidGenres[*input.Genre] {
+		return nil, apperror.ErrInvalidInput.WithMessage(
+			fmt.Sprintf("invalid genre %q", *input.Genre))
+	}
+
 	result, err := s.repo.Update(ctx, id, input)
 	if err != nil {
 		return nil, fmt.Errorf("SeriesService.Update: %w", err)
