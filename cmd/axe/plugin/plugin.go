@@ -637,7 +637,7 @@ func addStorage() error {
 	mainPath := filepath.Join("cmd", "api", "main.go")
 	injected := false
 	storageImport := fmt.Sprintf("\t\"%s/pkg/storage\"", module)
-	if err := injectContentAfterMarker(mainPath, "// axe:wire:import", storageImport, "\"pkg/storage\""); err == nil {
+	if err := injectContentAfterMarker(mainPath, "// axe:wire:import", storageImport, "pkg/storage"); err == nil {
 		injected = true
 	}
 	storageInit := `
@@ -659,7 +659,7 @@ func addStorage() error {
 			r.Delete("/*", storageHandler.HandleDelete)
 		})
 	})`
-	if err := injectContentAfterMarker(mainPath, "// axe:wire:handler", storageInit, "storage.New("); err == nil {
+	if err := injectContentAfterMarker(mainPath, "// axe:wire:handler", storageInit, "storageHandler := storage.NewHandler"); err == nil {
 		injected = true
 	}
 	if injected {

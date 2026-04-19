@@ -3061,43 +3061,17 @@ var (
 
 // tmplSetupPlugin generates internal/setup/plugin.go for the scaffolded project.
 func tmplSetupPlugin(data TemplateData) string {
-	var storageBlock string
-	if data.WithStorage {
-		storageBlock = `
-	// ── Storage plugin ────────────────────────────────────────────────────
-	storagePlug, err := storage.New(storage.Config{
-		Backend:     cfg.StorageBackend,
-		MountPath:   cfg.StorageMountPath,
-		MaxFileSize: cfg.StorageMaxFileSize,
-		URLPrefix:   cfg.StorageURLPrefix,
-	})
-	if err != nil {
-		return fmt.Errorf("storage plugin: %w", err)
-	}
-	if err := app.Use(storagePlug); err != nil {
-		return fmt.Errorf("storage plugin: %w", err)
-	}
-`
-	}
-
-	storageImport := ""
-	if data.WithStorage {
-		storageImport = fmt.Sprintf("\n\t\"%s/pkg/storage\"", data.Module)
-	}
-
-	// "fmt" is only needed when storage block is included (uses fmt.Errorf).
-	fmtImport := ""
-	if data.WithStorage {
-		fmtImport = "\n\t\"fmt\"\n"
-	}
+	// NOTE: Storage is wired directly in cmd/api/main.go via storage.NewHandler(),
+	// NOT through the plugin system. It doesn't implement plugin.Plugin.
+	// Only true plugins (with Name/Register/Shutdown) go through RegisterPlugins.
 
 	return fmt.Sprintf(`package setup
 
 import (
-	"context"%s
+	"context"
 
 	"%s/config"
-	"github.com/axe-cute/axe/pkg/plugin"%s
+	"github.com/axe-cute/axe/pkg/plugin"
 	// axe:wire:import
 )
 
@@ -3105,11 +3079,11 @@ import (
 //
 // This is the Plugin Leader — it knows how to initialize plugins and nothing else.
 // Decoupled from: Routes, Hooks, Services.
-func RegisterPlugins(_ context.Context, app *plugin.App, cfg *config.Config) error {%s
+func RegisterPlugins(_ context.Context, app *plugin.App, cfg *config.Config) error {
 	// axe:wire:plugin
 	return nil
 }
-`, fmtImport, data.Module, storageImport, storageBlock)
+`, data.Module)
 }
 
 // tmplHookLeader generates internal/handler/hook/hook.go for the scaffolded project.

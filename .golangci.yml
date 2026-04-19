@@ -46,9 +46,34 @@ issues:
     # Allow test files to use t.Fatal freely
     - path: "_test\\.go"
       linters: [gocritic]
-    # Generated Ent code
-    - path: "ent/"
-      linters: [all]
     # Generated cmd/axe code
     - path: "cmd/axe/generate/templates.go"
-      linters: [all]
+      linters:
+        - errcheck
+        - govet
+        - gocritic
+        - godot
+        - revive
+        - goconst
+        - unused
+        - ineffassign
+        - staticcheck
+        - goimports
+        - gofmt
+    # Generated cmd/axe/new templates
+    - path: "cmd/axe/new/templates.go"
+      linters:
+        - errcheck
+        - govet
+        - gocritic
+        - godot
+        - revive
+        - goconst
+        - unused
+        - ineffassign
+        - staticcheck
+        - goimports
+        - gofmt
+
+  exclude-dirs:
+    - ent
