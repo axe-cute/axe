@@ -12,13 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [v1.0.0-rc.1] — 2026-04-19
+
+**First release candidate.** All library packages ≥80% test coverage, zero TODO/FIXME,
+full documentation sync, and incremental adoption path for existing Go projects.
+
 ### Added
 - `CHANGELOG.md` — proper version history for upgrade decisions
-- Incremental adoption guide (`docs/guides/incremental-adoption.md`)
+- `docs/guides/incremental-adoption.md` — 4-stage guide for existing Go projects
+- `examples/` — 3 runnable examples (apperror, txmanager, plugin system)
+- `README.md` documentation section linking all guides
+- gRPC non-goal position documented in PRD
 
-### Fixed
-- Epic 8/9 documentation synced to match actual code status
-- Coverage scorecard updated: 29/33 tested packages ≥ 80%
+### Changed
+- **Coverage milestone**: 30/32 tested packages ≥80% (avg 83.9%)
+  - `pkg/plugin/ratelimit`: 54.3% → 92.9%
+  - `pkg/worker`: 54.5% → 84.8%
+  - `pkg/ws`: 77.8% → 88.9%
+  - `cmd/axe/generate`: 34.4% → 88.7%
+- Epic 8: 6-Layer consistency table synced (all 6 layers ✅)
+- Epic 9: Sentry + OpenAI marked Done (were stale "Planned")
+- PRD success metrics updated to reflect actual achievements
+- Sprint status updated through Sprint 31
 
 ---
 
@@ -194,7 +211,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/axe-cute/axe/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/axe-cute/axe/compare/v1.0.0-rc.1...HEAD
+[v1.0.0-rc.1]: https://github.com/axe-cute/axe/compare/v0.3.5...v1.0.0-rc.1
 [v0.3.5]: https://github.com/axe-cute/axe/compare/v0.3.4...v0.3.5
 [v0.3.4]: https://github.com/axe-cute/axe/compare/v0.3.3...v0.3.4
 [v0.3.3]: https://github.com/axe-cute/axe/compare/v0.3.2...v0.3.3
