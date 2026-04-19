@@ -8,7 +8,7 @@ Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · F
 
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/v0.2.0-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
+[![Release](https://img.shields.io/badge/v1.0.0--rc.1-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
 
 </div>
 
@@ -437,6 +437,23 @@ make docker-down  # Stop all
 </details>
 
 <br/>
+
+---
+
+## 🎯 Example Projects
+
+Full production APIs built with `axe new` + `axe generate resource` + custom business logic:
+
+| Project | Domain | Business Logic |
+|---|---|---|
+| [🛒 E-Commerce](examples/ecommerce/) | Product, Order, Review | PlaceOrder (stock validation + inventory deduction), order status machine, rating validation |
+| [📖 Webtoon](examples/webtoon/) | Series, Episode, Bookmark | Genre whitelist, view tracking, bookmark toggle (one-click add/remove) |
+
+```bash
+cd examples/ecommerce && docker-compose up -d && make run
+```
+
+See also: [standalone package examples](examples/) (apperror, txmanager, plugin).
 
 ---
 

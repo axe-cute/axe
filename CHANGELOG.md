@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `examples/ecommerce/` — full e-commerce API with PlaceOrder flow, order status machine, product/review validation
+- `examples/webtoon/` — webtoon platform API with genre whitelist, episode view tracking, bookmark toggle
+- Example Projects section in main README
+
 ---
 
 ## [v1.0.0-rc.1] — 2026-04-19
