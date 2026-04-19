@@ -1,9 +1,9 @@
 project: axe
 module: github.com/axe-cute/axe
-version: v0.3.1
+version: v0.3.2
 phase: 2
 
-current_sprint: 25
+current_sprint: 26
 active_story: story-8.5  # Sprint 25: Plugin Discovery CLI + Maturity
 
 epics:
@@ -418,6 +418,17 @@ sprint_log:
       - "Story 9.16 — pkg/plugin/oauth2: 18.3% → 60.2% (36 tests, mock providers, handler tests)"
       - "Story 9.17 — pkg/plugin/email: 46.9% → 67.9% (30 tests, sender factory, HTTP helpers)"
       - "Story 8.4 — pkg/plugin/tenant: 71.2% → 91.8% (Router helper, JWT extraction, MustFromCtx)"
+      - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
+
+  - sprint: 26
+    goal: "Structural Testing — Interface Injection for Testability"
+    stories: [story-11.1, story-11.4]
+    status: done
+    completed_at: "2026-04-19"
+    results:
+      - "Story 11.1 — pkg/outbox: extracted Enqueuer interface, collect-then-process refactor (62.3% → 82.1%)"
+      - "Story 11.1 — bug fix: SQLite NOW() → CURRENT_TIMESTAMP, detached context for UPDATE"
+      - "Story 11.4 — config: env var parsing + validation tests (57.1% → 85.7%)"
       - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
 
 
