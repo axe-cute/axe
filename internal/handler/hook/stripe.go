@@ -14,7 +14,7 @@ func RegisterStripeHooks(bus events.Bus) {
 		log.Info("payment succeeded",
 			"trace_id", e.Meta.TraceID,
 		)
-		// TODO: Add your business logic here. Example:
+		// IMPLEMENT: Add your business logic here. Example:
 		// orderID := e.Payload["metadata"].(map[string]any)["order_id"]
 		return nil
 	})

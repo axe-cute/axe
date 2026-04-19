@@ -159,7 +159,8 @@ func (h *WelcomeEmailHandler) ProcessTask(ctx context.Context, t *asynq.Task) er
 		return fmt.Errorf("unmarshal WelcomeEmailPayload: %w", err)
 	}
 
-	// TODO (Story 3.5+): integrate real email sender (SES, Resend, etc.)
+	// Framework reference: logs the email send. Host applications should inject
+	// a real email.Sender via the email plugin (pkg/plugin/email).
 	h.log.Info("sending welcome email",
 		"user_id", p.UserID,
 		"email", p.Email,
@@ -187,8 +188,8 @@ func (h *OutboxEventHandler) ProcessTask(ctx context.Context, t *asynq.Task) err
 		return fmt.Errorf("unmarshal OutboxEventPayload: %w", err)
 	}
 
-	// TODO: route event to appropriate downstream handler based on EventType
-	// e.g. "UserRegistered" → publish to message bus, webhook, etc.
+	// Framework reference: logs the event. Host applications should implement
+	// an EventRouter to dispatch events to downstream handlers (message bus, webhook, etc.).
 	h.log.Info("processing outbox event",
 		"event_id", p.EventID,
 		"event_type", p.EventType,

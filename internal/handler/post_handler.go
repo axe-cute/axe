@@ -36,24 +36,22 @@ func (h *PostHandler) Routes() chi.Router {
 }
 
 // createPostRequest is the POST request body.
-// TODO: add json struct tags after generation.
 type createPostRequest struct {
-	Title string
-	Body string
-	Published bool
-	Views int64
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Published bool   `json:"published"`
+	Views     int64  `json:"views"`
 }
 
 // postResponse is the API response shape.
-// TODO: add json struct tags after generation.
 type postResponse struct {
-	ID        string
-	Title string
-	Body string
-	Published bool
-	Views int64
-	CreatedAt string
-	UpdatedAt string
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Published bool   `json:"published"`
+	Views     int64  `json:"views"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 func toPostResponse(e *domain.Post) *postResponse {

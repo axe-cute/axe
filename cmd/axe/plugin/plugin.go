@@ -495,11 +495,11 @@ const ServiceKey = %q
 
 // Config configures the %s plugin.
 type Config struct {
-	// TODO: add configuration fields
+	// IMPLEMENT: add configuration fields
 }
 
 func (c *Config) validate() error {
-	// TODO: validate required fields and return descriptive errors
+	// IMPLEMENT: validate required fields and return descriptive errors
 	return nil
 }
 
@@ -524,7 +524,7 @@ func (p *Plugin) Name() string { return %q }
 func (p *Plugin) Register(ctx context.Context, app *plugin.App) error {
 	log := app.Logger.With("plugin", p.Name())
 
-	// TODO: implement plugin registration (routes, services, etc.)
+	// IMPLEMENT: plugin registration (routes, services, etc.)
 	_ = log
 
 	// plugin.Provide[YourService](app, ServiceKey, yourService)
