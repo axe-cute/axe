@@ -1,6 +1,6 @@
 project: axe
 module: github.com/axe-cute/axe
-version: v0.3.5
+version: v1.0.0-rc.1
 phase: 2
 
 current_sprint: 31
@@ -460,6 +460,25 @@ sprint_log:
       - "examples/: 3 runnable examples (apperror, txmanager, plugin system)"
       - "README.md: Documentation section with links to guides + CHANGELOG"
       - "go test ./... ✅ (34 packages, 0 failures)"
+  - sprint: 32
+    goal: "Post-rc.1 — Production example projects with real business logic"
+    stories: []
+    status: done
+    completed_at: "2026-04-19"
+    results:
+      - "Tagged v1.0.0-rc.1 (commit 3865dc9)"
+      - "cmd/axe/generate: 34.4% → 88.7% coverage lift (+54.3%)"
+      - "examples/ecommerce: full project via axe new + generate × 3"
+      - "  → PlaceOrder: stock validation + total calc + inventory deduction"
+      - "  → Order status machine: pending→confirmed→shipped→delivered"
+      - "  → Product validation (name, price>0, stock≥0)"
+      - "  → Review validation (rating 1-5, body required)"
+      - "examples/webtoon: full project via axe new + generate × 3"
+      - "  → Series: genre whitelist (11 genres) + status enum"
+      - "  → Episode: parent validation + view count tracking"
+      - "  → Bookmark toggle: one-click add/remove reading list"
+      - "Both projects: 5K+ LOC each, go build ✅"
+      - "READMEs: full API docs with curl examples + architecture"
 
 
 epics_continued:
