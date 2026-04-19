@@ -3,8 +3,8 @@ module: github.com/axe-cute/axe
 version: v1.0.0-rc.1
 phase: 2
 
-current_sprint: 31
-active_story: null  # Sprint 31 complete — Trust Building
+current_sprint: 33
+active_story: null  # Sprint 33 in progress — CI fix + BMAD sync
 
 epics:
   - id: epic-1
@@ -480,6 +480,18 @@ sprint_log:
       - "Both projects: 5K+ LOC each, go build ✅"
       - "READMEs: full API docs with curl examples + architecture"
 
+  - sprint: 33
+    goal: "CI Fix — commit ent-generated code + BMAD sync"
+    stories: []
+    status: in_progress
+    results:
+      - "ROOT CAUSE: .gitignore excluded ent/client.go, ent/user/, ent/predicate/ but committed files importing them"
+      - "FIX: removed ent exclusions from .gitignore (root + examples + scaffold template)"
+      - "FIX: git add -f all previously-ignored ent files"
+      - "BMAD: project-context Go version 1.22→1.25, sprint 21→33"
+      - "BMAD: PRD example projects metric → done"
+      - "BMAD: coverage scorecard merged Sprint 31+32 data"
+
 
 epics_continued:
   - id: epic-9
@@ -541,17 +553,17 @@ epics_continued:
         priority: P1
         notes: "30 tests: all defaults, all validation branches, RedisAddr, TTL helpers, Stripe optional. Coverage: 57.1% → 85.7%"
 
-# ── Coverage Scorecard (v0.3.5 — Sprint 30) ─────────────────────────────────
-# Shows ALL 52 non-ent packages. Updated after Sprint 30 coverage lift.
+# ── Coverage Scorecard (v1.0.0-rc.1 — Sprint 32) ────────────────────────────
+# Shows ALL 52 non-ent packages. Updated after Sprint 31+32 coverage lifts.
 coverage_scorecard:
   summary:
     total_packages: 52        # non-ent
     packages_with_tests: 33   # have _test.go files
     packages_zero_tests: 19   # NO test files at all
-    production_grade_pct: 50.0 # 26/52 packages ≥80%
+    production_grade_pct: 55.8 # 29/52 packages ≥80%
     todo_count: 0             # zero TODO/FIXME in production code
 
-  production_grade:  # ≥80% — 26 packages (+4 from Sprint 30)
+  production_grade:  # ≥80% — 29 packages (+3 from Sprint 31)
     - { pkg: "pkg/apperror", coverage: 100.0 }
     - { pkg: "pkg/plugin/obs", coverage: 100.0, notes: "S29: 69→100" }
     - { pkg: "pkg/plugin", coverage: 96.9 }
@@ -559,11 +571,13 @@ coverage_scorecard:
     - { pkg: "internal/service", coverage: 96.5, notes: "S29: 61.6→96.5" }
     - { pkg: "pkg/plugin/email", coverage: 95.1, notes: "S29: 67.9→95.1" }
     - { pkg: "pkg/plugin/sentry", coverage: 94.1, notes: "S30: 76.5→94.1" }
+    - { pkg: "pkg/plugin/ratelimit", coverage: 92.9, notes: "S31: 54.3→92.9" }
     - { pkg: "pkg/plugin/tenant", coverage: 91.8 }
     - { pkg: "pkg/jwtauth", coverage: 90.0 }
     - { pkg: "pkg/plugin/otel", coverage: 89.8, notes: "S30: 78.0→89.8" }
     - { pkg: "pkg/plugin/search/typesense", coverage: 89.6 }
-    - { pkg: "pkg/ratelimit", coverage: 88.9 }
+    - { pkg: "pkg/ws", coverage: 88.9, notes: "S31: 77.8→88.9" }
+    - { pkg: "cmd/axe/generate", coverage: 88.7, notes: "S32: 34.4→88.7" }
     - { pkg: "pkg/txmanager", coverage: 88.9 }
     - { pkg: "pkg/plugin/kafka", coverage: 88.0 }
     - { pkg: "pkg/plugin/ai/openai", coverage: 87.7, notes: "S30: 77.2→87.7" }
@@ -574,23 +588,16 @@ coverage_scorecard:
     - { pkg: "config", coverage: 85.7 }
     - { pkg: "pkg/cache", coverage: 85.3 }
     - { pkg: "pkg/plugin/payment/stripe", coverage: 85.0, notes: "S30: 66.4→85.0" }
+    - { pkg: "pkg/worker", coverage: 84.8, notes: "S31: 54.5→84.8" }
     - { pkg: "internal/handler/middleware", coverage: 84.4 }
     - { pkg: "pkg/plugin/oauth2", coverage: 83.9, notes: "S29: 60.2→83.9" }
     - { pkg: "pkg/plugin/storage/s3", coverage: 83.6 }
     - { pkg: "pkg/outbox", coverage: 82.1 }
 
-  # Sprint 31 upgrades: ratelimit 54.3→92.9, worker 54.5→84.8, ws 77.8→88.9
-  # These are now production-grade and moved to the list above.
-  # Updated production_grade list should include:
-  #   - pkg/plugin/ratelimit: 92.9 (S31)
-  #   - pkg/ws: 88.9 (S31)
-  #   - pkg/worker: 84.8 (S31)
-
   acceptable:  # 50-79% — 0 library packages
     # All library packages now ≥80% 🎉
 
   needs_work:  # <50% — CLI packages only
-    - { pkg: "cmd/axe/generate", coverage: 34.4, notes: "S28: 22.3→34.4 (remaining = CLI integration)" }
     - { pkg: "cmd/api", coverage: 0.0, notes: "main.go bootstrap — hard to unit test" }
     - { pkg: "tests/ws", coverage: 0.0, notes: "test-only package, no statements" }
 

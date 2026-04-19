@@ -2,7 +2,7 @@
 
 **Status**: Approved  
 **Version**: 3.0  
-**Date**: 2026-04-17  
+**Date**: 2026-04-19  
 **Changelog**: v3.0 — Admin UI promoted to optional plugin; added Epic 9 (Long-term Plugin Ecosystem); full plugin taxonomy (short-term vs long-term)
 
 ---
@@ -101,4 +101,4 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - [ ] **Long-term**: Web project configurator (start.axe.io) — deferred, CLI sufficient for early adopters
 - [x] **Adoption**: `CHANGELOG.md` available for upgrade decisions
 - [x] **Adoption**: Incremental adoption guide published (`docs/guides/incremental-adoption.md`)
-- [ ] **Adoption**: ≥ 3 real-world example projects (currently: blog-api only)
+- [x] **Adoption**: ≥ 3 real-world example projects (ecommerce, webtoon, 3 standalone examples)

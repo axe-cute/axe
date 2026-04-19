@@ -65,14 +65,8 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# Ent generated code (re-generated via ` + "`" + `go generate ./ent/...` + "`" + `)
-ent/client.go
-ent/ent.go
-ent/enttest/
-ent/hook/
-ent/migrate/
-ent/predicate/
-ent/runtime.go
+# Ent generated code — COMMITTED for CI buildability.
+# Re-generate via: go generate ./ent/...
 
 # sqlc generated code
 internal/repository/db/

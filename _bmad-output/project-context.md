@@ -13,7 +13,7 @@
 - CLI generator (`axe generate resource`) tạo CRUD endpoint < 10 phút
 - Production-grade từ ngày đầu: transactions, observability, error handling
 
-**Status**: Phase 2 (Plugin Ecosystem) — Sprint 21
+**Status**: Phase 2 (Plugin Ecosystem) — Sprint 33
 
 ---
 
@@ -21,7 +21,7 @@
 
 | Layer | Technology | Version |
 |---|---|---|
-| Language | Go | 1.22+ |
+| Language | Go | 1.25+ |
 | HTTP Router | Chi | v5 |
 | ORM (writes) | Ent | latest |
 | Query builder (reads) | sqlc | v2 |

@@ -35,20 +35,9 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# Ent generated code (re-generated via `go generate ./ent/...`)
-# Keep schema, exclude generated
-ent/client.go
-ent/ent.go
-ent/enttest/
-ent/hook/
-ent/migrate/
-ent/predicate/
-ent/runtime.go
-ent/user.go
-ent/user/
-ent/schema.go
-# But keep schema definitions:
-!ent/schema/
+# Ent generated code — COMMITTED for CI buildability.
+# Re-generate via: go generate ./ent/...
+# Only schema definitions are hand-written (ent/schema/).
 
 # sqlc generated code
 internal/repository/db/
