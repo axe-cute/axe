@@ -4,7 +4,7 @@ version: v0.3.2
 phase: 2
 
 current_sprint: 26
-active_story: story-8.5  # Sprint 25: Plugin Discovery CLI + Maturity
+active_story: null  # Sprint 26 complete — planning Sprint 27
 
 epics:
   - id: epic-1
@@ -139,7 +139,8 @@ epics:
 
   - id: epic-8
     title: "Plugin System & Ecosystem"
-    status: in-progress
+    status: done
+    completed_at: "2026-04-19"
     stories:
       - id: story-8.1
         title: "Plugin Interface + App.Use()"
@@ -153,9 +154,24 @@ epics:
         sprint: 19
         priority: P2
         notes: "pkg/plugin/storage/: FSStore (os pkg, works for local + JuiceFS POSIX mount), POST/GET/DELETE /upload, Prometheus metrics, zero external deps"
-      - { id: story-8.3, title: "axe-plugin-email (SendGrid/SMTP)",        status: in-progress, sprint: 21, priority: P2 }
-      - { id: story-8.4, title: "Multi-Tenancy Foundation",           status: planned, sprint: 22, priority: P2 }
-      - { id: story-8.5, title: "Plugin Registry CLI",                status: planned, sprint: 23, priority: P3 }
+      - id: story-8.3
+        title: "axe-plugin-email (SendGrid/SMTP)"
+        status: done
+        sprint: 21
+        priority: P2
+        notes: "pkg/plugin/email/: logSender (dev), sendgridSender (prod), smtpSender (fallback). 67.9% coverage."
+      - id: story-8.4
+        title: "Multi-Tenancy Middleware"
+        status: done
+        sprint: 25
+        priority: P2
+        notes: "pkg/plugin/tenant/: header/subdomain/JWT/auto source, Required mode, DefaultTenant, CacheKey, Router helper. 91.8% coverage."
+      - id: story-8.5
+        title: "Plugin Registry CLI"
+        status: done
+        sprint: 25
+        priority: P3
+        notes: "axe plugin list --installed/--maturity, axe plugin info <name> with import paths + config templates."
       - id: story-8.6
         title: "Storage Plugin Hardening (Auth + Security + Ops)"
         status: done
@@ -372,11 +388,7 @@ sprint_log:
       - "Story 9.8: tests/integration/setup_test.go + mysql_test.go — runMigrations() now embeds SQL inline instead of reading deleted files"
       - "Story 9.8: sqlc.yaml schema updated from './db/migrations' → './db/schema.sql'"
 
-  - sprint: 22
-    goal: "Multi-Tenancy Middleware (v1.0 scope: context + Redis namespace only)"
-    stories: [story-8.4]
-    status: planned
-    notes: "Reduced scope: no schema-per-tenant (deferred to v2.0)"
+  # (sprint-22 multi-tenancy was deferred → completed in sprint-25 as story-8.4)
 
   - sprint: 23
     goal: "BMAD audit fixes — code correctness & interface consistency"
@@ -435,98 +447,95 @@ sprint_log:
 epics_continued:
   - id: epic-9
     title: "DX Quality — Test Coverage & Generated Code Fidelity"
-    status: in-progress
+    status: done
+    completed_at: "2026-04-19"
     stories:
-      - id: story-9.1
-        title: "Unit tests: pkg/cache, pkg/ratelimit, pkg/outbox"
-        status: in-progress
-        sprint: 21
-        priority: P1
-        notes: "PRD success metric: test coverage ≥ 80% — 14 packages had zero tests; storage_test.go +11 new FUSE-error tests done (11 tests in story-9.4)"
-      - id: story-9.2
-        title: "Fix generated repo stubs → compile-ready Ent bodies"
-        status: done
-        sprint: 21
-        priority: P1
-        notes: "Rate limit scaffold TODO replaced with real redis_rate implementation; go-redis/redis_rate added to tmplGoMod; docs/05_plans.md axe new --with-storage mismatch fixed"
-      - id: story-9.3
-        title: "Storage: fsync + write-verify health check"
-        status: done
-        sprint: 21
-        priority: P0
-        notes: |
-          pkg/plugin/storage/fs_store.go: added f.Sync() before close in Upload() to flush FUSE buffers.
-          Added FSStore.HealthCheck() — write+read+delete sentinel cycle instead of os.Stat.
-          cmd/api/main.go: /ready now calls HealthCheck() via interface assertion instead of os.Stat(path).
-      - id: story-9.4
-        title: "Storage: wrap FUSE errors → AppError"
-        status: done
-        sprint: 21
-        priority: P1
-        notes: |
-          Added wrapFSError(op, err) in fs_store.go.
-          Handles ENOTCONN, EIO (mount unavailable), EROFS (read-only), ENOSPC (quota), EACCES/EPERM (permissions).
-          Applied to Delete, Open, fsync call. Prevents raw syscall messages leaking to HTTP clients.
-          11 new tests added to storage_test.go.
-      - id: story-9.5
-        title: "Create ADR-010 file"
-        status: done
-        sprint: 21
-        priority: P1
-        notes: "docs/adr/010-fsstore-posix-over-s3.md created. ADR README updated with full 001-010 index and pending-file note for 002,004-009."
-      - id: story-9.6
-        title: "JuiceFS Storage Integration Guide"
-        status: done
-        sprint: 21
-        priority: P1
-        notes: "docs/guides/juicefs-storage.md created — covers install, mount, env config, health-check, ops checklist, Docker deployment, Prometheus dashboards."
-      - id: story-9.7
-        title: "plugin.App — remove EntClient coupling to ent generated code"
-        status: done
-        sprint: 22
-        priority: P0
-        notes: |
-          pkg/plugin/plugin.go: removed EntClient *ent.Client from AppConfig and App.
-          Ent is host-project generated code; framework pkg/plugin must not import it.
-          cmd/api/main.go: EntClient removed from plugin.NewApp() call.
-          go build ./... + go test ./...: clean.
-          Root cause: axe new failed (go mod tidy error) because published v0.1.7 did not include ent/user, ent/predicate.
-      - id: story-9.8
-        title: "Scaffold hygiene — no default domain model in generated project"
-        status: done
-        sprint: 22
-        priority: P1
-        notes: |
-          001_init.sql scaffold template: removed hardcoded users table + trigger.
-          Now only contains trigger_set_updated_at() infrastructure function.
-          db/migrations/ deleted from axe repo (framework ≠ demo app).
-          db/schema.sql created as dedicated sqlc schema source.
-          sqlc.yaml: schema path updated from ./db/migrations → ./db/schema.sql.
-          tests/integration/setup_test.go + mysql_test.go: runMigrations() embeds SQL inline.
-          User table generated via: axe generate resource User --fields="..."
-
-      - id: story-9.9
-        title: "BMAD Audit — Bug fixes & interface consistency"
-        status: done
-        sprint: 23
-        priority: P0
-        notes: |
-          Full BMAD audit of sprint-22 codebase identified 5 bugs and 2 improvements.
-          BUG-1: DATA RACE in pkg/ws/hub_test.go — missing mu.Lock() on clientRef read.
-          BUG-2: /ready endpoint defined but not mounted in generated project — Kubernetes readiness probe 404.
-          BUG-3: outbox/poller.go hardcoded $1 (PG) placeholder — MySQL/SQLite fail; fixed with Driver-aware helpers.
-          BUG-4: generated JWTAuth template ignored Redis blocklist errors silently — synced to fail-open pattern.
-          IMPROVE-5: Store.HealthCheck() now takes context.Context (Storage interface, FSStore, S3, all callers).
-          IMPROVE-7: strings.Title deprecated — replaced with titleWords() helper in scaffold.go.
-          Result: go test -race ./... 100% PASS, 0 data races.
+      - { id: story-9.1, title: "Unit tests: pkg/cache, pkg/ratelimit, pkg/outbox", status: done, sprint: 21-26, priority: P1 }
+      - { id: story-9.2, title: "Fix generated repo stubs", status: done, sprint: 21, priority: P1 }
+      - { id: story-9.3, title: "Storage: fsync + write-verify health check", status: done, sprint: 21, priority: P0 }
+      - { id: story-9.4, title: "Storage: wrap FUSE errors → AppError", status: done, sprint: 21, priority: P1 }
+      - { id: story-9.5, title: "ADR-010 file", status: done, sprint: 21, priority: P1 }
+      - { id: story-9.6, title: "JuiceFS Integration Guide", status: done, sprint: 21, priority: P1 }
+      - { id: story-9.7, title: "plugin.App — remove EntClient coupling", status: done, sprint: 22, priority: P0 }
+      - { id: story-9.8, title: "Scaffold hygiene — no default domain model", status: done, sprint: 22, priority: P1 }
+      - { id: story-9.9, title: "BMAD Audit — Bug fixes & interface consistency", status: done, sprint: 23, priority: P0 }
+      - { id: story-9.10, title: "pkg/outbox test hardening", status: done, sprint: 24, priority: P1 }
+      - { id: story-9.11, title: "pkg/worker test hardening", status: done, sprint: 24, priority: P1 }
+      - { id: story-9.12, title: "pkg/jwtauth test hardening", status: done, sprint: 24, priority: P0 }
+      - { id: story-9.13, title: "internal/handler auth tests", status: done, sprint: 24, priority: P1 }
+      - { id: story-9.14, title: "pkg/txmanager test hardening", status: done, sprint: 24, priority: P0 }
+      - { id: story-9.15, title: "cmd/axe/generate tests", status: done, sprint: 24, priority: P2 }
+      - { id: story-9.16, title: "pkg/plugin/oauth2 test hardening", status: done, sprint: 25, priority: P1 }
+      - { id: story-9.17, title: "pkg/plugin/email test hardening", status: done, sprint: 25, priority: P1 }
 
   - id: epic-10
     title: "Communication Plugins"
-    status: planned
+    status: done
+    completed_at: "2026-04-18"
     stories:
       - id: story-10.1
         title: "axe-plugin-email (SendGrid/SMTP)"
-        status: planned
-        sprint: 22
+        status: done
+        sprint: 21
         priority: P2
-        notes: "Replaces story-8.3; pkg/plugin/email/ — EmailPlugin, Send(), SendGrid adapter + SMTP fallback, go:embed HTML templates, Asynq async send, MailHog dev mode"
+        notes: "pkg/plugin/email/: Config validation, logSender, sendgridSender, smtpSender. 67.9% coverage."
+
+  - id: epic-11
+    title: "Structural Testing — Interface Injection"
+    status: done
+    completed_at: "2026-04-19"
+    stories:
+      - id: story-11.1
+        title: "pkg/outbox — extract Enqueuer interface"
+        status: done
+        sprint: 26
+        priority: P0
+        notes: |
+          Extracted Enqueuer interface; *asynq.Client satisfies it.
+          New() accepts Enqueuer, NewWithRedis() for backward compat.
+          Refactored poll() to collect-then-process (fix SQLite lock contention).
+          Bug fix: SQLite NOW() → CURRENT_TIMESTAMP.
+          Bug fix: detached context for UPDATE (prevents duplicate delivery).
+          Coverage: 62.3% → 82.1%
+      - id: story-11.4
+        title: "config — exhaustive env var + validation tests"
+        status: done
+        sprint: 26
+        priority: P1
+        notes: "30 tests: all defaults, all validation branches, RedisAddr, TTL helpers, Stripe optional. Coverage: 57.1% → 85.7%"
+
+# ── Coverage Scorecard (v0.3.2) ──────────────────────────────────────────────
+coverage_scorecard:
+  production_grade:  # ≥80%
+    - { pkg: "pkg/apperror", coverage: 100.0 }
+    - { pkg: "pkg/plugin", coverage: 96.9 }
+    - { pkg: "pkg/plugin/events", coverage: 96.8 }
+    - { pkg: "pkg/plugin/tenant", coverage: 91.8 }
+    - { pkg: "pkg/jwtauth", coverage: 90.0 }
+    - { pkg: "pkg/plugin/search/typesense", coverage: 89.6 }
+    - { pkg: "pkg/ratelimit", coverage: 88.9 }
+    - { pkg: "pkg/txmanager", coverage: 88.9 }
+    - { pkg: "pkg/plugin/kafka", coverage: 88.0 }
+    - { pkg: "pkg/logger", coverage: 86.7 }
+    - { pkg: "pkg/plugin/admin", coverage: 86.3 }
+    - { pkg: "config", coverage: 85.7 }
+    - { pkg: "pkg/cache", coverage: 85.3 }
+    - { pkg: "internal/handler/middleware", coverage: 84.4 }
+    - { pkg: "pkg/plugin/storage/s3", coverage: 83.6 }
+    - { pkg: "pkg/outbox", coverage: 82.1 }
+  acceptable:  # 50-79%
+    - { pkg: "pkg/plugin/otel", coverage: 78.0 }
+    - { pkg: "pkg/plugin/ai/openai", coverage: 77.2 }
+    - { pkg: "pkg/plugin/sentry", coverage: 76.5 }
+    - { pkg: "pkg/plugin/obs", coverage: 69.0 }
+    - { pkg: "pkg/plugin/email", coverage: 67.9 }
+    - { pkg: "pkg/plugin/payment/stripe", coverage: 66.4 }
+    - { pkg: "internal/handler", coverage: 63.3 }
+    - { pkg: "internal/service", coverage: 61.6 }
+    - { pkg: "pkg/plugin/oauth2", coverage: 60.2 }
+    - { pkg: "pkg/worker", coverage: 54.5 }
+    - { pkg: "pkg/plugin/ratelimit", coverage: 54.3 }
+  needs_work:  # <50%
+    - { pkg: "pkg/ws", coverage: 49.2 }
+    - { pkg: "pkg/plugin/storage", coverage: 47.7 }
+    - { pkg: "cmd/axe/generate", coverage: 22.3 }
