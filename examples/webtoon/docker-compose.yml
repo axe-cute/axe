@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: webtoon_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: webtoon
+      POSTGRES_PASSWORD: webtoon
+      POSTGRES_DB: webtoon_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - webtoon_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webtoon -d webtoon_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: webtoon_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    platform: linux/amd64
+    container_name: webtoon_asynqmon
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  webtoon_postgres_data:

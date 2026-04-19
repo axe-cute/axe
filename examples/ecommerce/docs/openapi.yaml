@@ -1,0 +1,26 @@
+openapi: "3.0.3"
+info:
+  title: "ecommerce API"
+  version: "1.0.0"
+  description: "REST API for ecommerce"
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
