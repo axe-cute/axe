@@ -504,16 +504,17 @@ epics_continued:
         priority: P1
         notes: "30 tests: all defaults, all validation branches, RedisAddr, TTL helpers, Stripe optional. Coverage: 57.1% → 85.7%"
 
-# ── Coverage Scorecard (v0.3.2 — HONEST) ─────────────────────────────────────
-# Shows ALL 52 non-ent packages, not just tested ones.
+# ── Coverage Scorecard (v0.3.3 — Sprint 27+28) ──────────────────────────────
+# Shows ALL 52 non-ent packages. Updated after Sprint 28 coverage lift.
 coverage_scorecard:
   summary:
     total_packages: 52        # non-ent
-    packages_with_tests: 32   # have _test.go files
-    packages_zero_tests: 20   # NO test files at all
-    tested_coverage_pct: 30.8 # 16/52 packages ≥80%
+    packages_with_tests: 33   # have _test.go files (+1: cmd/api)
+    packages_zero_tests: 19   # NO test files at all (-1)
+    tested_coverage_pct: 32.7 # 17/52 packages ≥80%
+    todo_count: 0             # zero TODO/FIXME in production code
 
-  production_grade:  # ≥80% — 16 packages
+  production_grade:  # ≥80% — 17 packages (+1: storage promoted)
     - { pkg: "pkg/apperror", coverage: 100.0 }
     - { pkg: "pkg/plugin", coverage: 96.9 }
     - { pkg: "pkg/plugin/events", coverage: 96.8 }
@@ -525,14 +526,16 @@ coverage_scorecard:
     - { pkg: "pkg/plugin/kafka", coverage: 88.0 }
     - { pkg: "pkg/logger", coverage: 86.7 }
     - { pkg: "pkg/plugin/admin", coverage: 86.3 }
+    - { pkg: "pkg/plugin/storage", coverage: 86.0, notes: "Sprint 28: 47.7→86.0" }
     - { pkg: "config", coverage: 85.7 }
     - { pkg: "pkg/cache", coverage: 85.3 }
     - { pkg: "internal/handler/middleware", coverage: 84.4 }
     - { pkg: "pkg/plugin/storage/s3", coverage: 83.6 }
     - { pkg: "pkg/outbox", coverage: 82.1 }
 
-  acceptable:  # 50-79% — 11 packages
+  acceptable:  # 50-79% — 12 packages (+1: pkg/ws promoted from needs_work)
     - { pkg: "pkg/plugin/otel", coverage: 78.0 }
+    - { pkg: "pkg/ws", coverage: 77.8, notes: "Sprint 28: 49.2→77.8" }
     - { pkg: "pkg/plugin/ai/openai", coverage: 77.2 }
     - { pkg: "pkg/plugin/sentry", coverage: 76.5 }
     - { pkg: "pkg/plugin/obs", coverage: 69.0 }
@@ -544,14 +547,12 @@ coverage_scorecard:
     - { pkg: "pkg/worker", coverage: 54.5 }
     - { pkg: "pkg/plugin/ratelimit", coverage: 54.3 }
 
-  needs_work:  # <50% — 5 packages (have tests but coverage too low)
-    - { pkg: "pkg/ws", coverage: 49.2 }
-    - { pkg: "pkg/plugin/storage", coverage: 47.7 }
-    - { pkg: "cmd/axe/generate", coverage: 22.3 }
+  needs_work:  # <50% — 3 packages
+    - { pkg: "cmd/axe/generate", coverage: 34.4, notes: "Sprint 28: 22.3→34.4 (remaining = CLI integration)" }
+    - { pkg: "cmd/api", coverage: 0.0, notes: "Sprint 27: build smoke test only" }
     - { pkg: "tests/ws", coverage: 0.0, notes: "test-only package, no statements" }
 
-  zero_tests:  # 0% — 20 packages with NO test files
-    - cmd/api             # main binary entry point
+  zero_tests:  # 0% — 19 packages with NO test files
     - cmd/axe             # CLI root command
     - cmd/axe/migrate     # migration runner
     - cmd/axe/new         # project scaffolder (CI integration test only)
@@ -571,4 +572,5 @@ coverage_scorecard:
     - pkg/plugin/payment  # payment plugin registry
     - pkg/plugin/search   # search plugin registry
     - pkg/plugin/testing  # test helpers
+
 
