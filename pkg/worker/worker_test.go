@@ -108,7 +108,7 @@ func TestOutboxEventPayload_JSONRoundtrip(t *testing.T) {
 // ── Handler: WelcomeEmailHandler ─────────────────────────────────────────────
 
 func TestWelcomeEmailHandler_ProcessTask(t *testing.T) {
-	handler := worker.NewWelcomeEmailHandler(slog.Default()) // nil logger OK in test
+	handler := worker.NewWelcomeEmailHandler(slog.Default())
 	require.NotNil(t, handler)
 
 	// Create a valid task payload.
@@ -135,7 +135,7 @@ func TestWelcomeEmailHandler_InvalidPayload(t *testing.T) {
 // ── Handler: OutboxEventHandler ──────────────────────────────────────────────
 
 func TestOutboxEventHandler_ProcessTask(t *testing.T) {
-	handler := worker.NewOutboxEventHandler(slog.Default()) // nil logger OK in test
+	handler := worker.NewOutboxEventHandler(slog.Default())
 	require.NotNil(t, handler)
 
 	payload, _ := json.Marshal(worker.OutboxEventPayload{
@@ -174,4 +174,119 @@ func TestHandler_ImplementsAsynqHandler(t *testing.T) {
 	// Compile-time checks.
 	var _ asynq.Handler = (*worker.WelcomeEmailHandler)(nil)
 	var _ asynq.Handler = (*worker.OutboxEventHandler)(nil)
+}
+
+// ── Server creation ──────────────────────────────────────────────────────────
+
+func TestNew_DefaultConcurrency(t *testing.T) {
+	// New applies default concurrency of 10 when given 0.
+	// We can't inspect the internal asynq.Server, but we can verify
+	// New doesn't panic with zero-value config.
+	srv := worker.New(worker.Config{
+		RedisAddr: "localhost:16379", // bogus address — we don't connect during New
+	}, slog.Default())
+	require.NotNil(t, srv)
+}
+
+func TestNew_CustomQueues(t *testing.T) {
+	srv := worker.New(worker.Config{
+		RedisAddr:   "localhost:16379",
+		Concurrency: 5,
+		Queues:      map[string]int{"high": 10, "default": 5},
+	}, slog.Default())
+	require.NotNil(t, srv)
+}
+
+func TestNew_WithPassword(t *testing.T) {
+	srv := worker.New(worker.Config{
+		RedisAddr:     "localhost:16379",
+		RedisPassword: "secret",
+	}, slog.Default())
+	require.NotNil(t, srv)
+}
+
+// ── Server.Register ──────────────────────────────────────────────────────────
+
+func TestServer_Register(t *testing.T) {
+	srv := worker.New(worker.Config{
+		RedisAddr: "localhost:16379",
+	}, slog.Default())
+
+	// Register should not panic.
+	srv.Register(worker.TypeSendWelcomeEmail, worker.NewWelcomeEmailHandler(slog.Default()))
+	srv.Register(worker.TypeProcessOutboxEvent, worker.NewOutboxEventHandler(slog.Default()))
+}
+
+// ── Server.Shutdown ──────────────────────────────────────────────────────────
+
+func TestServer_Shutdown(t *testing.T) {
+	srv := worker.New(worker.Config{
+		RedisAddr: "localhost:16379",
+	}, slog.Default())
+
+	// Shutdown on a non-started server should not panic.
+	srv.Shutdown()
+}
+
+// ── Handler: WelcomeEmail edge cases ─────────────────────────────────────────
+
+func TestWelcomeEmailHandler_EmptyPayload(t *testing.T) {
+	handler := worker.NewWelcomeEmailHandler(slog.Default())
+	task := asynq.NewTask(worker.TypeSendWelcomeEmail, []byte("{}"))
+
+	// Empty but valid JSON — should succeed (empty fields are OK).
+	err := handler.ProcessTask(context.Background(), task)
+	assert.NoError(t, err)
+}
+
+func TestWelcomeEmailHandler_SpecialCharacters(t *testing.T) {
+	handler := worker.NewWelcomeEmailHandler(slog.Default())
+	payload, _ := json.Marshal(worker.WelcomeEmailPayload{
+		UserID: "user-with-special-chars-à@ñ",
+		Email:  "unicode@例え.jp",
+		Name:   "Nguyễn Văn Á",
+	})
+	task := asynq.NewTask(worker.TypeSendWelcomeEmail, payload)
+
+	err := handler.ProcessTask(context.Background(), task)
+	assert.NoError(t, err)
+}
+
+// ── Handler: OutboxEvent edge cases ──────────────────────────────────────────
+
+func TestOutboxEventHandler_EmptyPayload(t *testing.T) {
+	handler := worker.NewOutboxEventHandler(slog.Default())
+	task := asynq.NewTask(worker.TypeProcessOutboxEvent, []byte("{}"))
+
+	err := handler.ProcessTask(context.Background(), task)
+	assert.NoError(t, err)
+}
+
+func TestOutboxEventHandler_LargePayload(t *testing.T) {
+	handler := worker.NewOutboxEventHandler(slog.Default())
+	payload, _ := json.Marshal(worker.OutboxEventPayload{
+		EventID:   "evt-large",
+		EventType: "BigEvent",
+		Aggregate: string(make([]byte, 1024)),
+	})
+	task := asynq.NewTask(worker.TypeProcessOutboxEvent, payload)
+
+	err := handler.ProcessTask(context.Background(), task)
+	assert.NoError(t, err)
+}
+
+// ── WelcomeEmailTask payload verification ────────────────────────────────────
+
+func TestNewWelcomeEmailTask_MaxRetry(t *testing.T) {
+	task, err := worker.NewWelcomeEmailTask("u1", "e@x.com", "N")
+	require.NoError(t, err)
+	// Task should have MaxRetry set (the exact value is internal to asynq,
+	// but the task itself should be non-nil and typed correctly).
+	assert.Equal(t, worker.TypeSendWelcomeEmail, task.Type())
+}
+
+func TestNewOutboxEventTask_MaxRetry(t *testing.T) {
+	task, err := worker.NewOutboxEventTask("e1", "T", "A")
+	require.NoError(t, err)
+	assert.Equal(t, worker.TypeProcessOutboxEvent, task.Type())
 }

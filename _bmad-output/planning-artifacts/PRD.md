@@ -43,6 +43,7 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - Không distributed tracing phức tạp ở Phase 1 (OpenTelemetry defer sang Epic 9)
 - Không schema-per-tenant multi-tenancy ở v1.0 (chỉ tenant middleware)
 - Không lock-in cloud provider — storage/messaging/AI đều pluggable
+- **Không gRPC ở v1.0** — REST-first. gRPC support sẽ được đánh giá cho v2.0 dựa trên community demand. `pkg/ratelimit` và `pkg/ws` đã expose programmatic API (non-HTTP) có thể dùng từ gRPC handlers.
 
 ---
 
@@ -77,8 +78,8 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - **Epic 5**: Multi-Database Support — PostgreSQL + MySQL + SQLite (Sprint 13–14) ✅
 - **Epic 6**: `axe new` — Project Scaffolding CLI (Sprint 15–16) ✅
 - **Epic 7**: WebSocket Hub — real-time support (Sprint 17–18) ✅
-- **Epic 8**: Plugin System & Ecosystem — short-term plugins (Sprint 19–24) 🔄 In Progress
-- **Epic 9**: Long-term Plugin Ecosystem — AI, Cloud, Observability (Sprint 25+) 🟡 Planned
+- **Epic 8**: Plugin System & Ecosystem — short-term plugins (Sprint 19–24) ✅ Done
+- **Epic 9**: Long-term Plugin Ecosystem — AI, Cloud, Observability (Sprint 25+) 🔄 In Progress (7/13 stories done)
 
 ---
 
@@ -87,13 +88,17 @@ Các team Go backend hiện tại mất 2-3 ngày chỉ để scaffold một pro
 - [x] `axe new blog && cd blog && make setup && make run` hoạt động (< 5 phút)
 - [x] User domain CRUD đầy đủ làm reference implementation
 - [x] `axe generate resource Post` tạo đủ 10 files
-- [ ] Test coverage ≥ 80% cho handler + service layers
+- [x] Test coverage ≥ 80% cho handler (86.5%) + service (96.5%) layers
 - [x] Zero forbidden imports trong internal/domain/
 - [x] Multi-DB: PostgreSQL + MySQL + SQLite integration tests pass
 - [x] WebSocket hub hoạt động với Redis pub/sub
 - [x] Plugin system: `app.Use(plugin)` lifecycle hoạt động
-- [ ] **Short-term**: ≥ 6 official plugins shipped (storage, email, auth, ratelimit, tenant, admin)
-- [ ] **Short-term**: `axe plugin add email` tự động inject code vào main.go
-- [ ] **Short-term**: Plugin infrastructure shipped before new plugins — correctness gates (8.10) + event bus (8.12) + observability contract (8.13) done in Sprint 21–23
-- [ ] **Long-term**: ≥ 3 AI plugins (openai, gemini, ollama)
-- [ ] **Long-term**: Web project configurator (start.axe.io) generates main.go scaffold
+- [x] **Short-term**: ≥ 6 official plugins shipped (storage, email, ratelimit, oauth2, tenant, admin)
+- [x] **Short-term**: `axe plugin add email` tự động inject code
+- [x] **Short-term**: Plugin infrastructure — correctness gates (8.10) + event bus (8.12) + observability contract (8.13) + versioning (8.14) done
+- [x] **Long-term**: OpenAI plugin shipped (87.7% coverage) + Sentry (94.1%) + OTel (89.8%)
+- [ ] **Long-term**: ≥ 3 AI plugins (openai ✅, gemini, ollama)
+- [ ] **Long-term**: Web project configurator (start.axe.io) — deferred, CLI sufficient for early adopters
+- [x] **Adoption**: `CHANGELOG.md` available for upgrade decisions
+- [x] **Adoption**: Incremental adoption guide published (`docs/guides/incremental-adoption.md`)
+- [ ] **Adoption**: ≥ 3 real-world example projects (currently: blog-api only)

@@ -1010,10 +1010,10 @@ Monorepo layout:
 |---|---|---|---|
 | 1. Interface Contract | Compiler enforces `Name/Register/Shutdown` | `plugin.go` | ✅ Done |
 | 2. Duplicate Detection | `names` map check in `App.Use()` | `plugin.go:158` | ✅ Done |
-| 3. Dependency Declaration | `Dependent` interface + Kahn's cycle detection | `plugin.go` | ❌ Story 8.10 |
-| 4. Fail-fast Config | Validate in `New()`, not `Register()` | per-plugin | ⚠️ Convention → enforce |
-| 5. Typed Service Keys | `const ServiceKey` per plugin | per-plugin | ✅ Convention |
-| 6. Shared Resource Pool | Use `app.DB`/`app.Cache`, never create new connections | per-plugin | ⚠️ Convention → enforce |
+| 3. Dependency Declaration | `Dependent` interface + Kahn's cycle detection | `plugin.go` | ✅ Done (Story 8.10) |
+| 4. Fail-fast Config | Validate in `New()`, not `Register()` | per-plugin | ✅ Enforced — all plugins return `(*Plugin, error)` |
+| 5. Typed Service Keys | `const ServiceKey` per plugin | per-plugin | ✅ Enforced |
+| 6. Shared Resource Pool | Use `app.DB`/`app.Cache`, never create new connections | per-plugin | ✅ Enforced — all plugins use `app.Cache.Redis()` |
 
 ### Plugin Authoring Checklist (for code review)
 

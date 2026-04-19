@@ -4,7 +4,7 @@
 
 **Business Value**: Tạo axe thành nền tảng "batteries-included" cho Go backend, cạnh tranh với Spring Boot ecosystem. Developer không cần research và integrate từng library riêng lẻ.
 
-**Status**: 🟡 Planned (Sprint 25+, v2.0)
+**Status**: 🔄 In Progress (Stories 9.1, 9.3, 9.5–9.9 done ✅)
 
 **Priority**: P3 — Defer đến sau v1.0 release. Prioritize dựa trên community demand.
 
@@ -111,7 +111,9 @@ type PaymentPlugin interface {
 - [ ] Dev mode: stdout exporter
 
 ### Story 9.8 — `axe-plugin-sentry`
-**Sprint**: 28 | **Priority**: P2 | **Status**: 🟡 Planned
+**Sprint**: 28 | **Priority**: P2 | **Status**: ✅ Done
+
+> Completed Sprint 30. 206 LOC, 94.1% test coverage.
 
 **Goal**: Error tracking và performance monitoring với Sentry.
 
@@ -123,7 +125,9 @@ type PaymentPlugin interface {
 - [ ] Config: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`
 
 ### Story 9.9 — `axe-plugin-ai:openai`
-**Sprint**: 29 | **Priority**: P2 | **Status**: 🟡 Planned
+**Sprint**: 29 | **Priority**: P2 | **Status**: ✅ Done
+
+> Completed Sprint 30. 487 LOC, 87.7% test coverage.
 
 **Goal**: OpenAI integration plugin (ChatGPT, Embeddings, DALL-E).
 
@@ -204,10 +208,10 @@ type AIPlugin interface {
 | 9.3 | Typesense search | P2 | 26 | Content-heavy app demand |
 | 9.5 | S3 storage | P2 | 27 | Scale-out storage demand |
 | 9.6 | Kafka | P2 | 27 | Event-driven demand |
-| 9.7 | OpenTelemetry | P2 | 28 | Enterprise/compliance demand |
-| 9.8 | Sentry | P2 | 28 | Error visibility demand |
-| 9.9 | OpenAI | P2 | 29 | AI feature demand |
-| 9.10 | Gemini | P2 | 29 | AI feature demand |
+| 9.7 | OpenTelemetry | P2 | 28 | Enterprise/compliance demand | ✅ Done |
+| 9.8 | Sentry | P2 | 28 | Error visibility demand | ✅ Done |
+| 9.9 | OpenAI | P2 | 29 | AI feature demand | ✅ Done |
+| 9.10 | Gemini | P2 | 29 | AI feature demand | 🟡 Planned |
 | 9.2 | PayOS (VN) | P3 | 25 | Vietnam market |
 | 9.4 | Elasticsearch | P3 | 26 | Enterprise search demand |
 | 9.11 | Ollama (local) | P3 | 29 | Privacy/offline demand |

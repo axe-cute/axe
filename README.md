@@ -440,6 +440,17 @@ make docker-down  # Stop all
 
 ---
 
+## 📚 Documentation
+
+| Guide | Description |
+|---|---|
+| [Incremental Adoption](docs/guides/incremental-adoption.md) | Use axe packages in your **existing** Go project — no full migration needed |
+| [JuiceFS Storage](docs/guides/juicefs-storage.md) | Production storage with JuiceFS FUSE mount |
+| [Architecture Contract](docs/architecture_contract.md) | Layer rules, import boundaries, error taxonomy |
+| [CHANGELOG](CHANGELOG.md) | Version history, breaking changes, upgrade notes |
+
+---
+
 ## 🤝 Contributing
 
 ```bash
