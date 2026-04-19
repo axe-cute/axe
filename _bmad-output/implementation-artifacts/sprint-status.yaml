@@ -504,52 +504,52 @@ epics_continued:
         priority: P1
         notes: "30 tests: all defaults, all validation branches, RedisAddr, TTL helpers, Stripe optional. Coverage: 57.1% → 85.7%"
 
-# ── Coverage Scorecard (v0.3.4 — Sprint 29) ─────────────────────────────────
-# Shows ALL 52 non-ent packages. Updated after Sprint 29 coverage lift.
+# ── Coverage Scorecard (v0.3.5 — Sprint 30) ─────────────────────────────────
+# Shows ALL 52 non-ent packages. Updated after Sprint 30 coverage lift.
 coverage_scorecard:
   summary:
     total_packages: 52        # non-ent
     packages_with_tests: 33   # have _test.go files
     packages_zero_tests: 19   # NO test files at all
-    production_grade_pct: 42.3 # 22/52 packages ≥80%
+    production_grade_pct: 50.0 # 26/52 packages ≥80%
     todo_count: 0             # zero TODO/FIXME in production code
 
-  production_grade:  # ≥80% — 22 packages (+5 from Sprint 29)
+  production_grade:  # ≥80% — 26 packages (+4 from Sprint 30)
     - { pkg: "pkg/apperror", coverage: 100.0 }
-    - { pkg: "pkg/plugin/obs", coverage: 100.0, notes: "Sprint 29: 69.0→100" }
+    - { pkg: "pkg/plugin/obs", coverage: 100.0, notes: "S29: 69→100" }
     - { pkg: "pkg/plugin", coverage: 96.9 }
     - { pkg: "pkg/plugin/events", coverage: 96.8 }
-    - { pkg: "internal/service", coverage: 96.5, notes: "Sprint 29: 61.6→96.5" }
-    - { pkg: "pkg/plugin/email", coverage: 95.1, notes: "Sprint 29: 67.9→95.1" }
+    - { pkg: "internal/service", coverage: 96.5, notes: "S29: 61.6→96.5" }
+    - { pkg: "pkg/plugin/email", coverage: 95.1, notes: "S29: 67.9→95.1" }
+    - { pkg: "pkg/plugin/sentry", coverage: 94.1, notes: "S30: 76.5→94.1" }
     - { pkg: "pkg/plugin/tenant", coverage: 91.8 }
     - { pkg: "pkg/jwtauth", coverage: 90.0 }
+    - { pkg: "pkg/plugin/otel", coverage: 89.8, notes: "S30: 78.0→89.8" }
     - { pkg: "pkg/plugin/search/typesense", coverage: 89.6 }
     - { pkg: "pkg/ratelimit", coverage: 88.9 }
     - { pkg: "pkg/txmanager", coverage: 88.9 }
     - { pkg: "pkg/plugin/kafka", coverage: 88.0 }
+    - { pkg: "pkg/plugin/ai/openai", coverage: 87.7, notes: "S30: 77.2→87.7" }
     - { pkg: "pkg/logger", coverage: 86.7 }
-    - { pkg: "internal/handler", coverage: 86.5, notes: "Sprint 29: 63.3→86.5" }
+    - { pkg: "internal/handler", coverage: 86.5, notes: "S29: 63.3→86.5" }
     - { pkg: "pkg/plugin/admin", coverage: 86.3 }
-    - { pkg: "pkg/plugin/storage", coverage: 86.0, notes: "Sprint 28: 47.7→86.0" }
+    - { pkg: "pkg/plugin/storage", coverage: 86.0, notes: "S28: 47.7→86.0" }
     - { pkg: "config", coverage: 85.7 }
     - { pkg: "pkg/cache", coverage: 85.3 }
+    - { pkg: "pkg/plugin/payment/stripe", coverage: 85.0, notes: "S30: 66.4→85.0" }
     - { pkg: "internal/handler/middleware", coverage: 84.4 }
-    - { pkg: "pkg/plugin/oauth2", coverage: 83.9, notes: "Sprint 29: 60.2→83.9" }
+    - { pkg: "pkg/plugin/oauth2", coverage: 83.9, notes: "S29: 60.2→83.9" }
     - { pkg: "pkg/plugin/storage/s3", coverage: 83.6 }
     - { pkg: "pkg/outbox", coverage: 82.1 }
 
-  acceptable:  # 50-79% — 8 packages
-    - { pkg: "pkg/plugin/otel", coverage: 78.0 }
-    - { pkg: "pkg/ws", coverage: 77.8, notes: "Sprint 28: 49.2→77.8" }
-    - { pkg: "pkg/plugin/ai/openai", coverage: 77.2 }
-    - { pkg: "pkg/plugin/sentry", coverage: 76.5 }
-    - { pkg: "pkg/plugin/payment/stripe", coverage: 66.4 }
-    - { pkg: "pkg/worker", coverage: 54.5 }
-    - { pkg: "pkg/plugin/ratelimit", coverage: 54.3 }
+  acceptable:  # 50-79% — 4 packages
+    - { pkg: "pkg/ws", coverage: 77.8, notes: "S28: 49.2→77.8 (redis_adapter needs Redis)" }
+    - { pkg: "pkg/worker", coverage: 54.5, notes: "asynq needs Redis" }
+    - { pkg: "pkg/plugin/ratelimit", coverage: 54.3, notes: "Redis-backed limiter" }
 
   needs_work:  # <50% — 3 packages
-    - { pkg: "cmd/axe/generate", coverage: 34.4, notes: "Sprint 28: 22.3→34.4 (remaining = CLI integration)" }
-    - { pkg: "cmd/api", coverage: 0.0, notes: "Sprint 27: build smoke test only" }
+    - { pkg: "cmd/axe/generate", coverage: 34.4, notes: "S28: 22.3→34.4 (remaining = CLI integration)" }
+    - { pkg: "cmd/api", coverage: 0.0, notes: "S27: build smoke test only" }
     - { pkg: "tests/ws", coverage: 0.0, notes: "test-only package, no statements" }
 
   zero_tests:  # 0% — 19 packages with NO test files
@@ -572,6 +572,7 @@ coverage_scorecard:
     - pkg/plugin/payment  # payment plugin registry
     - pkg/plugin/search   # search plugin registry
     - pkg/plugin/testing  # test helpers
+
 
 
 
