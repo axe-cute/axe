@@ -26,8 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/db"
 	_ "modernc.org/sqlite" // register "sqlite" driver
+
+	"github.com/axe-cute/axe/pkg/db"
 )
 
 const (

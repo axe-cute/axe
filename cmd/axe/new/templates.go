@@ -7,7 +7,6 @@ import (
 	"text/template"
 )
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Root-level config files
 // ─────────────────────────────────────────────────────────────────────────────
@@ -762,7 +761,7 @@ func main() {
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "ok", "service": "` + data.Name + `"})
+	writeJSON(w, map[string]string{"status": "ok", "service": "`+data.Name+`"})
 }
 
 func readyHandler(sqlDB *sql.DB) http.HandlerFunc {
@@ -792,7 +791,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 `, imports, data.Name, cacheInit, workerInit, storageInit, sqlDriverName, storageRoute, workerStart, workerStop)
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Static templates (identical for all projects)
@@ -917,7 +915,6 @@ clean: ## Remove build artifacts
 	@echo "✅ Cleaned"
 `
 
-
 //go:embed tmpl/cmd_axe_main.go.tmpl
 var cmdAxeMainTmpl string
 
@@ -929,14 +926,22 @@ func tmplMainAxeGo(data TemplateData) string {
 	funcMap := template.FuncMap{
 		"lower": strings.ToLower,
 		"title": func(s string) string {
-			if s == "" { return s }
+			if s == "" {
+				return s
+			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
 		"snake": func(s string) string {
 			var b strings.Builder
 			for i, r := range s {
-				if r >= 'A' && r <= 'Z' && i > 0 { b.WriteByte('_') }
-				if r >= 'A' && r <= 'Z' { b.WriteByte(byte(r + 32)) } else { b.WriteRune(r) }
+				if r >= 'A' && r <= 'Z' && i > 0 {
+					b.WriteByte('_')
+				}
+				if r >= 'A' && r <= 'Z' {
+					b.WriteByte(byte(r + 32))
+				} else {
+					b.WriteRune(r)
+				}
 			}
 			return b.String()
 		},
@@ -952,7 +957,6 @@ func tmplMainAxeGo(data TemplateData) string {
 	}
 	return buf.String()
 }
-
 
 const tmplConfigGo = `// Package config loads application configuration from environment variables.
 package config
@@ -1616,7 +1620,7 @@ func (l *Limiter) middleware(rate int, window time.Duration, label string) func(
 				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
-				fmt.Fprintf(w, `+"`"+`{"code":"TOO_MANY_REQUESTS","message":"rate limit exceeded — retry after %ds"}`+"`"+`, retryAfter)
+				fmt.Fprintf(w, ` + "`" + `{"code":"TOO_MANY_REQUESTS","message":"rate limit exceeded — retry after %ds"}` + "`" + `, retryAfter)
 				return
 			}
 
@@ -2703,7 +2707,6 @@ func methodColor(method string) string {
 	}
 }
 `
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage plugin templates

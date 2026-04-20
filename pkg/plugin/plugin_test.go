@@ -58,7 +58,10 @@ func TestPluginRegistrationOrder(t *testing.T) {
 	app := newTestApp()
 
 	// Use a mutex-protected slice since wave-based startup runs goroutines.
-	var (mu sync.Mutex; order []string)
+	var (
+		mu    sync.Mutex
+		order []string
+	)
 	makePlugin := func(name string) Plugin {
 		return &orderPlugin{name: name, order: &order, mu: &mu}
 	}
@@ -441,4 +444,3 @@ func TestVersioned_NoImplementation_AlwaysPasses(t *testing.T) {
 	require.NoError(t, app.Start(context.Background()))
 	assert.True(t, p.registered)
 }
-

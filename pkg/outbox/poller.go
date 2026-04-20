@@ -3,9 +3,10 @@
 // and dispatches them as Asynq tasks.
 //
 // Architecture:
-//   DB write → insert to outbox_events (same TX)
-//   Poller   → read unprocessed → enqueue to Asynq → mark processed
-//   Worker   → consume from Asynq → call downstream (webhook, email, etc.)
+//
+//	DB write → insert to outbox_events (same TX)
+//	Poller   → read unprocessed → enqueue to Asynq → mark processed
+//	Worker   → consume from Asynq → call downstream (webhook, email, etc.)
 package outbox
 
 import (

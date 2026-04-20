@@ -56,11 +56,11 @@ type postResponse struct {
 
 func toPostResponse(e *domain.Post) *postResponse {
 	return &postResponse{
-		ID: e.ID.String(),
-		Title: e.Title,
-		Body: e.Body,
+		ID:        e.ID.String(),
+		Title:     e.Title,
+		Body:      e.Body,
 		Published: e.Published,
-		Views: e.Views,
+		Views:     e.Views,
 		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -73,10 +73,10 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreatePost(r.Context(), domain.CreatePostInput{
-		Title: req.Title,
-		Body: req.Body,
+		Title:     req.Title,
+		Body:      req.Body,
 		Published: req.Published,
-		Views: req.Views,
+		Views:     req.Views,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)

@@ -7,11 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/search"
 	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────
@@ -169,9 +170,9 @@ func TestSearch_DefaultsPageAndPerPage(t *testing.T) {
 		// No Q, Page, PerPage
 	})
 	require.NoError(t, err)
-	assert.Contains(t, capturedQuery, "q=%2A",       "empty Q defaults to *")
-	assert.Contains(t, capturedQuery, "page=1",       "default page is 1")
-	assert.Contains(t, capturedQuery, "per_page=20",  "default per_page is 20")
+	assert.Contains(t, capturedQuery, "q=%2A", "empty Q defaults to *")
+	assert.Contains(t, capturedQuery, "page=1", "default page is 1")
+	assert.Contains(t, capturedQuery, "per_page=20", "default per_page is 20")
 }
 
 func TestSearch_ServerError(t *testing.T) {
@@ -204,7 +205,6 @@ func mustNewPlugin(t *testing.T, baseURL string) *Plugin {
 	p.client.baseURL = baseURL
 	return p
 }
-
 
 // newMockTypesenseServer returns an httptest.Server that mimics Typesense responses.
 func newMockTypesenseServer(t *testing.T) *httptest.Server {

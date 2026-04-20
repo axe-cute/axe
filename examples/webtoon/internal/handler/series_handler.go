@@ -16,8 +16,8 @@ import (
 
 // SeriesHandler handles HTTP requests for the Series domain.
 type SeriesHandler struct {
-	svc domain.SeriesService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.SeriesService
+	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
 }
 
@@ -36,7 +36,6 @@ func (h *SeriesHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklis
 	return h
 }
 
-
 // Routes returns a Chi router with all series endpoints.
 // Register in main.go: r.Mount("/api/v1/serieses", seriesHandler.Routes())
 func (h *SeriesHandler) Routes() chi.Router {
@@ -53,38 +52,38 @@ func (h *SeriesHandler) Routes() chi.Router {
 
 // createSeriesRequest is the POST request body.
 type createSeriesRequest struct {
-	Title string `json:"title"`
+	Title       string `json:"title"`
 	Description string `json:"description"`
-	Genre string `json:"genre"`
-	Author string `json:"author"`
-	CoverUrl string `json:"cover_url"`
-	Status string `json:"status"`
+	Genre       string `json:"genre"`
+	Author      string `json:"author"`
+	CoverUrl    string `json:"cover_url"`
+	Status      string `json:"status"`
 }
 
 // seriesResponse is the API response shape.
 type seriesResponse struct {
-	ID        string `json:"id"`
-	Title string `json:"title"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
 	Description string `json:"description"`
-	Genre string `json:"genre"`
-	Author string `json:"author"`
-	CoverUrl string `json:"cover_url"`
-	Status string `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	Genre       string `json:"genre"`
+	Author      string `json:"author"`
+	CoverUrl    string `json:"cover_url"`
+	Status      string `json:"status"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 func toSeriesResponse(e *domain.Series) *seriesResponse {
 	return &seriesResponse{
-		ID: e.ID.String(),
-		Title: e.Title,
+		ID:          e.ID.String(),
+		Title:       e.Title,
 		Description: e.Description,
-		Genre: e.Genre,
-		Author: e.Author,
-		CoverUrl: e.CoverUrl,
-		Status: e.Status,
-		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Genre:       e.Genre,
+		Author:      e.Author,
+		CoverUrl:    e.CoverUrl,
+		Status:      e.Status,
+		CreatedAt:   e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -95,12 +94,12 @@ func (h *SeriesHandler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreateSeries(r.Context(), domain.CreateSeriesInput{
-		Title: req.Title,
+		Title:       req.Title,
 		Description: req.Description,
-		Genre: req.Genre,
-		Author: req.Author,
-		CoverUrl: req.CoverUrl,
-		Status: req.Status,
+		Genre:       req.Genre,
+		Author:      req.Author,
+		CoverUrl:    req.CoverUrl,
+		Status:      req.Status,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)

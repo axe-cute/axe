@@ -97,8 +97,8 @@ func TestListUsers_Pagination(t *testing.T) {
 	// Create 3 users
 	for i := range 3 {
 		resp := do(t, http.MethodPost, "/api/v1/users", map[string]any{
-			"email": fmt.Sprintf("pag_%d@example.com", i),
-			"name":  fmt.Sprintf("Pag User %d", i),
+			"email":    fmt.Sprintf("pag_%d@example.com", i),
+			"name":     fmt.Sprintf("Pag User %d", i),
 			"password": "password1", "role": "user",
 		}, tok)
 		resp.Body.Close()

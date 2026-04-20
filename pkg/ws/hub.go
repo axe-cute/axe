@@ -209,7 +209,6 @@ func (h *Hub) UpgradeAuthenticated(w http.ResponseWriter, r *http.Request, track
 	return c, nil
 }
 
-
 // Join adds client to the named room, creating the room if necessary.
 // It also subscribes the hub to the room's Redis channel (no-op for MemoryAdapter).
 func (h *Hub) Join(client *Client, roomID string) {

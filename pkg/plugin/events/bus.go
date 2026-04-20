@@ -234,4 +234,4 @@ func topicMatches(pattern, topic string) bool {
 type NoopBus struct{}
 
 func (NoopBus) Publish(_ context.Context, _ Event) error { return nil }
-func (NoopBus) Subscribe(_ string, _ Handler)             {}
+func (NoopBus) Subscribe(_ string, _ Handler)            {}

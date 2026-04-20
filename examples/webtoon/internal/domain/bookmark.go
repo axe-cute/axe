@@ -11,7 +11,7 @@ import (
 // Bookmark represents a user's bookmarked (favorited) series.
 type Bookmark struct {
 	ID        uuid.UUID
-	UserID    string    // from JWT claims
+	UserID    string // from JWT claims
 	SeriesID  uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time

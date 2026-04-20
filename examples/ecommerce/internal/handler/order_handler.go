@@ -16,8 +16,8 @@ import (
 
 // OrderHandler handles HTTP requests for the Order domain.
 type OrderHandler struct {
-	svc domain.OrderService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.OrderService
+	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
 }
 
@@ -36,7 +36,6 @@ func (h *OrderHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklist
 	return h
 }
 
-
 // Routes returns a Chi router with all order endpoints.
 // Register in main.go: r.Mount("/api/v1/orders", orderHandler.Routes())
 func (h *OrderHandler) Routes() chi.Router {
@@ -52,27 +51,27 @@ func (h *OrderHandler) Routes() chi.Router {
 	r.Delete("/{id}", h.DeleteOrder)
 
 	// Business flows
-	r.Post("/place", h.PlaceOrder)          // the hero endpoint
-	r.Put("/{id}/status", h.UpdateStatus)   // status machine
+	r.Post("/place", h.PlaceOrder)        // the hero endpoint
+	r.Put("/{id}/status", h.UpdateStatus) // status machine
 
 	return r
 }
 
 // createOrderRequest is the POST request body.
 type createOrderRequest struct {
-	Total float64 `json:"total"`
-	Status string `json:"status"`
+	Total  float64 `json:"total"`
+	Status string  `json:"status"`
 }
 
 // orderResponse is the API response shape.
 type orderResponse struct {
-	ID        string            `json:"id"`
-	UserID    string            `json:"user_id,omitempty"`
-	Total     float64           `json:"total"`
-	Status    string            `json:"status"`
+	ID        string             `json:"id"`
+	UserID    string             `json:"user_id,omitempty"`
+	Total     float64            `json:"total"`
+	Status    string             `json:"status"`
 	Items     []domain.OrderItem `json:"items,omitempty"`
-	CreatedAt string            `json:"created_at"`
-	UpdatedAt string            `json:"updated_at"`
+	CreatedAt string             `json:"created_at"`
+	UpdatedAt string             `json:"updated_at"`
 }
 
 func toOrderResponse(e *domain.Order) *orderResponse {
@@ -94,7 +93,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreateOrder(r.Context(), domain.CreateOrderInput{
-		Total: req.Total,
+		Total:  req.Total,
 		Status: req.Status,
 	})
 	if err != nil {

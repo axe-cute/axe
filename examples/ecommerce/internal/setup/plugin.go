@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/axe-cute/examples-ecommerce/config"
+
 	"github.com/axe-cute/axe/pkg/plugin"
 	// axe:wire:import
 )

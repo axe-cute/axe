@@ -50,15 +50,15 @@ type Message struct {
 
 // ChatRequest describes a chat completion request.
 type ChatRequest struct {
-	Messages    []Message `json:"messages"`
+	Messages []Message `json:"messages"`
 	// Model overrides the plugin-level default model for this request.
-	Model       string    `json:"model,omitempty"`
+	Model string `json:"model,omitempty"`
 	// MaxTokens limits the response length.
-	MaxTokens   int       `json:"max_tokens,omitempty"`
+	MaxTokens int `json:"max_tokens,omitempty"`
 	// Temperature controls randomness [0.0, 2.0]. Default: 1.0.
-	Temperature float64   `json:"temperature,omitempty"`
+	Temperature float64 `json:"temperature,omitempty"`
 	// Stream enables token-by-token streaming via ChatStream().
-	Stream      bool      `json:"stream,omitempty"`
+	Stream bool `json:"stream,omitempty"`
 }
 
 // ChatResponse is the complete response from a Chat call.
@@ -76,9 +76,9 @@ type ChatChunk struct {
 	// Delta is the incremental text for this chunk.
 	Delta string
 	// Done is true when this is the final chunk.
-	Done  bool
+	Done bool
 	// Err carries a streaming error (final chunk only).
-	Err   error
+	Err error
 }
 
 // TokenUsage reports token consumption for billing/monitoring.

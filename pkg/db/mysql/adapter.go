@@ -17,8 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/db"
 	_ "github.com/go-sql-driver/mysql" // register "mysql" driver
+
+	"github.com/axe-cute/axe/pkg/db"
 )
 
 const (

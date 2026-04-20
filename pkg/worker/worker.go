@@ -74,17 +74,17 @@ func NewOutboxEventTask(eventID, eventType, aggregate string) (*asynq.Task, erro
 
 // Server wraps an asynq.Server for background job processing.
 type Server struct {
-	srv  *asynq.Server
-	mux  *asynq.ServeMux
-	log  *slog.Logger
+	srv *asynq.Server
+	mux *asynq.ServeMux
+	log *slog.Logger
 }
 
 // Config holds worker server settings.
 type Config struct {
-	RedisAddr    string
+	RedisAddr     string
 	RedisPassword string
-	Concurrency  int
-	Queues       map[string]int // queue name → priority weight
+	Concurrency   int
+	Queues        map[string]int // queue name → priority weight
 }
 
 // New creates a new worker Server.

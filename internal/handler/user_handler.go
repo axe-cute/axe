@@ -62,10 +62,10 @@ type userResponse struct {
 }
 
 type listUsersResponse struct {
-	Data  []*userResponse `json:"data"`
-	Total int             `json:"total"`
-	Limit int             `json:"limit"`
-	Offset int            `json:"offset"`
+	Data   []*userResponse `json:"data"`
+	Total  int             `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
 }
 
 func toUserResponse(u *domain.User) *userResponse {

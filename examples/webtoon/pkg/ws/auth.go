@@ -34,7 +34,9 @@ type AuthOption func(*authOptions)
 // WithMaxConnsPerUser sets the maximum concurrent WebSocket connections per user.
 func WithMaxConnsPerUser(n int) AuthOption {
 	return func(o *authOptions) {
-		if n > 0 { o.maxConns = n }
+		if n > 0 {
+			o.maxConns = n
+		}
 	}
 }
 
@@ -50,29 +52,39 @@ func (t *UserConnTracker) Acquire(userID string, max int) bool {
 	counter := actual.(*int64)
 	for {
 		cur := atomic.LoadInt64(counter)
-		if cur >= int64(max) { return false }
-		if atomic.CompareAndSwapInt64(counter, cur, cur+1) { return true }
+		if cur >= int64(max) {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(counter, cur, cur+1) {
+			return true
+		}
 	}
 }
 
 // Release decrements the connection count for a user.
 func (t *UserConnTracker) Release(userID string) {
 	if v, ok := t.m.Load(userID); ok {
-		if atomic.AddInt64(v.(*int64), -1) < 0 { atomic.StoreInt64(v.(*int64), 0) }
+		if atomic.AddInt64(v.(*int64), -1) < 0 {
+			atomic.StoreInt64(v.(*int64), 0)
+		}
 	}
 }
 
 // Count returns the current connection count for a user.
 func (t *UserConnTracker) Count(userID string) int64 {
 	v, ok := t.m.Load(userID)
-	if !ok { return 0 }
+	if !ok {
+		return 0
+	}
 	return atomic.LoadInt64(v.(*int64))
 }
 
 // WSAuth is a middleware that authenticates WebSocket connections via JWT.
 func WSAuth(svc *jwtauth.Service, blocklist WSBlocklist, tracker *UserConnTracker, opts ...AuthOption) func(http.Handler) http.Handler {
 	options := &authOptions{maxConns: 5}
-	for _, o := range opts { o(options) }
+	for _, o := range opts {
+		o(options)
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log := logger.FromCtx(r.Context())
@@ -114,7 +126,9 @@ func WSAuth(svc *jwtauth.Service, blocklist WSBlocklist, tracker *UserConnTracke
 func extractWSToken(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); h != "" {
 		if parts := strings.SplitN(h, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-			if t := strings.TrimSpace(parts[1]); t != "" { return t }
+			if t := strings.TrimSpace(parts[1]); t != "" {
+				return t
+			}
 		}
 	}
 	return r.URL.Query().Get("token")

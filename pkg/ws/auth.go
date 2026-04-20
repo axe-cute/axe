@@ -207,5 +207,3 @@ func extractWSToken(r *http.Request) string {
 	}
 	return ""
 }
-
-

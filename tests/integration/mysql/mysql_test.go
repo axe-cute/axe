@@ -322,8 +322,11 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (id),
 			CONSTRAINT chk_users_role CHECK (role IN ('user', 'admin'))
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_active_created ON users (active, created_at DESC)`,
+		// MySQL 8.0 does NOT support CREATE INDEX IF NOT EXISTS.
+		// Use ALTER TABLE IGNORE duplicate-key or inline in CREATE TABLE.
+		// Since CREATE TABLE IF NOT EXISTS already ran, these are safe:
+		`ALTER TABLE users ADD UNIQUE INDEX idx_users_email (email)`,
+		`ALTER TABLE users ADD INDEX idx_users_active_created (active, created_at DESC)`,
 		// Outbox events
 		`CREATE TABLE IF NOT EXISTS outbox_events (
 			id           CHAR(36)    NOT NULL DEFAULT (UUID()),
@@ -335,7 +338,7 @@ func runMigrations(ctx context.Context, db *sql.DB) error {
 			retries      INT         NOT NULL DEFAULT 0,
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed ON outbox_events (created_at ASC)`,
+		`ALTER TABLE outbox_events ADD INDEX idx_outbox_unprocessed (created_at ASC)`,
 	}
 
 	for _, stmt := range stmts {

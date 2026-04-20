@@ -16,8 +16,8 @@ import (
 
 // ReviewHandler handles HTTP requests for the Review domain.
 type ReviewHandler struct {
-	svc domain.ReviewService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.ReviewService
+	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
 }
 
@@ -36,7 +36,6 @@ func (h *ReviewHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklis
 	return h
 }
 
-
 // Routes returns a Chi router with all review endpoints.
 // Register in main.go: r.Mount("/api/v1/reviews", reviewHandler.Routes())
 func (h *ReviewHandler) Routes() chi.Router {
@@ -53,24 +52,24 @@ func (h *ReviewHandler) Routes() chi.Router {
 
 // createReviewRequest is the POST request body.
 type createReviewRequest struct {
-	Body string `json:"body"`
-	Rating int64 `json:"rating"`
+	Body   string `json:"body"`
+	Rating int64  `json:"rating"`
 }
 
 // reviewResponse is the API response shape.
 type reviewResponse struct {
 	ID        string `json:"id"`
-	Body string `json:"body"`
-	Rating int64 `json:"rating"`
+	Body      string `json:"body"`
+	Rating    int64  `json:"rating"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
 
 func toReviewResponse(e *domain.Review) *reviewResponse {
 	return &reviewResponse{
-		ID: e.ID.String(),
-		Body: e.Body,
-		Rating: e.Rating,
+		ID:        e.ID.String(),
+		Body:      e.Body,
+		Rating:    e.Rating,
 		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -83,7 +82,7 @@ func (h *ReviewHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreateReview(r.Context(), domain.CreateReviewInput{
-		Body: req.Body,
+		Body:   req.Body,
 		Rating: req.Rating,
 	})
 	if err != nil {

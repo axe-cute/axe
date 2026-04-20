@@ -63,15 +63,15 @@ const defaultBaseURL = "https://api.openai.com"
 
 // Prometheus metrics.
 var (
-	chatTotal     = obs.NewCounterVec("ai_openai", "chat_total",
+	chatTotal = obs.NewCounterVec("ai_openai", "chat_total",
 		"Chat completion requests.", []string{"model", "status"})
-	embedTotal    = obs.NewCounterVec("ai_openai", "embed_total",
+	embedTotal = obs.NewCounterVec("ai_openai", "embed_total",
 		"Embedding requests.", []string{"status"})
-	imageTotal    = obs.NewCounterVec("ai_openai", "image_total",
+	imageTotal = obs.NewCounterVec("ai_openai", "image_total",
 		"Image generation requests.", []string{"status"})
-	chatLatency   = obs.NewHistogram("ai_openai", "chat_duration_seconds",
+	chatLatency = obs.NewHistogram("ai_openai", "chat_duration_seconds",
 		"Chat completion latency.")
-	tokenTotal    = obs.NewCounterVec("ai_openai", "tokens_total",
+	tokenTotal = obs.NewCounterVec("ai_openai", "tokens_total",
 		"Tokens consumed.", []string{"type"}) // type: prompt|completion
 )
 

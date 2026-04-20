@@ -472,4 +472,3 @@ func testCacheClient(t *testing.T, addr string) *cache.Client {
 	t.Cleanup(func() { c.Close() })
 	return c
 }
-

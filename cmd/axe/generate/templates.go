@@ -645,7 +645,6 @@ func (h *{{.Name}}WSHandler) Connect(w http.ResponseWriter, r *http.Request) {
 }
 `
 
-
 // ── pkg/ws package templates (scaffolded when --with-ws is used) ──────────────
 
 // wsPkgAdapterTmpl — pkg/ws/adapter.go

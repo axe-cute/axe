@@ -251,8 +251,6 @@ func adminToken(t *testing.T) string {
 	return pair.AccessToken
 }
 
-
-
 // mustParseUUID parses a UUID string, panics on error.
 func mustParseUUID(s string) [16]byte {
 	var id [16]byte

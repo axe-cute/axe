@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,25 +15,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/axe-cute/examples-ecommerce/config"
-	"github.com/axe-cute/examples-ecommerce/pkg/devroutes"
-	"github.com/axe-cute/examples-ecommerce/pkg/logger"
-	"github.com/axe-cute/examples-ecommerce/pkg/ws"
-	"github.com/axe-cute/examples-ecommerce/pkg/cache"
-	"github.com/axe-cute/examples-ecommerce/pkg/ratelimit"
-	"github.com/redis/go-redis/v9"
-	"github.com/axe-cute/examples-ecommerce/pkg/worker"
-	"github.com/axe-cute/examples-ecommerce/pkg/jwtauth"
-	"github.com/axe-cute/examples-ecommerce/pkg/metrics"
+	ent "github.com/axe-cute/examples-ecommerce/ent"
 	"github.com/axe-cute/examples-ecommerce/internal/handler"
 	"github.com/axe-cute/examples-ecommerce/internal/repository"
 	"github.com/axe-cute/examples-ecommerce/internal/service"
-	entsql "entgo.io/ent/dialect/sql"
-	ent "github.com/axe-cute/examples-ecommerce/ent"
+	"github.com/axe-cute/examples-ecommerce/pkg/cache"
+	"github.com/axe-cute/examples-ecommerce/pkg/devroutes"
+	"github.com/axe-cute/examples-ecommerce/pkg/jwtauth"
+	"github.com/axe-cute/examples-ecommerce/pkg/logger"
+	"github.com/axe-cute/examples-ecommerce/pkg/metrics"
+	"github.com/axe-cute/examples-ecommerce/pkg/ratelimit"
+	"github.com/axe-cute/examples-ecommerce/pkg/worker"
+	"github.com/axe-cute/examples-ecommerce/pkg/ws"
+	"github.com/redis/go-redis/v9"
+
 	// axe:wire:import
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers "pgx" driver for database/sql
-
 )
 
 func main() {
@@ -152,7 +152,6 @@ func main() {
 		// axe:wire:route
 	})
 
-
 	// ── WebSocket router (bare chi — NO response-wrapping middleware) ──────────
 	// Wrapping middleware (Logger, Compress, Recoverer) all break http.Hijacker.
 	// Only add non-wrapping middleware here (e.g. ws.WSAuth).
@@ -175,7 +174,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", cfg.ServerPort),
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 0,  // MUST be 0 to support WebSocket connections
+		WriteTimeout: 0, // MUST be 0 to support WebSocket connections
 		IdleTimeout:  120 * time.Second,
 	}
 

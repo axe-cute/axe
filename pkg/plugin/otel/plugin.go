@@ -37,8 +37,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/plugin"
-	"github.com/axe-cute/axe/pkg/plugin/obs"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,6 +47,9 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/axe-cute/axe/pkg/plugin"
+	"github.com/axe-cute/axe/pkg/plugin/obs"
 )
 
 // ServiceKey is the service locator key for the OTel [trace.Tracer].

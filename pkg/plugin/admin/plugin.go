@@ -35,9 +35,10 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/axe-cute/axe/pkg/plugin"
 )
 
 // ServiceKey is the typed service locator key for the Admin *Plugin.
@@ -92,7 +93,7 @@ type ConfigSchema struct {
 type ConfigField struct {
 	Key       string   `json:"key"`
 	Label     string   `json:"label"`
-	Type      string   `json:"type"`    // "text" | "select" | "toggle" | "number"
+	Type      string   `json:"type"` // "text" | "select" | "toggle" | "number"
 	Options   []string `json:"options,omitempty"`
 	Required  bool     `json:"required,omitempty"`
 	Sensitive bool     `json:"sensitive,omitempty"` // mask value in UI like a password
@@ -128,9 +129,9 @@ func (c *Config) defaults() {
 // ── pluginEntry holds runtime state per registered plugin ─────────────────────
 
 type pluginEntry struct {
-	Plugin       plugin.Plugin
-	Contribution *Contribution // nil if not a Contributor
-	NavVisible   bool
+	Plugin         plugin.Plugin
+	Contribution   *Contribution // nil if not a Contributor
+	NavVisible     bool
 	IsConfigurable bool
 }
 
@@ -210,10 +211,10 @@ func (p *Plugin) handleListPlugins(w http.ResponseWriter, _ *http.Request) {
 	defer p.mu.RUnlock()
 
 	type row struct {
-		ID             string       `json:"id"`
-		NavVisible     bool         `json:"nav_visible"`
-		HasNavPanel    bool         `json:"has_nav_panel"`
-		IsConfigurable bool         `json:"is_configurable"`
+		ID             string        `json:"id"`
+		NavVisible     bool          `json:"nav_visible"`
+		HasNavPanel    bool          `json:"has_nav_panel"`
+		IsConfigurable bool          `json:"is_configurable"`
 		Contribution   *Contribution `json:"contribution,omitempty"`
 	}
 	rows := make([]row, len(p.entries))

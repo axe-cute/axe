@@ -41,17 +41,17 @@ var ValidSeriesStatuses = map[string]bool{
 
 // ValidGenres lists all allowed genre values for the webtoon platform.
 var ValidGenres = map[string]bool{
-	"action":    true,
-	"romance":   true,
-	"comedy":    true,
-	"drama":     true,
-	"fantasy":   true,
-	"horror":    true,
-	"thriller":  true,
+	"action":        true,
+	"romance":       true,
+	"comedy":        true,
+	"drama":         true,
+	"fantasy":       true,
+	"horror":        true,
+	"thriller":      true,
 	"slice-of-life": true,
-	"sci-fi":    true,
-	"sports":    true,
-	"historical": true,
+	"sci-fi":        true,
+	"sports":        true,
+	"historical":    true,
 }
 
 // ValidateCreateSeries validates the inputs for series creation.

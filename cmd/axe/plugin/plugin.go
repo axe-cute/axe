@@ -231,7 +231,6 @@ func infoCmd() *cobra.Command {
 	}
 }
 
-
 func maturityLabel(m string) string {
 	switch m {
 	case "production":
@@ -437,7 +436,7 @@ func validatePlugin(dir, name string) []string {
 	// Check if New() returns error — look for ", error" or ", nil" near New.
 	if strings.Contains(src, "func New(") {
 		newIdx := strings.Index(src, "func New(")
-		snippet := src[newIdx : min(newIdx+200, len(src))]
+		snippet := src[newIdx:min(newIdx+200, len(src))]
 		if !strings.Contains(snippet, "error") {
 			issues = append(issues, "Layer 4: New() should return error for config validation (found no error return)")
 		}
@@ -751,7 +750,6 @@ func injectContentAfterMarker(filePath, marker, content, idempotencyKey string) 
 	result := src[:insertAt] + "\n" + content + src[insertAt:]
 	return os.WriteFile(filePath, []byte(result), 0o644)
 }
-
 
 func appendToFile(filePath, content, idempotencyKey string) error {
 	existing, err := os.ReadFile(filePath)

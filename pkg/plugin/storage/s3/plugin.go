@@ -54,9 +54,9 @@ const ServiceKey = storagePlugin.ServiceKey // "storage"
 
 // Prometheus metrics — backend label distinguishes s3 from local/juicefs.
 var (
-	uploadTotal   = obs.NewCounterVec("storage_s3", "uploads_total",
+	uploadTotal = obs.NewCounterVec("storage_s3", "uploads_total",
 		"S3 uploads.", []string{"status"})
-	deleteTotal   = obs.NewCounterVec("storage_s3", "deletes_total",
+	deleteTotal = obs.NewCounterVec("storage_s3", "deletes_total",
 		"S3 deletes.", []string{"status"})
 	uploadLatency = obs.NewHistogram("storage_s3", "upload_duration_seconds",
 		"S3 upload latency.")

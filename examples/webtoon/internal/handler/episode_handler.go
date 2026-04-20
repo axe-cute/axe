@@ -16,8 +16,8 @@ import (
 
 // EpisodeHandler handles HTTP requests for the Episode domain.
 type EpisodeHandler struct {
-	svc domain.EpisodeService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.EpisodeService
+	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
 }
 
@@ -36,7 +36,6 @@ func (h *EpisodeHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blockli
 	return h
 }
 
-
 // Routes returns a Chi router with all episode endpoints.
 // Register in main.go: r.Mount("/api/v1/episodes", episodeHandler.Routes())
 func (h *EpisodeHandler) Routes() chi.Router {
@@ -53,32 +52,32 @@ func (h *EpisodeHandler) Routes() chi.Router {
 
 // createEpisodeRequest is the POST request body.
 type createEpisodeRequest struct {
-	Title string `json:"title"`
-	EpisodeNumber int64 `json:"episode_number"`
-	ThumbnailUrl string `json:"thumbnail_url"`
-	Published bool `json:"published"`
+	Title         string `json:"title"`
+	EpisodeNumber int64  `json:"episode_number"`
+	ThumbnailUrl  string `json:"thumbnail_url"`
+	Published     bool   `json:"published"`
 }
 
 // episodeResponse is the API response shape.
 type episodeResponse struct {
-	ID        string `json:"id"`
-	Title string `json:"title"`
-	EpisodeNumber int64 `json:"episode_number"`
-	ThumbnailUrl string `json:"thumbnail_url"`
-	Published bool `json:"published"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	EpisodeNumber int64  `json:"episode_number"`
+	ThumbnailUrl  string `json:"thumbnail_url"`
+	Published     bool   `json:"published"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 func toEpisodeResponse(e *domain.Episode) *episodeResponse {
 	return &episodeResponse{
-		ID: e.ID.String(),
-		Title: e.Title,
+		ID:            e.ID.String(),
+		Title:         e.Title,
 		EpisodeNumber: e.EpisodeNumber,
-		ThumbnailUrl: e.ThumbnailUrl,
-		Published: e.Published,
-		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ThumbnailUrl:  e.ThumbnailUrl,
+		Published:     e.Published,
+		CreatedAt:     e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -89,10 +88,10 @@ func (h *EpisodeHandler) CreateEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreateEpisode(r.Context(), domain.CreateEpisodeInput{
-		Title: req.Title,
+		Title:         req.Title,
 		EpisodeNumber: req.EpisodeNumber,
-		ThumbnailUrl: req.ThumbnailUrl,
-		Published: req.Published,
+		ThumbnailUrl:  req.ThumbnailUrl,
+		Published:     req.Published,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)

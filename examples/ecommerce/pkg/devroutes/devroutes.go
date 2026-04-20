@@ -37,8 +37,12 @@ func Collect(routers ...chi.Router) []RouteInfo {
 	}
 	sort.Slice(routes, func(i, j int) bool {
 		ci, cj := categoryOrder(routes[i].Category), categoryOrder(routes[j].Category)
-		if ci != cj { return ci < cj }
-		if routes[i].Path == routes[j].Path { return methodOrder(routes[i].Method) < methodOrder(routes[j].Method) }
+		if ci != cj {
+			return ci < cj
+		}
+		if routes[i].Path == routes[j].Path {
+			return methodOrder(routes[i].Method) < methodOrder(routes[j].Method)
+		}
 		return routes[i].Path < routes[j].Path
 	})
 	return routes
@@ -78,11 +82,17 @@ func DebugRoutesHandler(isDev bool, routers ...chi.Router) http.HandlerFunc {
 
 func PrintRoutes(routers ...chi.Router) {
 	routes := Collect(routers...)
-	if len(routes) == 0 { return }
+	if len(routes) == 0 {
+		return
+	}
 	methodW, pathW := 6, 4
 	for _, ri := range routes {
-		if len(ri.Method) > methodW { methodW = len(ri.Method) }
-		if len(ri.Path) > pathW { pathW = len(ri.Path) }
+		if len(ri.Method) > methodW {
+			methodW = len(ri.Method)
+		}
+		if len(ri.Path) > pathW {
+			pathW = len(ri.Path)
+		}
 	}
 	fmt.Printf("\n   Registered routes:\n")
 	fmt.Printf("   %-*s  %s\n", methodW, "METHOD", "PATH")
@@ -111,29 +121,42 @@ func categorize(path string) string {
 
 func categoryOrder(cat string) int {
 	switch cat {
-	case "api": return 0
-	case "ws": return 1
-	default: return 2
+	case "api":
+		return 0
+	case "ws":
+		return 1
+	default:
+		return 2
 	}
 }
 
 func categoryLabel(cat string) string {
 	switch cat {
-	case "api": return "-- API -------------------------"
-	case "ws": return "-- WebSocket -------------------"
-	case "system": return "-- System ----------------------"
-	default: return ""
+	case "api":
+		return "-- API -------------------------"
+	case "ws":
+		return "-- WebSocket -------------------"
+	case "system":
+		return "-- System ----------------------"
+	default:
+		return ""
 	}
 }
 
 func methodOrder(m string) int {
 	switch m {
-	case "GET": return 0
-	case "POST": return 1
-	case "PUT": return 2
-	case "PATCH": return 3
-	case "DELETE": return 4
-	default: return 5
+	case "GET":
+		return 0
+	case "POST":
+		return 1
+	case "PUT":
+		return 2
+	case "PATCH":
+		return 3
+	case "DELETE":
+		return 4
+	default:
+		return 5
 	}
 }
 
@@ -170,19 +193,28 @@ func renderHTML(method, path string, routes []RouteInfo) string {
 
 func categoryHTMLLabel(cat string) string {
 	switch cat {
-	case "api": return "API"
-	case "ws": return "WebSocket"
-	case "system": return "System"
-	default: return ""
+	case "api":
+		return "API"
+	case "ws":
+		return "WebSocket"
+	case "system":
+		return "System"
+	default:
+		return ""
 	}
 }
 
 func methodColor(method string) string {
 	switch method {
-	case "GET": return "#22d3ee"
-	case "POST": return "#4ade80"
-	case "PUT", "PATCH": return "#facc15"
-	case "DELETE": return "#ef4444"
-	default: return "#a1a1aa"
+	case "GET":
+		return "#22d3ee"
+	case "POST":
+		return "#4ade80"
+	case "PUT", "PATCH":
+		return "#facc15"
+	case "DELETE":
+		return "#ef4444"
+	default:
+		return "#a1a1aa"
 	}
 }

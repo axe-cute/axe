@@ -10,8 +10,9 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/db"
 	_ "github.com/jackc/pgx/v5/stdlib" // register "pgx" driver
+
+	"github.com/axe-cute/axe/pkg/db"
 )
 
 const (

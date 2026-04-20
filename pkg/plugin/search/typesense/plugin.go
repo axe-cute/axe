@@ -49,11 +49,11 @@ const ServiceKey = "search:typesense"
 
 // Prometheus metrics.
 var (
-	indexedTotal  = obs.NewCounterVec("search_typesense", "indexed_total",
+	indexedTotal = obs.NewCounterVec("search_typesense", "indexed_total",
 		"Documents indexed.", []string{"collection"})
-	deletedTotal  = obs.NewCounterVec("search_typesense", "deleted_total",
+	deletedTotal = obs.NewCounterVec("search_typesense", "deleted_total",
 		"Documents deleted.", []string{"collection"})
-	searchTotal   = obs.NewCounterVec("search_typesense", "searches_total",
+	searchTotal = obs.NewCounterVec("search_typesense", "searches_total",
 		"Search queries executed.", []string{"collection"})
 	searchLatency = obs.NewHistogram("search_typesense", "search_duration_seconds",
 		"Typesense search query latency.")
@@ -241,7 +241,7 @@ func (p *Plugin) Search(ctx context.Context, q search.Query) (*search.Results, e
 		Found int `json:"found"`
 		Page  int `json:"page"`
 		Hits  []struct {
-			Document   map[string]any `json:"document"`
+			Document      map[string]any `json:"document"`
 			TextMatchInfo struct {
 				Score float64 `json:"best_field_score"`
 			} `json:"text_match_info"`

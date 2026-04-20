@@ -19,7 +19,9 @@ type RedisAdapter struct {
 // NewRedisAdapter creates a new Redis-backed adapter.
 func NewRedisAdapter(rdb *redis.Client, opts ...func(*RedisAdapter)) *RedisAdapter {
 	a := &RedisAdapter{rdb: rdb, prefix: "axe:ws:", log: slog.Default(), pubsubs: make(map[string]*redis.PubSub)}
-	for _, o := range opts { o(a) }
+	for _, o := range opts {
+		o(a)
+	}
 	return a
 }
 
@@ -47,7 +49,9 @@ func (a *RedisAdapter) Subscribe(ctx context.Context, channel string, handler fu
 	a.pubsubs[channel] = ps
 	go func() {
 		defer ps.Close() //nolint:errcheck
-		for msg := range ps.Channel() { handler([]byte(msg.Payload)) }
+		for msg := range ps.Channel() {
+			handler([]byte(msg.Payload))
+		}
 	}()
 	a.log.Info("ws/redis: subscribed", "channel", ch)
 	return nil

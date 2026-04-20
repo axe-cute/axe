@@ -49,7 +49,7 @@ const ServiceKey = "payment:stripe"
 
 // Prometheus metrics — obs enforces axe_{plugin}_{metric}_{unit} naming.
 var (
-	chargesTotal  = obs.NewCounterVec("payment_stripe", "charges_total",
+	chargesTotal = obs.NewCounterVec("payment_stripe", "charges_total",
 		"Stripe charges processed.", []string{"status"})
 	chargeDuration = obs.NewHistogram("payment_stripe", "charge_duration_seconds",
 		"Stripe Charge API latency.")
@@ -195,11 +195,11 @@ func (p *Plugin) Charge(ctx context.Context, req payment.ChargeRequest) (*paymen
 	chargesTotal.WithLabelValues("succeeded").Inc()
 
 	return &payment.ChargeResult{
-		ID:        result.ID,
-		Amount:    result.Amount,
-		Currency:  result.Currency,
-		Status:    result.Status,
-		CreatedAt: time.Unix(result.Created, 0),
+		ID:         result.ID,
+		Amount:     result.Amount,
+		Currency:   result.Currency,
+		Status:     result.Status,
+		CreatedAt:  time.Unix(result.Created, 0),
 		ReceiptURL: result.ReceiptURL,
 	}, nil
 }
@@ -216,7 +216,9 @@ func (p *Plugin) CreateCustomer(ctx context.Context, email, name string) (*payme
 		Email   string `json:"email"`
 		Name    string `json:"name"`
 		Created int64  `json:"created"`
-		Error   *struct{ Message string `json:"message"` } `json:"error,omitempty"`
+		Error   *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
 	}
 	if err := p.client.post(ctx, "/v1/customers", params, &result); err != nil {
 		return nil, fmt.Errorf("stripe: create customer: %w", err)
@@ -235,15 +237,17 @@ func (p *Plugin) CreateCustomer(ctx context.Context, email, name string) (*payme
 // Subscribe creates a recurring subscription for a customer.
 func (p *Plugin) Subscribe(ctx context.Context, customerID, planID string) (*payment.Subscription, error) {
 	params := url.Values{
-		"customer":             {customerID},
-		"items[0][price]":      {planID},
+		"customer":        {customerID},
+		"items[0][price]": {planID},
 	}
 
 	var result struct {
-		ID                string `json:"id"`
-		Status            string `json:"status"`
-		CurrentPeriodEnd  int64  `json:"current_period_end"`
-		Error             *struct{ Message string `json:"message"` } `json:"error,omitempty"`
+		ID               string `json:"id"`
+		Status           string `json:"status"`
+		CurrentPeriodEnd int64  `json:"current_period_end"`
+		Error            *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
 	}
 	if err := p.client.post(ctx, "/v1/subscriptions", params, &result); err != nil {
 		return nil, fmt.Errorf("stripe: subscribe: %w", err)
@@ -263,7 +267,9 @@ func (p *Plugin) Subscribe(ctx context.Context, customerID, planID string) (*pay
 // CancelSubscription cancels a subscription immediately.
 func (p *Plugin) CancelSubscription(ctx context.Context, subscriptionID string) error {
 	var result struct {
-		Error *struct{ Message string `json:"message"` } `json:"error,omitempty"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
 	}
 	if err := p.client.delete(ctx, "/v1/subscriptions/"+subscriptionID, &result); err != nil {
 		return fmt.Errorf("stripe: cancel subscription: %w", err)

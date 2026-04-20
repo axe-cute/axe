@@ -35,8 +35,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/axe-cute/axe/pkg/plugin"
 )
 
 // ServiceKey is the typed service locator key for the tenant [Middleware].

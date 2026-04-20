@@ -17,12 +17,16 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	ent "github.com/axe-cute/axe/ent"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/axe-cute/axe/config"
+	ent "github.com/axe-cute/axe/ent"
 	"github.com/axe-cute/axe/internal/handler"
+	"github.com/axe-cute/axe/internal/handler/hook"
 	"github.com/axe-cute/axe/internal/handler/middleware"
 	"github.com/axe-cute/axe/internal/repository"
 	"github.com/axe-cute/axe/internal/service"
+	"github.com/axe-cute/axe/internal/setup"
 	"github.com/axe-cute/axe/pkg/cache"
 	"github.com/axe-cute/axe/pkg/db"
 	_ "github.com/axe-cute/axe/pkg/db/mysql"    // register MySQL adapter
@@ -33,12 +37,9 @@ import (
 	"github.com/axe-cute/axe/pkg/outbox"
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/storage"
-	"github.com/axe-cute/axe/internal/handler/hook"
-	"github.com/axe-cute/axe/internal/setup"
 	"github.com/axe-cute/axe/pkg/ratelimit"
 	"github.com/axe-cute/axe/pkg/worker"
 	"github.com/axe-cute/axe/pkg/ws"
-	"github.com/redis/go-redis/v9"
 	// axe:wire:import
 )
 
@@ -168,7 +169,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	r.Use(metrics.Middleware)          // Prometheus instrumentation
+	r.Use(metrics.Middleware) // Prometheus instrumentation
 	r.Use(chimiddleware.Compress(5))
 
 	// System endpoints (no auth, no rate limit)
@@ -288,10 +289,10 @@ func main() {
 	go outboxPoller.Start(ctx)
 
 	log.Info("all services started",
-		"http",    fmt.Sprintf(":%d", cfg.ServerPort),
+		"http", fmt.Sprintf(":%d", cfg.ServerPort),
 		"metrics", fmt.Sprintf(":%d/metrics", cfg.ServerPort),
-		"worker",  "asynq",
-		"ws",      fmt.Sprintf(":%d/ws", cfg.ServerPort),
+		"worker", "asynq",
+		"ws", fmt.Sprintf(":%d/ws", cfg.ServerPort),
 	)
 
 	<-quit

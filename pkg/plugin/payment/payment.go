@@ -78,9 +78,9 @@ type Customer struct {
 
 // Subscription represents a recurring billing subscription.
 type Subscription struct {
-	ID         string
-	CustomerID string
-	PlanID     string
-	Status     string // "active", "past_due", "canceled"
+	ID               string
+	CustomerID       string
+	PlanID           string
+	Status           string // "active", "past_due", "canceled"
 	CurrentPeriodEnd time.Time
 }

@@ -16,8 +16,8 @@ import (
 
 // ProductHandler handles HTTP requests for the Product domain.
 type ProductHandler struct {
-	svc domain.ProductService
-	jwtSvc   *jwtauth.Service   // required: set via WithJWTAuth option
+	svc       domain.ProductService
+	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
 }
 
@@ -36,7 +36,6 @@ func (h *ProductHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blockli
 	return h
 }
 
-
 // Routes returns a Chi router with all product endpoints.
 // Register in main.go: r.Mount("/api/v1/products", productHandler.Routes())
 func (h *ProductHandler) Routes() chi.Router {
@@ -53,35 +52,35 @@ func (h *ProductHandler) Routes() chi.Router {
 
 // createProductRequest is the POST request body.
 type createProductRequest struct {
-	Name string `json:"name"`
-	Description string `json:"description"`
-	Price float64 `json:"price"`
-	Stock int64 `json:"stock"`
-	ImageUrl string `json:"image_url"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Stock       int64   `json:"stock"`
+	ImageUrl    string  `json:"image_url"`
 }
 
 // productResponse is the API response shape.
 type productResponse struct {
-	ID        string `json:"id"`
-	Name string `json:"name"`
-	Description string `json:"description"`
-	Price float64 `json:"price"`
-	Stock int64 `json:"stock"`
-	ImageUrl string `json:"image_url"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Stock       int64   `json:"stock"`
+	ImageUrl    string  `json:"image_url"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 func toProductResponse(e *domain.Product) *productResponse {
 	return &productResponse{
-		ID: e.ID.String(),
-		Name: e.Name,
+		ID:          e.ID.String(),
+		Name:        e.Name,
 		Description: e.Description,
-		Price: e.Price,
-		Stock: e.Stock,
-		ImageUrl: e.ImageUrl,
-		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Price:       e.Price,
+		Stock:       e.Stock,
+		ImageUrl:    e.ImageUrl,
+		CreatedAt:   e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -92,11 +91,11 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.CreateProduct(r.Context(), domain.CreateProductInput{
-		Name: req.Name,
+		Name:        req.Name,
 		Description: req.Description,
-		Price: req.Price,
-		Stock: req.Stock,
-		ImageUrl: req.ImageUrl,
+		Price:       req.Price,
+		Stock:       req.Stock,
+		ImageUrl:    req.ImageUrl,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)

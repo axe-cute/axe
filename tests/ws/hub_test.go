@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/ws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"nhooyr.io/websocket"
+
+	"github.com/axe-cute/axe/pkg/ws"
 )
 
 // dialHub dials the given test server and returns a *websocket.Conn.

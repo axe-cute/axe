@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────
@@ -132,8 +133,6 @@ func TestMiddleware_CapturesPanic(t *testing.T) {
 
 func boolPtr(v bool) *bool { return &v }
 
-
-
 // ── Mock Transport ────────────────────────────────────────────────────────
 
 type mockTransport struct {
@@ -144,6 +143,6 @@ func (m *mockTransport) Configure(options sentry.ClientOptions) {}
 func (m *mockTransport) SendEvent(event *sentry.Event) {
 	m.events = append(m.events, event)
 }
-func (m *mockTransport) Flush(timeout time.Duration) bool { return true }
+func (m *mockTransport) Flush(timeout time.Duration) bool        { return true }
 func (m *mockTransport) FlushWithContext(_ context.Context) bool { return true }
-func (m *mockTransport) Close()                            {}
+func (m *mockTransport) Close()                                  {}

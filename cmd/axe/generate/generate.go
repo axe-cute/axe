@@ -17,8 +17,8 @@ import (
 // Command returns the `axe generate` cobra command with sub-commands.
 func Command() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "generate",
-		Short: "Code generation commands",
+		Use:     "generate",
+		Short:   "Code generation commands",
 		Aliases: []string{"g"},
 	}
 	cmd.AddCommand(resourceCmd())
@@ -91,17 +91,17 @@ func buildField(name, typ string) (Field, error) {
 
 // ResourceData is passed to all templates.
 type ResourceData struct {
-	Name       string  // Title case, e.g. "Post"
-	NameLower  string  // lowercase, e.g. "post"
-	NamePlural string  // lowercase plural, e.g. "posts"
-	NameSnake  string  // snake_case, e.g. "blog_post"
+	Name       string // Title case, e.g. "Post"
+	NameLower  string // lowercase, e.g. "post"
+	NamePlural string // lowercase plural, e.g. "posts"
+	NameSnake  string // snake_case, e.g. "blog_post"
 	Fields     []Field
 	BelongsTo  string // optional, e.g. "User" → adds UserID field
 	Module     string // go module path
 	Date       string
-	WithAuth   bool   // --with-auth: wrap routes with JWTAuth middleware
-	AdminOnly  bool   // --admin-only: further restrict to admin role only
-	WithWS     bool   // --with-ws: add a WebSocket room endpoint
+	WithAuth   bool // --with-auth: wrap routes with JWTAuth middleware
+	AdminOnly  bool // --admin-only: further restrict to admin role only
+	WithWS     bool // --with-ws: add a WebSocket room endpoint
 }
 
 func newResourceData(name string, fields []Field, belongsTo string, withAuth, adminOnly, withWS bool) ResourceData {

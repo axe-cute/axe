@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/axe-cute/axe/internal/handler/middleware"
 	"github.com/axe-cute/axe/pkg/jwtauth"
 	"github.com/axe-cute/axe/pkg/plugin"
-	"github.com/go-chi/chi/v5"
 )
-
 
 // Plugin implements [plugin.Plugin] for file storage.
 type Plugin struct {
@@ -31,7 +31,6 @@ func New(cfg Config) (*Plugin, error) {
 	}
 	return &Plugin{cfg: cfg}, nil
 }
-
 
 // Name returns the plugin identifier.
 func (p *Plugin) Name() string { return "storage" }
@@ -139,4 +138,3 @@ func (p *Plugin) HealthCheck(ctx context.Context) plugin.HealthStatus {
 		Latency: time.Since(start),
 	}
 }
-

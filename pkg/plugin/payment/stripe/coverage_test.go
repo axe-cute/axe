@@ -7,10 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	"github.com/axe-cute/axe/pkg/plugin/payment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/pkg/plugin/payment"
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Subscribe ────────────────────────────────────────────────────────────────

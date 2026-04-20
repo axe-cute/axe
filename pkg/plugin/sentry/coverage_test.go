@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/stretchr/testify/require"
+
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Shutdown: DSN set (exercises flush path) ─────────────────────────────────

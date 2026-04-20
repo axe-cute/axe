@@ -5,10 +5,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
+
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 
 	"github.com/axe-cute/axe/pkg/plugin"
 )

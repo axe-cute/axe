@@ -6,9 +6,10 @@
 // runtime (or the next `make run`) without this suite.
 //
 // Why not unit tests?
-//   Unit tests can validate template string rendering, but they cannot verify
-//   that the generated Go code satisfies the compiler. Only running `go build`
-//   against the output catches real issues.
+//
+//	Unit tests can validate template string rendering, but they cannot verify
+//	that the generated Go code satisfies the compiler. Only running `go build`
+//	against the output catches real issues.
 //
 // How to run locally:
 //

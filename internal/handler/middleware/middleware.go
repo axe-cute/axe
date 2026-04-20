@@ -10,9 +10,10 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/axe-cute/axe/pkg/apperror"
 	"github.com/axe-cute/axe/pkg/logger"
-	"github.com/google/uuid"
 )
 
 // ── RequestID ──────────────────────────────────────────────────────────────────

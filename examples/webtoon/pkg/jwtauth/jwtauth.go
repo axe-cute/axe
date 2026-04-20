@@ -25,8 +25,12 @@ func (c *Claims) JTI() string { return c.RegisteredClaims.ID }
 
 // RemainingTTL returns how long until the token expires.
 func (c *Claims) RemainingTTL() time.Duration {
-	if c.ExpiresAt == nil { return 0 }
-	if ttl := time.Until(c.ExpiresAt.Time); ttl > 0 { return ttl }
+	if c.ExpiresAt == nil {
+		return 0
+	}
+	if ttl := time.Until(c.ExpiresAt.Time); ttl > 0 {
+		return ttl
+	}
 	return 0
 }
 
@@ -66,7 +70,9 @@ func (s *Service) GenerateTokenPair(userID uuid.UUID, role string) (*TokenPair, 
 		},
 	}
 	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(s.secret)
-	if err != nil { return nil, fmt.Errorf("jwtauth: sign access: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("jwtauth: sign access: %w", err)
+	}
 
 	refreshClaims := Claims{
 		UserID: userID.String(), Role: role,
@@ -76,7 +82,9 @@ func (s *Service) GenerateTokenPair(userID uuid.UUID, role string) (*TokenPair, 
 		},
 	}
 	refreshToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(s.secret)
-	if err != nil { return nil, fmt.Errorf("jwtauth: sign refresh: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("jwtauth: sign refresh: %w", err)
+	}
 
 	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(s.accessTTL.Seconds())}, nil
 }
@@ -90,11 +98,15 @@ func (s *Service) Validate(tokenStr string) (*Claims, error) {
 		return s.secret, nil
 	})
 	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) { return nil, ErrTokenExpired }
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
 		return nil, ErrTokenInvalid
 	}
 	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid { return nil, ErrTokenInvalid }
+	if !ok || !token.Valid {
+		return nil, ErrTokenInvalid
+	}
 	return claims, nil
 }
 

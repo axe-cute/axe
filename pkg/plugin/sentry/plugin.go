@@ -37,11 +37,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/plugin"
-	"github.com/axe-cute/axe/pkg/plugin/obs"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/axe-cute/axe/pkg/plugin"
+	"github.com/axe-cute/axe/pkg/plugin/obs"
 )
 
 // Config configures the Sentry plugin.
@@ -162,7 +163,7 @@ func (p *Plugin) Register(ctx context.Context, app *plugin.App) error {
 						Message:  fmt.Sprintf("HTTP 5xx returned to client: %s", r.URL.Path),
 						Level:    sentry.LevelError,
 					}, 10)
-					
+
 					// Capture message for 5xx. If the handler propagated an error via
 					// a context value or an app framework error, it could be captured here.
 					// For now, capture the 5xx HTTP event.
@@ -200,7 +201,7 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 		p.log.Warn("sentry shutdown flush timed out", "timeout", timeout)
 		return nil // Non-fatal
 	}
-	
+
 	p.log.Info("sentry plugin shutdown complete")
 	return nil
 }

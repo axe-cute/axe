@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/axe-cute/axe/pkg/plugin"
-	"github.com/axe-cute/axe/pkg/plugin/events"
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	storagePlugin "github.com/axe-cute/axe/pkg/plugin/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/pkg/plugin"
+	"github.com/axe-cute/axe/pkg/plugin/events"
+	storagePlugin "github.com/axe-cute/axe/pkg/plugin/storage"
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────

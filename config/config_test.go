@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axe-cute/axe/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/config"
 )
 
 // setEnv sets multiple env vars and returns a cleanup function.

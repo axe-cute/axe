@@ -48,7 +48,6 @@ type Store interface {
 	HealthCheck(ctx context.Context) error
 }
 
-
 // Result holds metadata about a stored file.
 type Result struct {
 	Key         string `json:"key"`

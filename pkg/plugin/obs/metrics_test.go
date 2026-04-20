@@ -4,9 +4,10 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/axe-cute/axe/pkg/plugin/obs"
 	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	"github.com/stretchr/testify/assert"
 )
 
 // ── metricName (tested via NewCounter/NewGauge etc.) ─────────────────────────

@@ -13,6 +13,6 @@ type Adapter interface {
 // MemoryAdapter is a no-op adapter for single-instance deployments.
 type MemoryAdapter struct{}
 
-func (MemoryAdapter) Publish(_ context.Context, _ string, _ []byte) error        { return nil }
+func (MemoryAdapter) Publish(_ context.Context, _ string, _ []byte) error         { return nil }
 func (MemoryAdapter) Subscribe(_ context.Context, _ string, _ func([]byte)) error { return nil }
-func (MemoryAdapter) Close() error                                                 { return nil }
+func (MemoryAdapter) Close() error                                                { return nil }

@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/axe-cute/axe/pkg/plugin"
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/pkg/plugin"
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Config validation tests (Layer 4) ─────────────────────────────────────────

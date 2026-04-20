@@ -69,7 +69,7 @@ func LoadFromFile(path string) (*Config, error) {
 }
 
 // IsProduction reports whether the current environment is production.
-func (c *Config) IsProduction() bool  { return c.Environment == "production" }
+func (c *Config) IsProduction() bool { return c.Environment == "production" }
 
 // IsDevelopment reports whether the current environment is development.
 func (c *Config) IsDevelopment() bool { return c.Environment == "development" }

@@ -7,6 +7,7 @@ import (
 	"github.com/axe-cute/axe/config"
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/storage"
+
 	// axe:wire:import
 	stripeplug "github.com/axe-cute/axe/pkg/plugin/payment/stripe"
 )

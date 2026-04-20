@@ -1,11 +1,13 @@
 // Package benchmarks compares axe (Chi v5) against Gin, Echo, and Fiber.
 //
 // Run:
-//   go test -bench=. -benchmem -count=5 -timeout=10m | tee results.txt
+//
+//	go test -bench=. -benchmem -count=5 -timeout=10m | tee results.txt
 //
 // Pretty:
-//   go install golang.org/x/perf/cmd/benchstat@latest
-//   benchstat results.txt
+//
+//	go install golang.org/x/perf/cmd/benchstat@latest
+//	benchstat results.txt
 package benchmarks
 
 import (
@@ -26,8 +28,8 @@ import (
 	echomw "github.com/labstack/echo/v4/middleware"
 
 	"github.com/gofiber/fiber/v2"
-	fibermw "github.com/gofiber/fiber/v2/middleware/recover"
 	fiberlog "github.com/gofiber/fiber/v2/middleware/logger"
+	fibermw "github.com/gofiber/fiber/v2/middleware/recover"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

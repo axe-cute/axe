@@ -15,8 +15,9 @@ package plugintest
 import (
 	"log/slog"
 
-	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/axe-cute/axe/pkg/plugin"
 )
 
 // NewMockApp returns a minimal plugin.App suitable for unit testing.

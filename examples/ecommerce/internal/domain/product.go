@@ -10,14 +10,14 @@ import (
 
 // Product is the Product domain entity.
 type Product struct {
-	ID uuid.UUID
-	Name string
+	ID          uuid.UUID
+	Name        string
 	Description string
-	Price float64
-	Stock int64
-	ImageUrl string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Price       float64
+	Stock       int64
+	ImageUrl    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // ProductRepository defines data access for Product.
@@ -42,18 +42,18 @@ type ProductService interface {
 
 // CreateProductInput holds fields required to create a Product.
 type CreateProductInput struct {
-	Name string
+	Name        string
 	Description string
-	Price float64
-	Stock int64
-	ImageUrl string
+	Price       float64
+	Stock       int64
+	ImageUrl    string
 }
 
 // UpdateProductInput holds optional fields for partial update.
 type UpdateProductInput struct {
-	Name *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Price *float64 `json:"price,omitempty"`
-	Stock *int64 `json:"stock,omitempty"`
-	ImageUrl *string `json:"image_url,omitempty"`
+	Name        *string  `json:"name,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	Price       *float64 `json:"price,omitempty"`
+	Stock       *int64   `json:"stock,omitempty"`
+	ImageUrl    *string  `json:"image_url,omitempty"`
 }

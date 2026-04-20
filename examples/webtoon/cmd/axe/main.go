@@ -917,7 +917,6 @@ func (h *{{.Name}}WSHandler) Connect(w http.ResponseWriter, r *http.Request) {
 }
 `
 
-
 // ── pkg/ws templates ──────────────────────────────────────────────────────────
 
 const wsPkgAdapterTmpl = `package ws
@@ -1434,9 +1433,9 @@ func migrateCmd() *cobra.Command {
 
 func migrateCreateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "create <name>",
+		Use:   "create <name>",
 		Short: "Create a new timestamped migration file",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := strings.ToLower(strings.ReplaceAll(args[0], " ", "_"))
 			ts := time.Now().Format("20060102150405")
@@ -1455,19 +1454,30 @@ func migrateCreateCmd() *cobra.Command {
 
 func migrateUpCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "up",
+		Use:   "up",
 		Short: "Apply all pending migrations",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			conn, err := openDB(ctx)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defer conn.Close(ctx)
-			if err := ensureMigrationsTable(ctx, conn); err != nil { return err }
+			if err := ensureMigrationsTable(ctx, conn); err != nil {
+				return err
+			}
 			files, err := pendingMigrations(ctx, conn)
-			if err != nil { return err }
-			if len(files) == 0 { fmt.Println("✅ No pending migrations."); return nil }
+			if err != nil {
+				return err
+			}
+			if len(files) == 0 {
+				fmt.Println("✅ No pending migrations.")
+				return nil
+			}
 			for _, f := range files {
-				if err := applyMigration(ctx, conn, f); err != nil { return err }
+				if err := applyMigration(ctx, conn, f); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -1476,20 +1486,31 @@ func migrateUpCmd() *cobra.Command {
 
 func migrateDownCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "down",
+		Use:   "down",
 		Short: "Remove the last applied migration record (does not reverse SQL)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			conn, err := openDB(ctx)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defer conn.Close(ctx)
-			if err := ensureMigrationsTable(ctx, conn); err != nil { return err }
+			if err := ensureMigrationsTable(ctx, conn); err != nil {
+				return err
+			}
 			var last string
 			err = conn.QueryRow(ctx, `SELECT filename FROM schema_migrations ORDER BY applied_at DESC LIMIT 1`).Scan(&last)
-			if err == pgx.ErrNoRows { fmt.Println("⚠️  No applied migrations to roll back."); return nil }
-			if err != nil { return fmt.Errorf("query last migration: %w", err) }
+			if err == pgx.ErrNoRows {
+				fmt.Println("⚠️  No applied migrations to roll back.")
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("query last migration: %w", err)
+			}
 			_, err = conn.Exec(ctx, `DELETE FROM schema_migrations WHERE filename = $1`, last)
-			if err != nil { return fmt.Errorf("remove migration record: %w", err) }
+			if err != nil {
+				return fmt.Errorf("remove migration record: %w", err)
+			}
 			fmt.Printf("↩️  Removed migration record: %s\n   SQL was NOT reversed. Write a new migration or run manually.\n", last)
 			return nil
 		},
@@ -1498,23 +1519,33 @@ func migrateDownCmd() *cobra.Command {
 
 func migrateStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "status",
+		Use:   "status",
 		Short: "Show migration status",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			conn, err := openDB(ctx)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defer conn.Close(ctx)
-			if err := ensureMigrationsTable(ctx, conn); err != nil { return err }
+			if err := ensureMigrationsTable(ctx, conn); err != nil {
+				return err
+			}
 			applied, err := appliedMigrations(ctx, conn)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			files, err := sqlFiles()
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			fmt.Printf("%-55s  %s\n", "MIGRATION", "STATUS")
 			fmt.Println(strings.Repeat("─", 70))
 			for _, f := range files {
 				status := "pending"
-				if _, ok := applied[f]; ok { status = "applied" }
+				if _, ok := applied[f]; ok {
+					status = "applied"
+				}
 				fmt.Printf("%-55s  %s\n", f, status)
 			}
 			return nil
@@ -1527,23 +1558,37 @@ func migrateStatusCmd() *cobra.Command {
 func openDB(ctx context.Context) (*pgx.Conn, error) {
 	loadDotEnv(".env")
 	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" { return nil, fmt.Errorf("DATABASE_URL is not set (check your .env file)") }
+	if dsn == "" {
+		return nil, fmt.Errorf("DATABASE_URL is not set (check your .env file)")
+	}
 	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil { return nil, fmt.Errorf("connect to database: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("connect to database: %w", err)
+	}
 	return conn, nil
 }
 
 func loadDotEnv(path string) {
 	data, err := os.ReadFile(path)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") { continue }
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
 		k, v, ok := strings.Cut(line, "=")
-		if !ok { continue }
+		if !ok {
+			continue
+		}
 		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		if idx := strings.Index(v, " #"); idx != -1 { v = strings.TrimSpace(v[:idx]) }
-		if os.Getenv(k) == "" { _ = os.Setenv(k, v) }
+		if idx := strings.Index(v, " #"); idx != -1 {
+			v = strings.TrimSpace(v[:idx])
+		}
+		if os.Getenv(k) == "" {
+			_ = os.Setenv(k, v)
+		}
 	}
 }
 
@@ -1554,18 +1599,24 @@ func ensureMigrationsTable(ctx context.Context, conn *pgx.Conn) error {
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
-	if err != nil { return fmt.Errorf("ensure schema_migrations table: %w", err) }
+	if err != nil {
+		return fmt.Errorf("ensure schema_migrations table: %w", err)
+	}
 	return nil
 }
 
 func appliedMigrations(ctx context.Context, conn *pgx.Conn) (map[string]struct{}, error) {
 	rows, err := conn.Query(ctx, `SELECT filename FROM schema_migrations`)
-	if err != nil { return nil, fmt.Errorf("query applied migrations: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("query applied migrations: %w", err)
+	}
 	defer rows.Close()
 	applied := make(map[string]struct{})
 	for rows.Next() {
 		var name string
-		if err := rows.Scan(&name); err != nil { return nil, err }
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
 		applied[name] = struct{}{}
 	}
 	return applied, rows.Err()
@@ -1573,10 +1624,14 @@ func appliedMigrations(ctx context.Context, conn *pgx.Conn) (map[string]struct{}
 
 func sqlFiles() ([]string, error) {
 	entries, err := os.ReadDir(migrationsDir)
-	if err != nil { return nil, fmt.Errorf("read %s: %w", migrationsDir, err) }
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", migrationsDir, err)
+	}
 	var files []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") { files = append(files, e.Name()) }
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			files = append(files, e.Name())
+		}
 	}
 	sort.Strings(files)
 	return files, nil
@@ -1584,12 +1639,18 @@ func sqlFiles() ([]string, error) {
 
 func pendingMigrations(ctx context.Context, conn *pgx.Conn) ([]string, error) {
 	applied, err := appliedMigrations(ctx, conn)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	all, err := sqlFiles()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	var pending []string
 	for _, f := range all {
-		if _, ok := applied[f]; !ok { pending = append(pending, f) }
+		if _, ok := applied[f]; !ok {
+			pending = append(pending, f)
+		}
 	}
 	return pending, nil
 }
@@ -1597,10 +1658,14 @@ func pendingMigrations(ctx context.Context, conn *pgx.Conn) ([]string, error) {
 func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error {
 	path := filepath.Join(migrationsDir, filename)
 	sql, err := os.ReadFile(path)
-	if err != nil { return fmt.Errorf("read migration %s: %w", filename, err) }
+	if err != nil {
+		return fmt.Errorf("read migration %s: %w", filename, err)
+	}
 	fmt.Printf("→ Applying %s ... ", filename)
 	tx, err := conn.Begin(ctx)
-	if err != nil { return fmt.Errorf("begin transaction: %w", err) }
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 	if _, err := tx.Exec(ctx, string(sql)); err != nil {
 		return fmt.Errorf("\n  ❌ migration %s failed: %w", filename, err)
@@ -1608,7 +1673,9 @@ func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error 
 	if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (filename) VALUES ($1)`, filename); err != nil {
 		return fmt.Errorf("record migration %s: %w", filename, err)
 	}
-	if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit migration %s: %w", filename, err) }
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit migration %s: %w", filename, err)
+	}
 	fmt.Println("✅")
 	return nil
 }

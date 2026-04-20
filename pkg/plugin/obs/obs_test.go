@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/obs"
 	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ── ValidateName ──────────────────────────────────────────────────────────────
@@ -48,9 +49,9 @@ func TestValidateName_TooFewSegments(t *testing.T) {
 // healthyPlugin is a test plugin that implements HealthChecker.
 type healthyPlugin struct{ name string }
 
-func (p *healthyPlugin) Name() string                  { return p.name }
+func (p *healthyPlugin) Name() string                                    { return p.name }
 func (p *healthyPlugin) Register(_ context.Context, _ *plugin.App) error { return nil }
-func (p *healthyPlugin) Shutdown(_ context.Context) error                 { return nil }
+func (p *healthyPlugin) Shutdown(_ context.Context) error                { return nil }
 func (p *healthyPlugin) HealthCheck(_ context.Context) plugin.HealthStatus {
 	return plugin.HealthStatus{Plugin: p.name, OK: true, Message: "ok"}
 }
@@ -58,9 +59,9 @@ func (p *healthyPlugin) HealthCheck(_ context.Context) plugin.HealthStatus {
 // unhealthyPlugin always returns a failing status.
 type unhealthyPlugin struct{ name string }
 
-func (p *unhealthyPlugin) Name() string                  { return p.name }
+func (p *unhealthyPlugin) Name() string                                    { return p.name }
 func (p *unhealthyPlugin) Register(_ context.Context, _ *plugin.App) error { return nil }
-func (p *unhealthyPlugin) Shutdown(_ context.Context) error                 { return nil }
+func (p *unhealthyPlugin) Shutdown(_ context.Context) error                { return nil }
 func (p *unhealthyPlugin) HealthCheck(_ context.Context) plugin.HealthStatus {
 	return plugin.HealthStatus{Plugin: p.name, OK: false, Message: "connection refused"}
 }
@@ -68,9 +69,9 @@ func (p *unhealthyPlugin) HealthCheck(_ context.Context) plugin.HealthStatus {
 // noHealthPlugin does NOT implement HealthChecker — should be skipped.
 type noHealthPlugin struct{ name string }
 
-func (p *noHealthPlugin) Name() string                  { return p.name }
+func (p *noHealthPlugin) Name() string                                    { return p.name }
 func (p *noHealthPlugin) Register(_ context.Context, _ *plugin.App) error { return nil }
-func (p *noHealthPlugin) Shutdown(_ context.Context) error                 { return nil }
+func (p *noHealthPlugin) Shutdown(_ context.Context) error                { return nil }
 
 func newTestApp(t *testing.T) *plugin.App {
 	t.Helper()

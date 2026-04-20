@@ -39,8 +39,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/axe-cute/axe/pkg/plugin"
 )
 
 // ServiceKey is the typed service locator key for [*Manager].
@@ -427,10 +428,10 @@ func (g *googleProvider) ExchangeCode(ctx context.Context, code, redirectURI str
 	defer resp.Body.Close()
 
 	var info struct {
-		ID        string `json:"id"`
-		Email     string `json:"email"`
-		Name      string `json:"name"`
-		Picture   string `json:"picture"`
+		ID      string `json:"id"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Picture string `json:"picture"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err

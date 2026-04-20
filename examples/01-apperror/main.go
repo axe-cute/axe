@@ -5,9 +5,10 @@
 //
 // Run: go run ./examples/01-apperror
 // Test: curl -i http://localhost:8080/users/42
-//       curl -i http://localhost:8080/users/99
-//       curl -i -X POST http://localhost:8080/users -d '{"email":"bad"}'
-//       curl -i http://localhost:8080/admin/secrets
+//
+//	curl -i http://localhost:8080/users/99
+//	curl -i -X POST http://localhost:8080/users -d '{"email":"bad"}'
+//	curl -i http://localhost:8080/admin/secrets
 package main
 
 import (

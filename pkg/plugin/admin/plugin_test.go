@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/axe-cute/axe/pkg/plugin"
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-)
 
+	"github.com/axe-cute/axe/pkg/plugin"
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
+)
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ type simplePlugin struct{ name string }
 
 func (p *simplePlugin) Name() string                                    { return p.name }
 func (p *simplePlugin) Register(_ context.Context, _ *plugin.App) error { return nil }
-func (p *simplePlugin) Shutdown(_ context.Context) error                 { return nil }
+func (p *simplePlugin) Shutdown(_ context.Context) error                { return nil }
 
 // contributoPlugin implements Contributor.
 type contributorPlugin struct {
@@ -327,4 +327,3 @@ func newChiCtx(key, value string) context.Context {
 	rctx.URLParams.Add(key, value)
 	return context.WithValue(context.Background(), chi.RouteCtxKey, rctx)
 }
-

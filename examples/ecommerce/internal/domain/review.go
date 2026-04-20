@@ -10,9 +10,9 @@ import (
 
 // Review is the Review domain entity.
 type Review struct {
-	ID uuid.UUID
-	Body string
-	Rating int64
+	ID        uuid.UUID
+	Body      string
+	Rating    int64
 	ProductID uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -40,13 +40,13 @@ type ReviewService interface {
 
 // CreateReviewInput holds fields required to create a Review.
 type CreateReviewInput struct {
-	Body string
-	Rating int64
+	Body      string
+	Rating    int64
 	ProductID uuid.UUID
 }
 
 // UpdateReviewInput holds optional fields for partial update.
 type UpdateReviewInput struct {
-	Body *string `json:"body,omitempty"`
-	Rating *int64 `json:"rating,omitempty"`
+	Body   *string `json:"body,omitempty"`
+	Rating *int64  `json:"rating,omitempty"`
 }

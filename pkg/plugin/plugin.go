@@ -44,11 +44,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/axe-cute/axe/config"
 	"github.com/axe-cute/axe/pkg/cache"
 	"github.com/axe-cute/axe/pkg/plugin/events"
 	"github.com/axe-cute/axe/pkg/ws"
-	"github.com/go-chi/chi/v5"
 )
 
 // AxeVersion is the current framework version.
@@ -112,12 +113,12 @@ type Versioned interface {
 
 // AppConfig is the configuration passed to [NewApp].
 type AppConfig struct {
-	Router    chi.Router
-	Config    *config.Config
-	Logger    *slog.Logger
-	DB        *sql.DB
-	Cache     *cache.Client // may be nil if Redis is unavailable
-	Hub       *ws.Hub       // may be nil if WebSocket is disabled
+	Router chi.Router
+	Config *config.Config
+	Logger *slog.Logger
+	DB     *sql.DB
+	Cache  *cache.Client // may be nil if Redis is unavailable
+	Hub    *ws.Hub       // may be nil if WebSocket is disabled
 }
 
 // App is the host that plugins receive during registration.
@@ -133,7 +134,7 @@ type App struct {
 	// Logger is the structured logger. Tag with plugin name:
 	//   p.log = app.Logger.With("plugin", p.Name())
 	Logger *slog.Logger
-	DB *sql.DB
+	DB     *sql.DB
 	// Cache is the Redis cache client (may be nil).
 	Cache *cache.Client
 	// Hub is the WebSocket hub (may be nil).
@@ -156,15 +157,15 @@ func NewApp(cfg AppConfig) *App {
 		log = slog.Default()
 	}
 	return &App{
-		Router:    cfg.Router,
-		Config:    cfg.Config,
-		Logger:    log,
-		DB:        cfg.DB,
-		Cache:     cfg.Cache,
-		Hub:       cfg.Hub,
-		Events:    events.NewInProcessBus(log),
-		names:     make(map[string]bool),
-		services:  make(map[string]any),
+		Router:   cfg.Router,
+		Config:   cfg.Config,
+		Logger:   log,
+		DB:       cfg.DB,
+		Cache:    cfg.Cache,
+		Hub:      cfg.Hub,
+		Events:   events.NewInProcessBus(log),
+		names:    make(map[string]bool),
+		services: make(map[string]any),
 	}
 }
 

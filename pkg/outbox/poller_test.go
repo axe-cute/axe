@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	_ "modernc.org/sqlite" // CGO-free SQLite driver
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite" // CGO-free SQLite driver
 
 	"github.com/axe-cute/axe/pkg/outbox"
 )

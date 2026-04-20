@@ -111,8 +111,8 @@ func (c *Client) Done() <-chan struct{} { return c.done }
 // It runs in its own goroutine and terminates when the connection closes.
 func (c *Client) readPump(ctx context.Context) {
 	defer func() {
-		close(c.done)          // signal handler goroutine to return
-		c.hub.unregister <- c  // remove from hub
+		close(c.done)         // signal handler goroutine to return
+		c.hub.unregister <- c // remove from hub
 	}()
 
 	for {

@@ -9,12 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/axe-cute/axe/pkg/plugin/events"
 	"github.com/axe-cute/axe/pkg/plugin/payment"
 	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────

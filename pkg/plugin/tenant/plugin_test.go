@@ -8,9 +8,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	plugintest "github.com/axe-cute/axe/pkg/plugin/testing"
 )
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────
@@ -56,9 +57,9 @@ func TestExtract_Subdomain(t *testing.T) {
 	}{
 		{"acme.example.com", "acme"},
 		{"foo.bar.example.com", "foo"},
-		{"example.com", ""},     // no subdomain
-		{"localhost", ""},        // no subdomain
-		{"localhost:8080", ""},   // no subdomain
+		{"example.com", ""},    // no subdomain
+		{"localhost", ""},      // no subdomain
+		{"localhost:8080", ""}, // no subdomain
 		{"acme.example.com:443", "acme"},
 	}
 	p, _ := New(Config{Source: SourceSubdomain})
@@ -309,4 +310,3 @@ func TestConfig_KeepsExplicitSource(t *testing.T) {
 	cfg.defaults()
 	assert.Equal(t, SourceHeader, cfg.Source)
 }
-

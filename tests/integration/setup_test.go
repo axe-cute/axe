@@ -248,8 +248,6 @@ func hexVal(c byte) byte {
 	return 255
 }
 
-
-
 // runMigrations creates the schema needed for the axe framework integration tests.
 // The schema is embedded here because the axe repo is a framework — it does not
 // ship domain migration files. User-facing projects own their own db/migrations/.

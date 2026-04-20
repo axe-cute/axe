@@ -10,11 +10,11 @@ import (
 
 // Post is the Post domain entity.
 type Post struct {
-	ID uuid.UUID
-	Title string
-	Body string
+	ID        uuid.UUID
+	Title     string
+	Body      string
 	Published bool
-	Views int64
+	Views     int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -41,16 +41,16 @@ type PostService interface {
 
 // CreatePostInput holds fields required to create a Post.
 type CreatePostInput struct {
-	Title string
-	Body string
+	Title     string
+	Body      string
 	Published bool
-	Views int64
+	Views     int64
 }
 
 // UpdatePostInput holds optional fields for partial update.
 type UpdatePostInput struct {
-	Title *string
-	Body *string
+	Title     *string
+	Body      *string
 	Published *bool
-	Views *int64
+	Views     *int64
 }

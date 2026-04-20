@@ -128,9 +128,9 @@ type ReadyStatus struct {
 
 // PluginStatus is the health status of one plugin in the /ready response.
 type PluginStatus struct {
-	OK      bool   `json:"ok"`
-	Message string `json:"message"`
-	LatencyMs int64 `json:"latency_ms,omitempty"`
+	OK        bool   `json:"ok"`
+	Message   string `json:"message"`
+	LatencyMs int64  `json:"latency_ms,omitempty"`
 }
 
 // Aggregator collects health checks from all registered [plugin.HealthChecker]

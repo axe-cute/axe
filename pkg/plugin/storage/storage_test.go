@@ -11,11 +11,12 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/axe-cute/axe/config"
-	"github.com/axe-cute/axe/pkg/plugin"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/config"
+	"github.com/axe-cute/axe/pkg/plugin"
 )
 
 func testConfig(t *testing.T) Config {

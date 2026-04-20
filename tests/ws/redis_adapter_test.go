@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axe-cute/axe/pkg/ws"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"nhooyr.io/websocket"
+
+	"github.com/axe-cute/axe/pkg/ws"
 )
 
 // startRedis starts an ephemeral Redis container and returns the address and a cleanup func.
