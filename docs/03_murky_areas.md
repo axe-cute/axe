@@ -6,9 +6,10 @@
 
 ---
 
-### 📌 Current Status (v0.1.5)
+### 📌 Current Status (v0.5.1)
 
-> **All 7 murky areas have been clarified and implemented:**
+> **All 7 murky areas have been clarified and implemented.**
+> **Security clarifications (v0.5.1)**: Redis URL parsing, plugin semver, outbox SQL safety resolved.
 >
 > | # | Murky Area | Decision |
 > |---|---|---|
@@ -19,6 +20,12 @@
 > | 5 | Testing strategy | ✅ Multi-DB matrix CI (Postgres + MySQL + SQLite) |
 > | 6 | Observability | ✅ `pkg/logger` (slog) + `pkg/metrics` (Prometheus) |
 > | 7 | Auth model | ✅ JWT + RBAC (`pkg/jwtauth` + `middleware/auth.go`) |
+>
+> **Security clarifications in v0.5.1:**
+> - ✅ Redis URL parsing → `url.Parse()` handles auth with special characters
+> - ✅ Plugin semver → fail-closed on malformed versions (reject, don't skip)
+> - ✅ Outbox SQL → parameterized queries only (no string interpolation)
+> - ✅ JWT auth model → `typ` + `aud` claims, 32-byte minimum secret, `New()` returns error
 
 ---
 

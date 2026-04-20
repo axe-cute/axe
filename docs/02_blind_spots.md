@@ -3,9 +3,10 @@
 >
 > 🇻🇳 [Phiên bản tiếng Việt](vi/02_blind_spots.md)
 
-### 📌 Current Status (v0.1.5)
+### 📌 Current Status (v0.5.1)
 
-> **All 7 blind spots have been resolved in the codebase:**
+> **All 7 blind spots have been resolved in the codebase.**
+> **Security hardening (v0.5.1)**: 23 additional findings remediated — see CHANGELOG.md.
 >
 > | # | Blind Spot | Resolution |
 > |---|---|---|
@@ -16,6 +17,13 @@
 > | 5 | Error taxonomy | ✅ `pkg/apperror/apperror.go` |
 > | 6 | Failure strategy | ✅ `/health` + `/ready` endpoints |
 > | 7 | Developer adoption | ✅ `axe generate resource` CLI |
+>
+> **Security blind spots resolved in v0.5.1:**
+> - ✅ JWT token confusion → `typ` claim (access/refresh) + `aud` claim
+> - ✅ WS fail-open on blocklist error → fail-closed (reject on error)
+> - ✅ CORS wildcard in production → rejected at config validation
+> - ✅ bcrypt 72-byte truncation → input length capped
+> - ✅ Rate limiter IP spoofing → `RemoteAddr` by default, XFF only from trusted proxies
 
 ---
 
