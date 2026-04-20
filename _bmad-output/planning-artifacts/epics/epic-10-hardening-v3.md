@@ -60,7 +60,7 @@
 
 ### Story 10.3 — Unify JWT Systems (Sprint 34) — P0
 
-**Status**: 🔵 In Progress (plan approved, implementation pending)
+**Status**: ✅ Done
 
 **Goal**: Refactor OAuth2 plugin to use `jwtauth.Service` instead of homebrew HMAC-SHA256 JWT.
 
