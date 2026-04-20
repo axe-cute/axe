@@ -19,11 +19,9 @@ type mockPlugin struct {
 	registerErr error
 	shutdownErr error
 
-	mu             sync.Mutex
-	registered     bool
-	shutdown       bool
-	registerOrder  int
-	shutdownOrder  int
+	mu         sync.Mutex
+	registered bool
+	shutdown   bool
 }
 
 func (m *mockPlugin) Name() string { return m.name }

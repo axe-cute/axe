@@ -48,8 +48,7 @@ type Hub struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	log          *slog.Logger
-	pingInterval interface{} // reserved for future HubOption
+	log *slog.Logger
 }
 
 // HubOption is a functional option for NewHub.

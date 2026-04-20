@@ -137,7 +137,6 @@ func scaffold(name, target string, opts Options) error {
 		return fmt.Errorf("write cmd/axe/main.go: %w", err)
 	}
 	fmt.Println("   ✓ cmd/axe/main.go")
-	generated++
 
 	// ── 3. Resolve dependencies (populate go.sum) ──────────────────────────────
 	goBin, err := exec.LookPath("go")

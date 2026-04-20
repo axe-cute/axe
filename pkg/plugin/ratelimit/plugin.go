@@ -136,14 +136,6 @@ type Limiter struct {
 	errors prometheus.Counter
 }
 
-func newLimiter(rdb interface{ rateClient() *redis_rate.Limiter }, cfg Config) *Limiter {
-	return &Limiter{
-		inner: rdb.rateClient(),
-		cfg:   cfg,
-		limit: redis_rate.PerSecond(cfg.RPS),
-	}
-}
-
 // Middleware returns a chi-compatible HTTP middleware.
 func (l *Limiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

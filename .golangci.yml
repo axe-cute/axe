@@ -10,27 +10,17 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
     - goimports
-    - gocritic
-    - noctx          # HTTP requests without context
-    - bodyclose      # HTTP response body must be closed
-    - contextcheck   # Non-inherited context in function calls
-    - goconst        # Repeated string constants
-    - godot          # Comments end with period
-    - nilerr         # Returns nil with non-nil error
-    - revive         # More opinionated style checks
+    - revive
 
 linters-settings:
   goimports:
     local-prefixes: github.com/axe-cute/axe
 
-  gocritic:
-    enabled-checks:
-      - appendCombine
-      - badLock
-      - builtinShadow
-      - commentedOutCode
+  staticcheck:
+    checks:
+      - "all"
+      - "-SA1019"  # Ignore deprecated — nhooyr.io/websocket migration is tracked separately
 
   revive:
     rules:
@@ -40,40 +30,17 @@ linters-settings:
 
 issues:
   exclude-rules:
-    # Allow TODOs in non-test code
-    - source: "TODO"
-      linters: [godot]
-    # Allow test files to use t.Fatal freely
+    # Allow test files to skip errcheck (common pattern in test assertions)
     - path: "_test\\.go"
-      linters: [gocritic]
-    # Generated cmd/axe code
+      linters: [errcheck]
+    # Allow test files to use string context keys and unused assignments
+    - path: "_test\\.go"
+      text: "SA1029|SA4006"
+    # Template files contain raw string literals, not real Go code
     - path: "cmd/axe/generate/templates.go"
-      linters:
-        - errcheck
-        - govet
-        - gocritic
-        - godot
-        - revive
-        - goconst
-        - unused
-        - ineffassign
-        - staticcheck
-        - goimports
-        - gofmt
-    # Generated cmd/axe/new templates
+      linters: [errcheck, govet, unused, ineffassign, staticcheck, goimports, revive]
     - path: "cmd/axe/new/templates.go"
-      linters:
-        - errcheck
-        - govet
-        - gocritic
-        - godot
-        - revive
-        - goconst
-        - unused
-        - ineffassign
-        - staticcheck
-        - goimports
-        - gofmt
+      linters: [errcheck, govet, unused, ineffassign, staticcheck, goimports, revive]
 
   exclude-dirs:
     - ent

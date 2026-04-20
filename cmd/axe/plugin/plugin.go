@@ -752,9 +752,6 @@ func injectContentAfterMarker(filePath, marker, content, idempotencyKey string) 
 	return os.WriteFile(filePath, []byte(result), 0o644)
 }
 
-func injectAfterMarker(filePath, marker, content string) error {
-	return injectContentAfterMarker(filePath, marker, content, "")
-}
 
 func appendToFile(filePath, content, idempotencyKey string) error {
 	existing, err := os.ReadFile(filePath)
