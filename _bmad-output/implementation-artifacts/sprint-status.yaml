@@ -1,10 +1,10 @@
 project: axe
 module: github.com/axe-cute/axe
-version: v1.0.0-rc.1
+version: v0.5.1
 phase: 2
 
-current_sprint: 33
-active_story: null  # Sprint 33 in progress — CI fix + BMAD sync
+current_sprint: 35
+active_story: null  # Sprint 35 complete — Epic 10 fully resolved
 
 epics:
   - id: epic-1
@@ -491,6 +491,32 @@ sprint_log:
       - "BMAD: project-context Go version 1.22→1.25, sprint 21→33"
       - "BMAD: PRD example projects metric → done"
       - "BMAD: coverage scorecard merged Sprint 31+32 data"
+
+  - sprint: 34
+    goal: "Audit v3 Hardening — 18 P0/P1/P2 issues"
+    stories: [story-10.1, story-10.2, story-10.4, story-10.5, story-10.6]
+    status: done
+    completed_at: "2026-04-20"
+    results:
+      - "Story 10.1: Scaffold critical fixes (readyHandler, Go 1.25.0, slog, distroless)"
+      - "Story 10.2: 6 plugins MinAxeVersion v1.0.0 → v0.5.0"
+      - "Story 10.4: Security hardening (IP spoofing, admin auth, cookie Secure, fail-mode)"
+      - "Story 10.5: Event bus Publish() returns errors, pagination cap 100"
+      - "Story 10.6: All P2 DX fixes (Views DTO, worker cleanup, JWT placeholder, DB passwords, semaphore, IDOR docs, pkg→internal/infra)"
+      - "go build ✅ | go test ./... ✅ (32 packages, 0 failures)"
+
+  - sprint: 35
+    goal: "OAuth2 JWT Unification — single token system"
+    stories: [story-10.3]
+    status: done
+    completed_at: "2026-04-20"
+    results:
+      - "Story 10.3: BREAKING — OAuth2 plugin uses jwtauth.Service instead of homebrew HMAC"
+      - "Deleted 27 lines of manual JWT construction (issueJWT)"
+      - "Added Identity type — OnSuccess callback now returns {UserID, Role, RedirectURL}"
+      - "Config.JWTSecret/JWTExpiry removed; *jwtauth.Service added to plugin.AppConfig"
+      - "All OAuth2 tokens now have JTI, uid, role — compatible with JWTAuth middleware"
+      - "go build ✅ | go test ./... ✅ (32 packages, 0 failures)"
 
 
 epics_continued:
