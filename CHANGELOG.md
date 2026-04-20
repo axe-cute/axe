@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scaffold Dockerfile switched from `debian:bookworm-slim` (~100MB) to `gcr.io/distroless/static-debian12` (~10MB)
 - Scaffold JWT_SECRET placeholder shortened to fail validation if not changed
 - Scaffold Docker Compose DB passwords no longer identical to username
+- Scaffold output uses `internal/infra/` instead of `pkg/` for generated app packages
+- Worker package: removed domain-specific `WelcomeEmailHandler` (now scaffold-only)
+
+### Added
+- IDOR protection guide (`docs/guides/idor-protection.md`)
 
 ---
 
