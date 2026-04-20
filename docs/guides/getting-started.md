@@ -28,7 +28,7 @@ axe --help
 ## 2. Create a New Project
 
 ```bash
-axe new my-api --db=postgres --module=github.com/myorg/my-api --yes
+axe new my-api --db=postgres --yes
 cd my-api
 ```
 

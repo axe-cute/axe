@@ -24,7 +24,7 @@ Zero boilerplate, zero magic, full control.
 go install github.com/axe-cute/axe/cmd/axe@v0.5.0
 
 # Create a project
-axe new my-api --db=postgres --module=github.com/myorg/my-api --yes
+axe new my-api --db=postgres --yes
 
 # Generate a resource
 cd my-api
