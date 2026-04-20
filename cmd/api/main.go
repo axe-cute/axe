@@ -121,7 +121,6 @@ func main() {
 			"low":                  1,
 		},
 	}, log)
-	workerSrv.Register(worker.TypeSendWelcomeEmail, worker.NewWelcomeEmailHandler(log))
 	workerSrv.Register(worker.TypeProcessOutboxEvent, worker.NewOutboxEventHandler(log))
 
 	// ── Outbox Poller ─────────────────────────────────────────────────────────

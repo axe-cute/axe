@@ -19,21 +19,12 @@ import (
 // ── Task type constants ───────────────────────────────────────────────────────
 
 const (
-	// TypeSendWelcomeEmail is triggered when a new user registers.
-	TypeSendWelcomeEmail = "email:welcome"
-
 	// TypeProcessOutboxEvent processes a pending outbox_events row.
+	// This is an infrastructure concern — belongs in the framework.
 	TypeProcessOutboxEvent = "outbox:process"
 )
 
 // ── Task payload types ────────────────────────────────────────────────────────
-
-// WelcomeEmailPayload holds data for the welcome email task.
-type WelcomeEmailPayload struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Name   string `json:"name"`
-}
 
 // OutboxEventPayload holds data for the outbox processor task.
 type OutboxEventPayload struct {
@@ -43,19 +34,6 @@ type OutboxEventPayload struct {
 }
 
 // ── Task factories ────────────────────────────────────────────────────────────
-
-// NewWelcomeEmailTask creates a new welcome email task.
-func NewWelcomeEmailTask(userID, email, name string) (*asynq.Task, error) {
-	payload, err := json.Marshal(WelcomeEmailPayload{
-		UserID: userID,
-		Email:  email,
-		Name:   name,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal WelcomeEmailPayload: %w", err)
-	}
-	return asynq.NewTask(TypeSendWelcomeEmail, payload, asynq.MaxRetry(3)), nil
-}
 
 // NewOutboxEventTask creates a task to process an outbox event.
 func NewOutboxEventTask(eventID, eventType, aggregate string) (*asynq.Task, error) {
@@ -141,35 +119,6 @@ func (s *Server) Shutdown() {
 }
 
 // ── Handler implementations ───────────────────────────────────────────────────
-
-// WelcomeEmailHandler handles the TypeSendWelcomeEmail task.
-type WelcomeEmailHandler struct {
-	log *slog.Logger
-}
-
-// NewWelcomeEmailHandler creates a new WelcomeEmailHandler.
-func NewWelcomeEmailHandler(log *slog.Logger) *WelcomeEmailHandler {
-	return &WelcomeEmailHandler{log: log}
-}
-
-// ProcessTask implements asynq.Handler.
-func (h *WelcomeEmailHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
-	var p WelcomeEmailPayload
-	if err := json.Unmarshal(t.Payload(), &p); err != nil {
-		return fmt.Errorf("unmarshal WelcomeEmailPayload: %w", err)
-	}
-
-	// Framework reference: logs the email send. Host applications should inject
-	// a real email.Sender via the email plugin (pkg/plugin/email).
-	h.log.Info("sending welcome email",
-		"user_id", p.UserID,
-		"email", p.Email,
-		"name", p.Name,
-	)
-
-	// Simulate email send
-	return nil
-}
 
 // OutboxEventHandler processes outbox_events table rows.
 type OutboxEventHandler struct {
