@@ -60,18 +60,18 @@
 
 ### Story 10.3 — Unify JWT Systems (Sprint 34) — P0
 
-**Status**: 🟡 Planned (needs careful design for OAuth2 user identity mapping)
+**Status**: 🔵 In Progress (plan approved, implementation pending)
 
 **Goal**: Refactor OAuth2 plugin to use `jwtauth.Service` instead of homebrew HMAC-SHA256 JWT.
 
-**Before**: Two incompatible JWT systems — framework tokens have JTI (revokable), OAuth2 tokens don't.
+**Before**: Two incompatible JWT systems — framework tokens have JTI/uid/role, OAuth2 tokens have sub/email/provider. OAuth2 tokens fail `JWTAuth` middleware validation.
 
-**After**: Single JWT system. All tokens have JTI, consistent claims structure, all revokable via blocklist.
+**After**: Single JWT system. All tokens go through `jwtauth.Service.GenerateTokenPair()`. OAuth2 `OnSuccess` callback becomes the identity bridge (returns `{UserID, Role, RedirectURL}`).
 
-**Changes**:
-- `pkg/plugin/oauth2/plugin.go`: Replace `issueJWT()` with `jwtauth.Service.GenerateTokenPair()`
-- Generate deterministic UUID from provider+providerID for user identification
-- Delete hand-rolled `issueJWT()` function
+**Breaking Changes**:
+- `Config.JWTSecret` and `Config.JWTExpiry` removed
+- `Config.OnSuccess` signature: `func(ctx, *UserInfo) (string, error)` → `func(ctx, *UserInfo) (*Identity, error)`
+- `*jwtauth.Service` added to `plugin.AppConfig`
 
 **Acceptance Criteria**:
 - [x] OAuth2 tokens parsed by `jwtauth.Service.Validate()` without error
@@ -122,21 +122,22 @@
 
 ---
 
-### Story 10.6 — DX & Code Quality (Sprint 35) — P2
+### Story 10.6 — DX & Code Quality (Sprint 34–35) — P2
 
-**Status**: 🔲 Not Started
+**Status**: ✅ Done
 
 **Goal**: Fix remaining P2/P3 issues — generated code quality, framework hygiene, Docker defaults.
 
 **Fixes**:
 | # | Issue | Fix |
 |---|---|---|
-| C1 | Post handler `Views` client-settable | Remove from `createPostRequest` DTO |
-| C2 | Worker has domain logic in framework | Move `WelcomeEmailHandler` to scaffold |
-| C3 | JWT_SECRET placeholder passes validation | Change to `CHANGE_ME_BEFORE_DEPLOY` |
-| C4 | Docker compose: password = username | Use `{name}_dev_password` |
-| C5 | Async handlers unbounded goroutines | Add semaphore (max 100 concurrent) |
-| C6 | No IDOR protection docs | Create `docs/guides/authorization.md` |
+| C1 | Post handler `Views` client-settable | ✅ Removed from `createPostRequest` DTO |
+| C2 | Worker has domain logic in framework | ✅ Removed `WelcomeEmailHandler` from `pkg/worker` |
+| C3 | JWT_SECRET placeholder passes validation | ✅ Changed to `CHANGE_ME_BEFORE_DEPLOY` |
+| C4 | Docker compose: password = username | ✅ Use `{name}_dev_password` |
+| C5 | Async handlers unbounded goroutines | ✅ Added semaphore (max 100 concurrent) |
+| C6 | No IDOR protection docs | ✅ Created `docs/guides/idor-protection.md` |
+| C7 | Scaffold pkg/ convention | ✅ Changed to `internal/infra/` |
 
 ---
 
@@ -155,8 +156,8 @@
 
 | Sprint | Stories | Effort | Focus |
 |---|---|---|---|
-| 34 | 10.1, 10.2, 10.3, 10.4, 10.5 | ~4.5h | All P0/P1 — **blocks early adopters** |
-| 35 | 10.6 | ~3h | P2/P3 — quality & DX polish |
+| 34 | 10.1, 10.2, 10.4, 10.5, 10.6 | ~5h | All P0/P1 + P2 done ✅ |
+| 35 | 10.3 (OAuth2 JWT unification) | ~2h | Breaking change — single JWT system |
 
 ---
 

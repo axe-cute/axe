@@ -48,6 +48,7 @@ import (
 
 	"github.com/axe-cute/axe/config"
 	"github.com/axe-cute/axe/pkg/cache"
+	"github.com/axe-cute/axe/pkg/jwtauth"
 	"github.com/axe-cute/axe/pkg/plugin/events"
 	"github.com/axe-cute/axe/pkg/ws"
 )
@@ -117,8 +118,9 @@ type AppConfig struct {
 	Config *config.Config
 	Logger *slog.Logger
 	DB     *sql.DB
-	Cache  *cache.Client // may be nil if Redis is unavailable
-	Hub    *ws.Hub       // may be nil if WebSocket is disabled
+	Cache  *cache.Client    // may be nil if Redis is unavailable
+	Hub    *ws.Hub           // may be nil if WebSocket is disabled
+	JWT    *jwtauth.Service  // may be nil if auth is disabled
 }
 
 // App is the host that plugins receive during registration.
@@ -139,6 +141,8 @@ type App struct {
 	Cache *cache.Client
 	// Hub is the WebSocket hub (may be nil).
 	Hub *ws.Hub
+	// JWT is the shared JWT service for token generation/validation (may be nil).
+	JWT *jwtauth.Service
 	// Events is the plugin event bus for decoupled cross-plugin communication.
 	// Subscribe in Register(), Publish anywhere after registration.
 	Events events.Bus
@@ -163,6 +167,7 @@ func NewApp(cfg AppConfig) *App {
 		DB:       cfg.DB,
 		Cache:    cfg.Cache,
 		Hub:      cfg.Hub,
+		JWT:      cfg.JWT,
 		Events:   events.NewInProcessBus(log),
 		names:    make(map[string]bool),
 		services: make(map[string]any),

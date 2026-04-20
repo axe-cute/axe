@@ -10,7 +10,10 @@
 //	        {Name: "github", ClientID: os.Getenv("GITHUB_CLIENT_ID"), ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET")},
 //	    },
 //	    RedirectBase: "https://api.example.com",
-//	    JWTSecret:    os.Getenv("JWT_SECRET"),
+//	    OnSuccess: func(ctx context.Context, user *oauth2.UserInfo) (*oauth2.Identity, error) {
+//	        // find-or-create user in DB, return internal UUID + role
+//	        return &oauth2.Identity{UserID: u.ID.String(), Role: "user", RedirectURL: "https://app.example.com/callback"}, nil
+//	    },
 //	}))
 //
 // Auto-registered routes:
@@ -27,9 +30,7 @@ package oauth2
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -42,7 +43,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
+	"github.com/axe-cute/axe/pkg/jwtauth"
 	"github.com/axe-cute/axe/pkg/plugin"
 )
 
@@ -88,6 +91,19 @@ type ProviderConfig struct {
 	Scopes []string
 }
 
+// Identity is returned by OnSuccess to map an OAuth2 provider user to the
+// application's internal identity. This is the bridge between provider-specific
+// IDs (Google sub, GitHub user ID) and your app's UUIDs.
+type Identity struct {
+	// UserID is the internal UUID from your users table.
+	UserID string
+	// Role is the user's role (e.g. "user", "admin").
+	Role string
+	// RedirectURL is where to send the browser after login.
+	// The JWT access token will be appended as ?token=xxx.
+	RedirectURL string
+}
+
 // Config configures the OAuth2 plugin.
 type Config struct {
 	Providers []ProviderConfig
@@ -96,21 +112,10 @@ type Config struct {
 	// Callback URLs will be: {RedirectBase}/auth/{provider}/callback
 	RedirectBase string
 
-	// JWTSecret is used to sign the JWT issued after successful OAuth2 login.
-	JWTSecret string
-	// JWTExpiry is the access token TTL. Default: 24h.
-	JWTExpiry time.Duration
-
-	// OnSuccess is called after a successful login to allow custom logic
-	// (e.g. create user in DB, sync roles). Return ("", err) to abort login.
-	// Return a redirect URL to send the user there with the JWT as a query param.
-	OnSuccess func(ctx context.Context, user *UserInfo) (redirectURL string, err error)
-}
-
-func (c *Config) defaults() {
-	if c.JWTExpiry <= 0 {
-		c.JWTExpiry = 24 * time.Hour
-	}
+	// OnSuccess is REQUIRED. It maps an OAuth2 user to your app's internal identity.
+	// Typically: find-or-create user in DB, return their UUID and role.
+	// Return (nil, err) to reject the login.
+	OnSuccess func(ctx context.Context, user *UserInfo) (*Identity, error)
 }
 
 func (c *Config) validate() error {
@@ -138,10 +143,8 @@ func (c *Config) validate() error {
 	if c.RedirectBase == "" {
 		errs = append(errs, "RedirectBase is required (e.g. https://api.example.com)")
 	}
-	if c.JWTSecret == "" {
-		errs = append(errs, "JWTSecret is required")
-	} else if len(c.JWTSecret) < 32 {
-		errs = append(errs, "JWTSecret must be at least 32 characters")
+	if c.OnSuccess == nil {
+		errs = append(errs, "OnSuccess is required — maps OAuth2 users to app identity")
 	}
 	if len(errs) > 0 {
 		return errors.New("oauth2: " + strings.Join(errs, "; "))
@@ -197,12 +200,12 @@ type Plugin struct {
 	cfg     Config
 	manager *Manager
 	log     *slog.Logger
+	jwt     *jwtauth.Service
 }
 
 // New creates an OAuth2 plugin with the given configuration.
 // Returns an error if config is invalid (Layer 4: fail-fast in New).
 func New(cfg Config) (*Plugin, error) {
-	cfg.defaults()
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -215,6 +218,12 @@ func (p *Plugin) Name() string { return "oauth2" }
 // Register wires OAuth2 routes and provides the Manager via the service locator.
 func (p *Plugin) Register(_ context.Context, app *plugin.App) error {
 	p.log = app.Logger.With("plugin", p.Name())
+
+	// Require jwtauth.Service from the app — this is a cross-cutting concern.
+	if app.JWT == nil {
+		return fmt.Errorf("oauth2: app.JWT is nil — jwtauth.Service is required for token issuance")
+	}
+	p.jwt = app.JWT
 
 	mgr, err := newManager(p.cfg)
 	if err != nil {
@@ -311,28 +320,37 @@ func (p *Plugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	userInfo.Provider = providerName
 
-	// Call OnSuccess hook if configured.
-	redirectURL := ""
-	if p.cfg.OnSuccess != nil {
-		redirectURL, err = p.cfg.OnSuccess(r.Context(), userInfo)
-		if err != nil {
-			http.Error(w, `{"error":"login rejected"}`, http.StatusUnauthorized)
-			return
-		}
+	// Call OnSuccess hook — maps OAuth2 user to app identity.
+	identity, err := p.cfg.OnSuccess(r.Context(), userInfo)
+	if err != nil {
+		p.log.Warn("oauth2: OnSuccess rejected login", "email", userInfo.Email, "error", err)
+		http.Error(w, `{"error":"login rejected"}`, http.StatusUnauthorized)
+		return
+	}
+	if identity == nil {
+		http.Error(w, `{"error":"login rejected — no identity returned"}`, http.StatusUnauthorized)
+		return
 	}
 
-	// Issue JWT.
-	token, err := p.issueJWT(userInfo)
+	// Issue JWT using the shared jwtauth.Service — same token format as the rest of the app.
+	userUUID, err := uuid.Parse(identity.UserID)
 	if err != nil {
+		p.log.Error("oauth2: invalid UserID from OnSuccess", "user_id", identity.UserID, "error", err)
+		http.Error(w, `{"error":"internal identity error"}`, http.StatusInternalServerError)
+		return
+	}
+	pair, err := p.jwt.GenerateTokenPair(userUUID, identity.Role)
+	if err != nil {
+		p.log.Error("oauth2: token generation failed", "error", err)
 		http.Error(w, `{"error":"token issue failed"}`, http.StatusInternalServerError)
 		return
 	}
 
-	if redirectURL != "" {
+	if identity.RedirectURL != "" {
 		// Redirect to frontend with token as query param.
-		u, _ := url.Parse(redirectURL)
+		u, _ := url.Parse(identity.RedirectURL)
 		q := u.Query()
-		q.Set("token", token)
+		q.Set("token", pair.AccessToken)
 		u.RawQuery = q.Encode()
 		http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 		return
@@ -341,10 +359,11 @@ func (p *Plugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// No redirect — return JSON.
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"token":    token,
-		"provider": providerName,
-		"email":    userInfo.Email,
-		"name":     userInfo.Name,
+		"access_token":  pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"provider":      providerName,
+		"email":         userInfo.Email,
+		"name":          userInfo.Name,
 	})
 }
 
@@ -360,33 +379,6 @@ func (p *Plugin) redirectURI(r *http.Request, providerName string) string {
 		base = scheme + "://" + r.Host
 	}
 	return base + "/auth/" + providerName + "/callback"
-}
-
-// issueJWT creates an HS256-signed JWT for the authenticated user.
-// Uses HMAC-SHA256 with the configured JWTSecret for real signature verification.
-func (p *Plugin) issueJWT(user *UserInfo) (string, error) {
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
-	exp := time.Now().Add(p.cfg.JWTExpiry).Unix()
-	claimsJSON, err := json.Marshal(map[string]interface{}{
-		"sub":      user.ProviderID,
-		"email":    user.Email,
-		"name":     user.Name,
-		"provider": user.Provider,
-		"exp":      exp,
-		"iat":      time.Now().Unix(),
-	})
-	if err != nil {
-		return "", fmt.Errorf("oauth2: marshal claims: %w", err)
-	}
-	claims := base64.RawURLEncoding.EncodeToString(claimsJSON)
-
-	// HMAC-SHA256 signature using the configured secret.
-	signingInput := header + "." + claims
-	mac := hmac.New(sha256.New, []byte(p.cfg.JWTSecret))
-	mac.Write([]byte(signingInput))
-	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-
-	return signingInput + "." + sig, nil
 }
 
 // generateState returns a 16-byte URL-safe random string for CSRF protection.

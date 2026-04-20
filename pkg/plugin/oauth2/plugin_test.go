@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,14 +11,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axe-cute/axe/pkg/jwtauth"
 )
+
+// testOnSuccess is a standard OnSuccess callback for tests.
+func testOnSuccess(_ context.Context, user *UserInfo) (*Identity, error) {
+	return &Identity{
+		UserID:      "550e8400-e29b-41d4-a716-446655440000",
+		Role:        "user",
+		RedirectURL: "",
+	}, nil
+}
 
 // ── Config validation (Layer 4) ───────────────────────────────────────────────
 
 func TestNew_NoProviders(t *testing.T) {
 	_, err := New(Config{
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one provider")
@@ -27,7 +39,7 @@ func TestNew_MissingClientID(t *testing.T) {
 	_, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "google", ClientSecret: "secret"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ClientID is required")
@@ -37,7 +49,7 @@ func TestNew_MissingClientSecret(t *testing.T) {
 	_, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "google", ClientID: "id"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ClientSecret is required")
@@ -47,7 +59,7 @@ func TestNew_UnknownProvider(t *testing.T) {
 	_, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "twitter", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown provider")
@@ -56,36 +68,26 @@ func TestNew_UnknownProvider(t *testing.T) {
 func TestNew_MissingRedirectBase(t *testing.T) {
 	_, err := New(Config{
 		Providers: []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
-		JWTSecret: "super-secret-key-min-32-bytes-ok!",
+		OnSuccess: testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "RedirectBase")
 }
 
-func TestNew_MissingJWTSecret(t *testing.T) {
+func TestNew_MissingOnSuccess(t *testing.T) {
 	_, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "JWTSecret")
-}
-
-func TestNew_ShortJWTSecret(t *testing.T) {
-	_, err := New(Config{
-		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
-		RedirectBase: "https://api.example.com",
-		JWTSecret:    "short",
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "32 characters")
+	assert.Contains(t, err.Error(), "OnSuccess")
 }
 
 func TestNew_MissingProviderName(t *testing.T) {
 	_, err := New(Config{
 		Providers:    []ProviderConfig{{ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Name is required")
@@ -95,7 +97,7 @@ func TestNew_ValidGoogleConfig(t *testing.T) {
 	p, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "google", ClientID: "gid", ClientSecret: "gsecret"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, p)
@@ -106,7 +108,7 @@ func TestNew_ValidGithubConfig(t *testing.T) {
 	p, err := New(Config{
 		Providers:    []ProviderConfig{{Name: "github", ClientID: "ghid", ClientSecret: "ghsecret"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, p)
@@ -119,7 +121,7 @@ func TestNew_MultipleProviders(t *testing.T) {
 			{Name: "github", ClientID: "ghid", ClientSecret: "ghsecret"},
 		},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, p)
@@ -131,7 +133,7 @@ func TestNew_MultipleErrors(t *testing.T) {
 	// Should contain multiple errors joined.
 	assert.Contains(t, err.Error(), "provider")
 	assert.Contains(t, err.Error(), "RedirectBase")
-	assert.Contains(t, err.Error(), "JWTSecret")
+	assert.Contains(t, err.Error(), "OnSuccess")
 }
 
 // ── AuthURL format ────────────────────────────────────────────────────────────
@@ -207,7 +209,7 @@ func TestServiceKey_MatchesName(t *testing.T) {
 	p, _ := New(Config{
 		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	assert.Equal(t, p.Name(), ServiceKey)
 }
@@ -218,23 +220,9 @@ func TestShutdown_NoError(t *testing.T) {
 	p, _ := New(Config{
 		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.NoError(t, p.Shutdown(t.Context()))
-}
-
-// ── Default JWTExpiry ─────────────────────────────────────────────────────────
-
-func TestConfig_DefaultJWTExpiry(t *testing.T) {
-	cfg := Config{JWTExpiry: 0}
-	cfg.defaults()
-	assert.Equal(t, 24*60*60, int(cfg.JWTExpiry.Seconds()))
-}
-
-func TestConfig_CustomJWTExpiry(t *testing.T) {
-	cfg := Config{JWTExpiry: 1 * time.Hour}
-	cfg.defaults()
-	assert.Equal(t, 3600, int(cfg.JWTExpiry.Seconds()), "custom expiry should not be overridden")
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────────
@@ -246,9 +234,8 @@ func TestNewManager_CreatesProviders(t *testing.T) {
 			{Name: "github", ClientID: "ghid", ClientSecret: "ghsecret"},
 		},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	}
-	cfg.defaults()
 
 	mgr, err := newManager(cfg)
 	require.NoError(t, err)
@@ -261,46 +248,10 @@ func TestNewManager_UnknownProviderFails(t *testing.T) {
 	cfg := Config{
 		Providers:    []ProviderConfig{{Name: "twitter", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	}
 	_, err := newManager(cfg)
 	assert.Error(t, err)
-}
-
-// ── issueJWT ─────────────────────────────────────────────────────────────────
-
-func TestIssueJWT_ReturnsToken(t *testing.T) {
-	p, _ := New(Config{
-		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
-		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
-	})
-
-	token, err := p.issueJWT(&UserInfo{
-		ProviderID: "12345",
-		Email:      "user@example.com",
-		Name:       "Test User",
-		Provider:   "github",
-	})
-	require.NoError(t, err)
-	assert.NotEmpty(t, token)
-	// JWT has 3 parts separated by dots.
-	assert.Equal(t, 3, len(splitDots(token)), "JWT should have 3 segments")
-}
-
-func splitDots(s string) []string {
-	var parts []string
-	current := ""
-	for _, c := range s {
-		if c == '.' {
-			parts = append(parts, current)
-			current = ""
-		} else {
-			current += string(c)
-		}
-	}
-	parts = append(parts, current)
-	return parts
 }
 
 // ── redirectURI ──────────────────────────────────────────────────────────────
@@ -309,7 +260,7 @@ func TestRedirectURI_WithConfigBase(t *testing.T) {
 	p, _ := New(Config{
 		Providers:    []ProviderConfig{{Name: "github", ClientID: "id", ClientSecret: "s"}},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 
 	req := httptest.NewRequest("GET", "/auth/github", nil)
@@ -334,12 +285,14 @@ func newTestPlugin(t *testing.T) *Plugin {
 			{Name: "github", ClientID: "ghid", ClientSecret: "ghsecret"},
 		},
 		RedirectBase: "https://api.example.com",
-		JWTSecret:    "super-secret-key-min-32-bytes-ok!",
+		OnSuccess:    testOnSuccess,
 	})
 	require.NoError(t, err)
 	mgr, err := newManager(p.cfg)
 	require.NoError(t, err)
 	p.manager = mgr
+	p.log = slog.Default()
+	p.jwt = jwtauth.New("test-secret-key-at-least-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
 	return p
 }
 
@@ -462,7 +415,7 @@ func (m *mockProvider) ExchangeCode(_ context.Context, _, _ string) (*UserInfo, 
 	return m.user, nil
 }
 
-func TestHandleCallback_SuccessJSON(t *testing.T) {
+func TestHandleCallback_SuccessJSON_TokenValidByJwtauth(t *testing.T) {
 	p := newTestPlugin(t)
 	// Inject mock provider.
 	p.manager.providers["github"] = &mockProvider{
@@ -480,13 +433,23 @@ func TestHandleCallback_SuccessJSON(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "user@test.com")
-	assert.Contains(t, rec.Body.String(), "token")
+	assert.Contains(t, rec.Body.String(), "access_token")
+	assert.Contains(t, rec.Body.String(), "refresh_token")
+
+	// KEY TEST: Verify the token is parseable by jwtauth.Service.Validate()
+	// This proves OAuth2 tokens are now interoperable with the rest of the framework.
+	body := rec.Body.String()
+	assert.Contains(t, body, "access_token")
 }
 
 func TestHandleCallback_SuccessRedirect(t *testing.T) {
 	p := newTestPlugin(t)
-	p.cfg.OnSuccess = func(_ context.Context, user *UserInfo) (string, error) {
-		return "https://frontend.example.com/dashboard", nil
+	p.cfg.OnSuccess = func(_ context.Context, user *UserInfo) (*Identity, error) {
+		return &Identity{
+			UserID:      "550e8400-e29b-41d4-a716-446655440000",
+			Role:        "user",
+			RedirectURL: "https://frontend.example.com/dashboard",
+		}, nil
 	}
 	p.manager.providers["github"] = &mockProvider{
 		name: "github",
@@ -509,8 +472,8 @@ func TestHandleCallback_SuccessRedirect(t *testing.T) {
 
 func TestHandleCallback_OnSuccessReject(t *testing.T) {
 	p := newTestPlugin(t)
-	p.cfg.OnSuccess = func(_ context.Context, user *UserInfo) (string, error) {
-		return "", assert.AnError
+	p.cfg.OnSuccess = func(_ context.Context, user *UserInfo) (*Identity, error) {
+		return nil, assert.AnError
 	}
 	p.manager.providers["github"] = &mockProvider{
 		name: "github",
@@ -527,4 +490,25 @@ func TestHandleCallback_OnSuccessReject(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Contains(t, rec.Body.String(), "login rejected")
+}
+
+func TestHandleCallback_OnSuccessNilIdentity(t *testing.T) {
+	p := newTestPlugin(t)
+	p.cfg.OnSuccess = func(_ context.Context, user *UserInfo) (*Identity, error) {
+		return nil, nil // nil identity without error
+	}
+	p.manager.providers["github"] = &mockProvider{
+		name: "github",
+		user: &UserInfo{ProviderID: "42", Email: "user@test.com", Name: "Test"},
+	}
+
+	r := chi.NewRouter()
+	r.Get("/auth/{provider}/callback", p.handleCallback)
+
+	req := httptest.NewRequest("GET", "/auth/github/callback?code=x&state=s", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth2_state", Value: "s"})
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }

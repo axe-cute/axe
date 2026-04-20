@@ -225,6 +225,7 @@ func main() {
 		DB:     sqlDB,
 		Cache:  cacheClient,
 		Hub:    wsHub,
+		JWT:    jwtSvc,
 	})
 
 	if err := setup.RegisterPlugins(context.Background(), pluginApp, cfg); err != nil {

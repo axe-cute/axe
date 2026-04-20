@@ -38,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - IDOR protection guide (`docs/guides/idor-protection.md`)
+- `plugin.AppConfig.JWT` field — plugins can now access the shared `*jwtauth.Service`
+
+### Breaking Changes
+- **OAuth2 plugin**: `Config.JWTSecret` and `Config.JWTExpiry` removed — all tokens now issued via shared `jwtauth.Service`
+- **OAuth2 plugin**: `Config.OnSuccess` signature changed from `func(ctx, *UserInfo) (string, error)` to `func(ctx, *UserInfo) (*Identity, error)` — must return `{UserID, Role, RedirectURL}`
+- **OAuth2 plugin**: requires `app.JWT != nil` during `Register()` — pass `jwtauth.Service` in `plugin.AppConfig`
 
 ---
 
