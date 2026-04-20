@@ -100,6 +100,17 @@ func (t *UserConnTracker) Count(userID string) int64 {
 	return atomic.LoadInt64(v.(*int64))
 }
 
+// Cleanup removes entries with zero active connections to prevent unbounded
+// sync.Map growth. Safe to call periodically (e.g. every 5 minutes).
+func (t *UserConnTracker) Cleanup() {
+	t.m.Range(func(key, value any) bool {
+		if atomic.LoadInt64(value.(*int64)) <= 0 {
+			t.m.Delete(key)
+		}
+		return true
+	})
+}
+
 // ── WSAuth middleware ─────────────────────────────────────────────────────────
 
 // WSAuth returns an HTTP middleware that validates a JWT for WebSocket upgrade
@@ -145,7 +156,7 @@ func WSAuth(
 			}
 
 			// 2. Validate JWT.
-			claims, err := svc.Validate(token)
+			claims, err := svc.ValidateAccess(token)
 			if err != nil {
 				log.Info("ws auth: invalid token", "remote", r.RemoteAddr, "error", err)
 				http.Error(w, "invalid or expired token", http.StatusUnauthorized)
@@ -157,8 +168,12 @@ func WSAuth(
 			if blocklist != nil && claims.JTI() != "" {
 				blocked, blErr := blocklist.IsTokenBlocked(r.Context(), claims.JTI())
 				if blErr != nil {
-					log.Warn("ws auth: blocklist check failed", "error", blErr)
-					// Fail-open: log the issue, allow the request.
+					// Fail-closed: reject when blocklist is unavailable to prevent
+					// revoked tokens from being accepted (P0-02).
+					log.Warn("ws auth: blocklist check failed — rejecting (fail-closed)", "error", blErr)
+					http.Error(w, "authentication service unavailable", http.StatusServiceUnavailable)
+					wsConnectRejectedTotal.Inc()
+					return
 				} else if blocked {
 					log.Info("ws auth: token revoked", "jti", claims.JTI(), "user_id", claims.UserID)
 					http.Error(w, "token revoked", http.StatusUnauthorized)

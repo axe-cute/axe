@@ -67,6 +67,7 @@ func TestLoad_CustomValues(t *testing.T) {
 		"HUB_ADAPTER", "redis",
 		"STORAGE_BACKEND", "juicefs",
 		"STORAGE_MOUNT_PATH", "/mnt/jfs",
+		"CORS_ALLOWED_ORIGINS", "https://example.com", // P0-05: wildcard rejected in production
 	)
 
 	cfg, err := config.Load()
@@ -210,6 +211,7 @@ func TestLoad_InvalidJWTExpiry(t *testing.T) {
 func TestConfig_IsProduction(t *testing.T) {
 	requiredEnv(t)
 	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://example.com") // P0-05: wildcard rejected in production
 	cfg, err := config.Load()
 	require.NoError(t, err)
 	assert.True(t, cfg.IsProduction())
@@ -250,7 +252,7 @@ func TestConfig_RedisAddr(t *testing.T) {
 		{"standard", "redis://localhost:6379/0", "localhost:6379"},
 		{"no db", "redis://localhost:6379", "localhost:6379"},
 		{"tls", "rediss://redis.example.com:6380/2", "redis.example.com:6380"},
-		{"with password", "redis://user:pass@myredis:6379/0", "user:pass@myredis:6379"},
+		{"with password", "redis://user:pass@myredis:6379/0", "myredis:6379"},
 	}
 
 	for _, tc := range tests {

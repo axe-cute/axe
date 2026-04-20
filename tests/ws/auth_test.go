@@ -18,7 +18,11 @@ import (
 
 // newTestJWTSvc returns a jwtauth.Service suitable for test use.
 func newTestJWTSvc() *jwtauth.Service {
-	return jwtauth.New("test-secret-32-bytes-xxxxxxxxxxxx", 1*time.Hour, 24*time.Hour)
+	svc, err := jwtauth.New("test-secret-32-bytes-xxxxxxxxxxxx", 1*time.Hour, 24*time.Hour)
+	if err != nil {
+		panic(err)
+	}
+	return svc
 }
 
 // validToken generates a signed JWT for the given user.

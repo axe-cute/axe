@@ -13,7 +13,11 @@ import (
 )
 
 func newJWTSvc() *jwtauth.Service {
-	return jwtauth.New("test-secret-key-min-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
+	svc, err := jwtauth.New("test-secret-key-min-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
+	if err != nil {
+		panic(err)
+	}
+	return svc
 }
 
 // ── JWTAuth middleware ────────────────────────────────────────────────────────
@@ -77,7 +81,7 @@ func TestJWTAuth_InvalidToken_Returns401(t *testing.T) {
 }
 
 func TestJWTAuth_ExpiredToken_Returns401(t *testing.T) {
-	expiredSvc := jwtauth.New("test-secret-key-min-32-bytes-long!!", -time.Second, time.Hour)
+	expiredSvc, _ := jwtauth.New("test-secret-key-min-32-bytes-long!!", -time.Second, time.Hour)
 	pair, _ := expiredSvc.GenerateTokenPair(uuid.New(), "user")
 
 	// validate with normal svc (same secret, but expired)

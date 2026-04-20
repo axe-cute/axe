@@ -50,7 +50,7 @@ func JWTAuth(svc *jwtauth.Service, blocklist Blocklist) func(http.Handler) http.
 				return
 			}
 
-			claims, err := svc.Validate(token)
+			claims, err := svc.ValidateAccess(token)
 			if err != nil {
 				switch err {
 				case jwtauth.ErrTokenExpired:
@@ -121,12 +121,20 @@ func extractBearerToken(r *http.Request) string {
 	return strings.TrimSpace(parts[1])
 }
 
+// roleLevel maps known roles to their privilege level.
+// Unknown roles are denied by default (fail-closed).
+var roleLevel = map[string]int{
+	"user":  1,
+	"admin": 2,
+}
+
 // hasRole checks whether userRole satisfies the required role.
-// Role hierarchy: admin > user
+// Unknown roles are denied — fail-closed by design (P1-03).
 func hasRole(userRole, required string) bool {
-	if required == "admin" {
-		return userRole == "admin"
+	userLvl, userOK := roleLevel[userRole]
+	reqLvl, reqOK := roleLevel[required]
+	if !userOK || !reqOK {
+		return false // unknown roles are denied
 	}
-	// "user" level: both user and admin have access
-	return userRole == "user" || userRole == "admin"
+	return userLvl >= reqLvl
 }

@@ -292,7 +292,8 @@ func newTestPlugin(t *testing.T) *Plugin {
 	require.NoError(t, err)
 	p.manager = mgr
 	p.log = slog.Default()
-	p.jwt = jwtauth.New("test-secret-key-at-least-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+	p.jwt, err = jwtauth.New("test-secret-key-at-least-32-bytes-long!", 15*time.Minute, 7*24*time.Hour)
+	require.NoError(t, err)
 	return p
 }
 

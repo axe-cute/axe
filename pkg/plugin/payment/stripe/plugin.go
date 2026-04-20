@@ -296,17 +296,16 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify Stripe webhook signature (HMAC-SHA256).
-	if p.cfg.WebhookSecret != "" {
-		sig := r.Header.Get("Stripe-Signature")
-		if sig == "" {
-			http.Error(w, "missing Stripe-Signature", http.StatusUnauthorized)
-			return
-		}
-		if err := verifyStripeSignature(body, sig, p.cfg.WebhookSecret); err != nil {
-			p.log.Warn("stripe webhook signature verification failed", "error", err)
-			http.Error(w, "signature verification failed", http.StatusUnauthorized)
-			return
-		}
+	// WebhookSecret is required by config validation — always verify.
+	sig := r.Header.Get("Stripe-Signature")
+	if sig == "" {
+		http.Error(w, "missing Stripe-Signature", http.StatusUnauthorized)
+		return
+	}
+	if err := verifyStripeSignature(body, sig, p.cfg.WebhookSecret); err != nil {
+		p.log.Warn("stripe webhook signature verification failed", "error", err)
+		http.Error(w, "signature verification failed", http.StatusUnauthorized)
+		return
 	}
 
 	var event struct {

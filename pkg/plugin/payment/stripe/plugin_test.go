@@ -2,12 +2,16 @@ package stripe
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -166,11 +170,9 @@ func TestWebhook_PublishesPaymentSucceeded(t *testing.T) {
 
 	payload := `{"id":"evt_123","type":"charge.succeeded","data":{"object":{"amount":2000}}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(payload))
-	// No Stripe-Signature — WebhookSecret empty in test config forces skip.
+	req.Header.Set("Stripe-Signature", signPayload([]byte(payload), p.cfg.WebhookSecret))
 	w := httptest.NewRecorder()
 
-	// Bypass signature check — test plugin has non-empty secret, so we clear it.
-	p.cfg.WebhookSecret = ""
 	p.handleWebhook(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -206,7 +208,6 @@ func TestWebhook_UnknownEventType_IsIgnored(t *testing.T) {
 	defer srv.Close()
 
 	p := mustNewPlugin(t, srv.URL)
-	p.cfg.WebhookSecret = "" // skip sig check
 	app := plugintest.NewMockApp()
 	require.NoError(t, p.Register(t.Context(), app))
 
@@ -220,6 +221,7 @@ func TestWebhook_UnknownEventType_IsIgnored(t *testing.T) {
 
 	payload := `{"id":"evt_x","type":"customer.created","data":{"object":{}}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/stripe", strings.NewReader(payload))
+	req.Header.Set("Stripe-Signature", signPayload([]byte(payload), p.cfg.WebhookSecret))
 	w := httptest.NewRecorder()
 	p.handleWebhook(w, req)
 
@@ -244,6 +246,17 @@ func mustNewPlugin(t *testing.T, baseURL string) *Plugin {
 	})
 	require.NoError(t, err)
 	return p
+}
+
+// signPayload generates a valid Stripe-Signature header value for testing.
+func signPayload(body []byte, secret string) string {
+	ts := fmt.Sprintf("%d", time.Now().Unix())
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(ts))
+	mac.Write([]byte("."))
+	mac.Write(body)
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return "t=" + ts + ",v1=" + sig
 }
 
 // newMockStripeServer creates an httptest.Server that mimics Stripe API responses.

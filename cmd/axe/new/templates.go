@@ -654,7 +654,11 @@ func main() {
 	_ = sqlDB // used by ent client (injected by axe generate resource)
 
 	// ── JWT service ───────────────────────────────────────────────────────────
-	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+	jwtSvc, jwtErr := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+	if jwtErr != nil {
+		log.Error("jwt init failed", "error", jwtErr)
+		os.Exit(1)
+	}
 	_ = jwtSvc
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────

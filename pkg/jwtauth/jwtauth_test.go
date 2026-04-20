@@ -15,7 +15,11 @@ import (
 const testSecret = "super-secret-key-min-32-bytes-long!!"
 
 func newTestService() *jwtauth.Service {
-	return jwtauth.New(testSecret, 15*time.Minute, 7*24*time.Hour)
+	svc, err := jwtauth.New(testSecret, 15*time.Minute, 7*24*time.Hour)
+	if err != nil {
+		panic(err)
+	}
+	return svc
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +125,7 @@ func TestValidate_RefreshToken(t *testing.T) {
 
 func TestValidate_ExpiredToken(t *testing.T) {
 	// TTL of -1ns → immediately expired
-	svc := jwtauth.New(testSecret, -1*time.Nanosecond, time.Hour)
+	svc, _ := jwtauth.New(testSecret, -1*time.Nanosecond, time.Hour)
 	pair, _ := svc.GenerateTokenPair(uuid.New(), "user")
 
 	_, err := svc.Validate(pair.AccessToken)
@@ -138,8 +142,8 @@ func TestValidate_TamperedToken(t *testing.T) {
 }
 
 func TestValidate_WrongSecret(t *testing.T) {
-	svc1 := jwtauth.New("secret-one-at-least-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
-	svc2 := jwtauth.New("secret-two-at-least-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
+	svc1, _ := jwtauth.New("secret-one-at-least-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
+	svc2, _ := jwtauth.New("secret-two-at-least-32-bytes-long!!", 15*time.Minute, 7*24*time.Hour)
 
 	pair, _ := svc1.GenerateTokenPair(uuid.New(), "user")
 	_, err := svc2.Validate(pair.AccessToken)

@@ -102,7 +102,11 @@ func main() {
 	}
 
 	// ── JWT service ───────────────────────────────────────────────────────────
-	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+	jwtSvc, err := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+	if err != nil {
+		log.Error("jwt service init failed", "error", err)
+		os.Exit(1)
+	}
 
 	// ── Rate Limiter (Redis sliding window) ───────────────────────────────────
 	var redisForRL *redis.Client
@@ -184,7 +188,8 @@ func main() {
 
 	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(limiter.Global()) // 100 req/min per IP
+		r.Use(limiter.Global())           // 100 req/min per IP
+		r.Use(middleware.MaxBodySize(0))   // 1MB default body limit — prevents memory exhaustion (P1-05)
 
 		// Public auth (strict rate limit: 10 req/min)
 		r.With(limiter.Strict()).Mount("/auth", authHandler.Routes())

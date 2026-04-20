@@ -137,9 +137,9 @@ func (h *OutboxEventHandler) ProcessTask(ctx context.Context, t *asynq.Task) err
 		return fmt.Errorf("unmarshal OutboxEventPayload: %w", err)
 	}
 
-	// Framework reference: logs the event. Host applications should implement
+	// Framework reference: this is a STUB handler. Host applications MUST implement
 	// an EventRouter to dispatch events to downstream handlers (message bus, webhook, etc.).
-	h.log.Info("processing outbox event",
+	h.log.Warn("outbox event processed by STUB handler — implement a real EventRouter",
 		"event_id", p.EventID,
 		"event_type", p.EventType,
 		"aggregate", p.Aggregate,

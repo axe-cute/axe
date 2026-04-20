@@ -84,8 +84,8 @@ func NewHub(opts ...HubOption) *Hub {
 	h := &Hub{
 		clients:    make(map[string]*Client),
 		rooms:      make(map[string]*Room),
-		register:   make(chan *Client, 32),
-		unregister: make(chan *Client, 32),
+		register:   make(chan *Client, 256),
+		unregister: make(chan *Client, 256),
 		adapter:    MemoryAdapter{},
 		ctx:        ctx,
 		cancel:     cancel,

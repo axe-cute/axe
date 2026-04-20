@@ -112,11 +112,11 @@ func NewWithRedis(db *sql.DB, redisAddr string, cfg Config, log *slog.Logger) *P
 	return New(db, client, cfg, log)
 }
 
-// placeholder returns the correct positional placeholder for the driver.
+// ph returns the correct positional placeholder for parameter n.
 // PostgreSQL uses $N; MySQL and SQLite use ?.
-func (p *Poller) placeholder() string {
+func (p *Poller) ph(n int) string {
 	if p.driver == "postgres" {
-		return "$1"
+		return fmt.Sprintf("$%d", n)
 	}
 	return "?"
 }
@@ -173,12 +173,12 @@ func (p *Poller) poll(ctx context.Context) error {
 		SELECT id, event_type, aggregate, retries
 		FROM outbox_events
 		WHERE processed_at IS NULL
-		  AND retries < ` + fmt.Sprintf("%d", p.maxRetries) + `
+		  AND retries < ` + p.ph(1) + `
 		  AND (retry_after IS NULL OR retry_after <= ` + nowFn + `)
 		ORDER BY created_at ASC
-		LIMIT ` + p.placeholder() + lockSQL + `
+		LIMIT ` + p.ph(2) + lockSQL + `
 	`
-	rows, err := p.db.QueryContext(ctx, query, p.batchSize)
+	rows, err := p.db.QueryContext(ctx, query, p.maxRetries, p.batchSize)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (p *Poller) poll(ctx context.Context) error {
 		// Mark as processed — use driver-specific timestamp function.
 		// Use a short independent context so in-flight marks complete even if
 		// the parent poll context is cancelled (prevents duplicate delivery).
-		updateQuery := `UPDATE outbox_events SET processed_at = ` + nowFn + `, retries = retries + 1 WHERE id = ` + p.placeholder()
+		updateQuery := `UPDATE outbox_events SET processed_at = ` + nowFn + `, retries = retries + 1 WHERE id = ` + p.ph(1)
 		markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if _, err := p.db.ExecContext(markCtx, updateQuery, e.id); err != nil {
 			p.log.Error("mark outbox processed", "event_id", e.id, "error", err)
@@ -262,8 +262,8 @@ func (p *Poller) handleRetryOrDeadLetter(eventID, eventType, aggregate string, n
 			"max_retries", p.maxRetries,
 		)
 
-		updateQuery := `UPDATE outbox_events SET retries = ` + fmt.Sprintf("%d", newRetries) + ` WHERE id = ` + p.placeholder()
-		if _, err := p.db.ExecContext(ctx, updateQuery, eventID); err != nil {
+		updateQuery := `UPDATE outbox_events SET retries = ` + p.ph(1) + ` WHERE id = ` + p.ph(2)
+		if _, err := p.db.ExecContext(ctx, updateQuery, newRetries, eventID); err != nil {
 			p.log.Error("mark outbox dead letter", "event_id", eventID, "error", err)
 		}
 		return
@@ -288,22 +288,22 @@ func (p *Poller) handleRetryOrDeadLetter(eventID, eventType, aggregate string, n
 	switch p.driver {
 	case "postgres":
 		updateQuery = fmt.Sprintf(
-			`UPDATE outbox_events SET retries = %d, retry_after = NOW() + INTERVAL '%d seconds' WHERE id = %s`,
-			newRetries, backoffSec, p.placeholder(),
+			`UPDATE outbox_events SET retries = %s, retry_after = NOW() + INTERVAL '%d seconds' WHERE id = %s`,
+			p.ph(1), backoffSec, p.ph(2),
 		)
 	case "mysql":
 		updateQuery = fmt.Sprintf(
-			`UPDATE outbox_events SET retries = %d, retry_after = DATE_ADD(NOW(), INTERVAL %d SECOND) WHERE id = %s`,
-			newRetries, backoffSec, p.placeholder(),
+			`UPDATE outbox_events SET retries = %s, retry_after = DATE_ADD(NOW(), INTERVAL %d SECOND) WHERE id = %s`,
+			p.ph(1), backoffSec, p.ph(2),
 		)
 	default: // sqlite3
 		updateQuery = fmt.Sprintf(
-			`UPDATE outbox_events SET retries = %d, retry_after = datetime('now', '+%d seconds') WHERE id = %s`,
-			newRetries, backoffSec, p.placeholder(),
+			`UPDATE outbox_events SET retries = %s, retry_after = datetime('now', '+%d seconds') WHERE id = %s`,
+			p.ph(1), backoffSec, p.ph(2),
 		)
 	}
 
-	if _, err := p.db.ExecContext(ctx, updateQuery, eventID); err != nil {
+	if _, err := p.db.ExecContext(ctx, updateQuery, newRetries, eventID); err != nil {
 		p.log.Error("set outbox retry_after", "event_id", eventID, "error", err)
 	}
 }

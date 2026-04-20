@@ -347,11 +347,12 @@ func (p *Plugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if identity.RedirectURL != "" {
-		// Redirect to frontend with token as query param.
+		// Redirect to frontend with token as URL fragment (P0-04).
+		// Using fragment (#) instead of query param (?) prevents the token
+		// from being sent to the server in HTTP Referer headers or server logs.
+		// Frontend must read from window.location.hash.
 		u, _ := url.Parse(identity.RedirectURL)
-		q := u.Query()
-		q.Set("token", pair.AccessToken)
-		u.RawQuery = q.Encode()
+		u.Fragment = "token=" + pair.AccessToken
 		http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 		return
 	}
@@ -521,6 +522,11 @@ func exchangeToken(ctx context.Context, endpoint string, params url.Values) (str
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+
+	// P2-08: Check HTTP status before parsing — prevents interpreting error pages as valid JSON.
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("oauth2: token exchange HTTP %d: %s", resp.StatusCode, body)
+	}
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {

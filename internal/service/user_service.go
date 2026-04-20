@@ -30,7 +30,7 @@ func (s *UserService) CreateUser(ctx context.Context, input domain.CreateUserInp
 	log := logger.FromCtx(ctx).With("email", input.Email)
 
 	// Validate
-	if err := validateCreateUserInput(input); err != nil {
+	if err := validateCreateUserInput(&input); err != nil {
 		return nil, apperror.ErrInvalidInput.WithMessage(err.Error()).WithCause(err)
 	}
 
@@ -136,7 +136,7 @@ func (s *UserService) Authenticate(ctx context.Context, email, password string) 
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-func validateCreateUserInput(input domain.CreateUserInput) error {
+func validateCreateUserInput(input *domain.CreateUserInput) error {
 	input.Email = strings.TrimSpace(input.Email)
 	input.Name = strings.TrimSpace(input.Name)
 
@@ -157,6 +157,11 @@ func validateCreateUserInput(input domain.CreateUserInput) error {
 	}
 	if len(input.Password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
+	}
+	// P0-07: bcrypt silently truncates passwords beyond 72 bytes.
+	// Reject them explicitly to prevent false sense of security.
+	if len(input.Password) > 72 {
+		return fmt.Errorf("password must be 72 characters or fewer")
 	}
 	if input.Role != "" && input.Role != domain.RoleUser && input.Role != domain.RoleAdmin {
 		return fmt.Errorf("role must be 'user' or 'admin'")

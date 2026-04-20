@@ -11,6 +11,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -129,16 +130,21 @@ func (c *Config) RefreshTokenTTL() time.Duration {
 	return time.Duration(c.JWTRefreshTokenExpiryDays) * 24 * time.Hour
 }
 
-// RedisAddr extracts host:port from REDIS_URL (strips redis:// scheme).
-// e.g. "redis://localhost:6379/0" → "localhost:6379"
+// RedisAddr extracts host:port from REDIS_URL using proper URL parsing.
+// Handles auth URLs like redis://user:p@ss@host:6379/0 correctly.
 func (c *Config) RedisAddr() string {
-	u := c.RedisURL
-	u = strings.TrimPrefix(u, "redis://")
-	u = strings.TrimPrefix(u, "rediss://")
-	if idx := strings.LastIndex(u, "/"); idx != -1 {
-		u = u[:idx] // strip /db number
+	parsed, err := url.Parse(c.RedisURL)
+	if err != nil || parsed.Host == "" {
+		// Fallback: strip scheme and DB for simple URLs.
+		u := c.RedisURL
+		u = strings.TrimPrefix(u, "redis://")
+		u = strings.TrimPrefix(u, "rediss://")
+		if idx := strings.LastIndex(u, "/"); idx != -1 {
+			u = u[:idx]
+		}
+		return u
 	}
-	return u
+	return parsed.Host
 }
 
 func validate(cfg *Config) error {
@@ -173,6 +179,12 @@ func validate(cfg *Config) error {
 	validStorageBackends := map[string]bool{"local": true, "juicefs": true}
 	if !validStorageBackends[cfg.StorageBackend] {
 		return fmt.Errorf("STORAGE_BACKEND must be one of [local, juicefs], got %q", cfg.StorageBackend)
+	}
+
+	// P0-05: Reject CORS wildcard in production — prevents cross-origin attacks
+	// when combined with AllowCredentials: true.
+	if cfg.Environment == "production" && cfg.CORSAllowedOrigins == "*" {
+		return fmt.Errorf("CORS_ALLOWED_ORIGINS must not be '*' in production — specify explicit origins")
 	}
 
 	return nil

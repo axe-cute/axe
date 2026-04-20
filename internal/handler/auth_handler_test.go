@@ -48,7 +48,11 @@ func (b *mockBlocklist) IsTokenBlocked(_ context.Context, jti string) (bool, err
 const authTestSecret = "test-secret-key-at-least-32-bytes!!"
 
 func newAuthJWTService() *jwtauth.Service {
-	return jwtauth.New(authTestSecret, 15*time.Minute, 7*24*time.Hour)
+	svc, err := jwtauth.New(authTestSecret, 15*time.Minute, 7*24*time.Hour)
+	if err != nil {
+		panic(err)
+	}
+	return svc
 }
 
 func authTestUser() *domain.User {

@@ -489,15 +489,15 @@ func (a *App) AllPlugins() []Plugin {
 
 // semverAtLeast reports whether running >= required.
 // Supports "vMAJOR.MINOR.PATCH" format only.
-// Returns true if either version is unparseable (fail-open to avoid blocking startup).
+// Returns false if either version is unparseable (fail-closed to prevent bypass — P1-04).
 func semverAtLeast(running, required string) bool {
 	var rMaj, rMin, rPat int
 	var qMaj, qMin, qPat int
 	if _, err := fmt.Sscanf(running, "v%d.%d.%d", &rMaj, &rMin, &rPat); err != nil {
-		return true // unparseable running version — don't block startup
+		return false // unparseable running version — reject to prevent bypass
 	}
 	if _, err := fmt.Sscanf(required, "v%d.%d.%d", &qMaj, &qMin, &qPat); err != nil {
-		return true // unparseable requirement — don't block startup
+		return false // unparseable requirement — reject to prevent bypass
 	}
 	if rMaj != qMaj {
 		return rMaj > qMaj

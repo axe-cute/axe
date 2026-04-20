@@ -105,7 +105,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := h.jwt.Validate(req.RefreshToken)
+	claims, err := h.jwt.ValidateRefresh(req.RefreshToken)
 	if err != nil {
 		middleware.WriteError(w, apperror.ErrUnauthorized.WithMessage("invalid or expired refresh token"))
 		return

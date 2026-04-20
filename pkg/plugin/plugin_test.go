@@ -388,9 +388,9 @@ func TestSemverAtLeast(t *testing.T) {
 		{"v1.0.0", "v2.0.0", false},
 		{"v1.5.3", "v1.5.2", true},
 		{"v1.5.2", "v1.5.3", false},
-		// Unparseable — fail-open.
-		{"invalid", "v1.0.0", true},
-		{"v1.0.0", "invalid", true},
+		// Unparseable — fail-closed (P1-04).
+		{"invalid", "v1.0.0", false},
+		{"v1.0.0", "invalid", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.running+">="+tc.required, func(t *testing.T) {

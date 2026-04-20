@@ -95,6 +95,10 @@ func Recoverer(next http.Handler) http.Handler {
 					slog.Any("panic", rec),
 					slog.String("stack", string(debug.Stack())),
 				)
+				// P2-05: Preserve X-Request-ID so the client can correlate the 500.
+				if rid := r.Header.Get("X-Request-Id"); rid != "" {
+					w.Header().Set("X-Request-Id", rid)
+				}
 				writeError(w, apperror.ErrInternal)
 			}
 		}()

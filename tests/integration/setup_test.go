@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 	userRepo := repository.NewUserRepo(entClient)
 	userSvc := service.NewUserService(userRepo)
 
-	jwtSvc := jwtauth.New("integration-test-secret-32-bytes!!", 15*time.Minute, 7*24*time.Hour)
+	jwtSvc, _ := jwtauth.New("integration-test-secret-32-bytes!!", 15*time.Minute, 7*24*time.Hour)
 
 	// 6. Build router (no Redis blocklist in integration tests — nil is safe)
 	r := chi.NewRouter()

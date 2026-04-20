@@ -19,7 +19,11 @@ import (
 const testSecret = "test-secret-key-for-ws-auth-32bytes!"
 
 func newTestJWTService() *jwtauth.Service {
-	return jwtauth.New(testSecret, 15*time.Minute, 7*24*time.Hour)
+	svc, err := jwtauth.New(testSecret, 15*time.Minute, 7*24*time.Hour)
+	if err != nil {
+		panic(err)
+	}
+	return svc
 }
 
 func TestWSAuth_ValidToken_Header(t *testing.T) {
@@ -195,7 +199,7 @@ func TestWSAuth_BlockedToken(t *testing.T) {
 	}
 }
 
-func TestWSAuth_BlocklistError_FailOpen(t *testing.T) {
+func TestWSAuth_BlocklistError_FailClosed(t *testing.T) {
 	svc := newTestJWTService()
 	userID := uuid.New()
 
@@ -208,7 +212,7 @@ func TestWSAuth_BlocklistError_FailOpen(t *testing.T) {
 
 	mw := ws.WSAuth(svc, bl, nil)
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK) // fail-open: should reach here
+		t.Error("inner should not be called when blocklist fails (fail-closed)")
 	})
 
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -217,8 +221,8 @@ func TestWSAuth_BlocklistError_FailOpen(t *testing.T) {
 
 	mw(inner).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200 (fail-open)", w.Code)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 (fail-closed)", w.Code)
 	}
 }
 

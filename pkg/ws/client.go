@@ -53,6 +53,9 @@ type Client struct {
 	rooms map[string]struct{}
 	mu    sync.RWMutex
 
+	// closeOnce ensures sendCh is closed exactly once (P1-02).
+	closeOnce sync.Once
+
 	log *slog.Logger
 }
 
@@ -98,8 +101,9 @@ func (c *Client) send(msg []byte) {
 }
 
 // Close signals the client to disconnect gracefully.
+// Safe for concurrent calls from multiple goroutines (P1-02).
 func (c *Client) Close() {
-	close(c.sendCh)
+	c.closeOnce.Do(func() { close(c.sendCh) })
 }
 
 // Done returns a channel closed when the client disconnects.

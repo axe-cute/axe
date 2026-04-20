@@ -109,7 +109,7 @@ func main() {
 	_ = sqlDB // used by ent client (injected by axe generate resource)
 
 	// ── JWT service ───────────────────────────────────────────────────────────
-	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
+	jwtSvc, _ := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
 	_ = jwtSvc
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────

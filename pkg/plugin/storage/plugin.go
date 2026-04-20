@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -55,11 +56,15 @@ func (p *Plugin) Register(_ context.Context, app *plugin.App) error {
 	plugin.Provide[Store](app, ServiceKey, p.store)
 
 	// Build JWT middleware for auth-protected routes.
-	p.jwtSvc = jwtauth.New(
+	var jwtErr error
+	p.jwtSvc, jwtErr = jwtauth.New(
 		app.Config.JWTSecret,
 		app.Config.AccessTokenTTL(),
 		app.Config.RefreshTokenTTL(),
 	)
+	if jwtErr != nil {
+		return fmt.Errorf("storage: jwt init: %w", jwtErr)
+	}
 	if app.Cache != nil {
 		p.blocklist = app.Cache
 	}
