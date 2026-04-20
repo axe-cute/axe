@@ -44,10 +44,10 @@ type Claims struct {
 
 // Service handles token generation and validation.
 type Service struct {
-	secret        []byte
-	accessTTL     time.Duration
-	refreshTTL    time.Duration
-	issuer        string
+	secret     []byte
+	accessTTL  time.Duration
+	refreshTTL time.Duration
+	issuer     string
 }
 
 // New creates a new JWT Service.
@@ -144,7 +144,7 @@ func (s *Service) Validate(tokenStr string) (*Claims, error) {
 // ── Sentinel errors ───────────────────────────────────────────────────────────
 
 var (
-	ErrTokenExpired  = errors.New("token expired")
-	ErrTokenInvalid  = errors.New("token invalid")
-	ErrTokenRevoked  = errors.New("token revoked") // JTI found in blocklist
+	ErrTokenExpired = errors.New("token expired")
+	ErrTokenInvalid = errors.New("token invalid")
+	ErrTokenRevoked = errors.New("token revoked") // JTI found in blocklist
 )

@@ -9,7 +9,6 @@ import (
 
 	"github.com/axe-cute/axe/internal/handler/middleware"
 	"github.com/axe-cute/axe/pkg/apperror"
-	"github.com/axe-cute/axe/pkg/logger"
 )
 
 // ── RequestID ─────────────────────────────────────────────────────────────────
@@ -74,9 +73,6 @@ func TestLoggerMiddleware_Runs(t *testing.T) {
 func TestRecoverer_CatchesPanic(t *testing.T) {
 	// Setup: inject logger so Recoverer can log
 	handler := middleware.RequestID(middleware.Recoverer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Inject logger before panic
-		ctx := logger.WithLogger(r.Context(), logger.New("development"))
-		r = r.WithContext(ctx)
 		panic("something went wrong")
 	})))
 

@@ -415,7 +415,7 @@ func validatePlugin(dir, name string) []string {
 	pluginFile := filepath.Join(dir, "plugin.go")
 	data, err := os.ReadFile(pluginFile)
 	if err != nil {
-		return []string{fmt.Sprintf("missing plugin.go — every plugin needs a plugin.go")}
+		return []string{"missing plugin.go — every plugin needs a plugin.go"}
 	}
 	src := string(data)
 

@@ -28,10 +28,10 @@ type Config struct {
 
 	// Database
 	DBDriver                    string `env:"DB_DRIVER"                          env-default:"postgres"`
-	DatabaseURL                string `env:"DATABASE_URL"                       env-required:"true"`
-	DatabaseMaxOpenConns       int    `env:"DATABASE_MAX_OPEN_CONNS"            env-default:"25"`
-	DatabaseMaxIdleConns       int    `env:"DATABASE_MAX_IDLE_CONNS"            env-default:"5"`
-	DatabaseConnMaxLifetimeMins int   `env:"DATABASE_CONN_MAX_LIFETIME_MINUTES" env-default:"30"`
+	DatabaseURL                 string `env:"DATABASE_URL"                       env-required:"true"`
+	DatabaseMaxOpenConns        int    `env:"DATABASE_MAX_OPEN_CONNS"            env-default:"25"`
+	DatabaseMaxIdleConns        int    `env:"DATABASE_MAX_IDLE_CONNS"            env-default:"5"`
+	DatabaseConnMaxLifetimeMins int    `env:"DATABASE_CONN_MAX_LIFETIME_MINUTES" env-default:"30"`
 
 	// Redis
 	RedisURL        string `env:"REDIS_URL"         env-default:"redis://localhost:6379/0"`
@@ -43,9 +43,9 @@ type Config struct {
 	JWTRefreshTokenExpiryDays   int    `env:"JWT_REFRESH_TOKEN_EXPIRY_DAYS"     env-default:"7"`
 
 	// Asynq
-	AsynqConcurrency    int    `env:"ASYNQ_CONCURRENCY"     env-default:"10"`
-	AsynqQueueDefault   string `env:"ASYNQ_QUEUE_DEFAULT"   env-default:"default"`
-	AsynqQueueCritical  string `env:"ASYNQ_QUEUE_CRITICAL"  env-default:"critical"`
+	AsynqConcurrency   int    `env:"ASYNQ_CONCURRENCY"     env-default:"10"`
+	AsynqQueueDefault  string `env:"ASYNQ_QUEUE_DEFAULT"   env-default:"default"`
+	AsynqQueueCritical string `env:"ASYNQ_QUEUE_CRITICAL"  env-default:"critical"`
 
 	// WebSocket Hub
 	// HubAdapter selects the pub/sub backend for multi-instance WebSocket broadcasting.
@@ -75,7 +75,6 @@ type Config struct {
 	// Stripe Payment
 	StripeSecretKey     string `env:"STRIPE_SECRET_KEY"`
 	StripeWebhookSecret string `env:"STRIPE_WEBHOOK_SECRET"`
-
 }
 
 // Load reads configuration from environment variables and validates it.
