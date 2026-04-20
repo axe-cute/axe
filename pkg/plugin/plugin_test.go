@@ -411,10 +411,10 @@ func (v *versionedPlugin) MinAxeVersion() string { return v.minVersion }
 
 func TestVersioned_CompatibleVersion(t *testing.T) {
 	app := newTestApp()
-	// AxeVersion is "v1.0.0"; plugin requires "v1.0.0" — compatible.
+	// AxeVersion is "v0.5.0"; plugin requires "v0.5.0" — compatible.
 	p := &versionedPlugin{
 		mockPlugin: mockPlugin{name: "ai"},
-		minVersion: "v1.0.0",
+		minVersion: "v0.5.0",
 	}
 	require.NoError(t, app.Use(p))
 	require.NoError(t, app.Start(context.Background()))
@@ -423,7 +423,7 @@ func TestVersioned_CompatibleVersion(t *testing.T) {
 
 func TestVersioned_IncompatibleVersion(t *testing.T) {
 	app := newTestApp()
-	// AxeVersion is "v1.0.0"; plugin requires "v2.0.0" — incompatible.
+	// AxeVersion is "v0.5.0"; plugin requires "v2.0.0" — incompatible.
 	p := &versionedPlugin{
 		mockPlugin: mockPlugin{name: "ai"},
 		minVersion: "v2.0.0",

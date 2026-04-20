@@ -65,7 +65,8 @@ func openTestDB(t *testing.T) *sql.DB {
 			payload      TEXT        NOT NULL DEFAULT '{}',
 			created_at   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			processed_at DATETIME    NULL,
-			retries      INTEGER     NOT NULL DEFAULT 0
+			retries      INTEGER     NOT NULL DEFAULT 0,
+			retry_after  DATETIME    NULL
 		)
 	`)
 	require.NoError(t, err, "failed to create outbox_events table")
@@ -322,7 +323,7 @@ func TestOutboxTable_Schema(t *testing.T) {
 	insertEvent(t, db, "evt-schema-1", "UserRegistered", "user")
 
 	rows, err := db.QueryContext(context.Background(), `
-		SELECT id, event_type, aggregate
+		SELECT id, event_type, aggregate, retries
 		FROM outbox_events
 		WHERE processed_at IS NULL
 		  AND retries < 5
@@ -333,11 +334,13 @@ func TestOutboxTable_Schema(t *testing.T) {
 	defer rows.Close()
 
 	var id, evtType, aggregate string
+	var retries int
 	require.True(t, rows.Next())
-	require.NoError(t, rows.Scan(&id, &evtType, &aggregate))
+	require.NoError(t, rows.Scan(&id, &evtType, &aggregate, &retries))
 	assert.Equal(t, "evt-schema-1", id)
 	assert.Equal(t, "UserRegistered", evtType)
 	assert.Equal(t, "user", aggregate)
+	assert.Equal(t, 0, retries)
 }
 
 // ── processed_at lifecycle ────────────────────────────────────────────────────
@@ -505,4 +508,114 @@ func TestOutboxTable_MixedProcessedAndUnprocessed(t *testing.T) {
 func TestEnqueuerInterface_MockCompliance(t *testing.T) {
 	// Verify mockEnqueuer satisfies the Enqueuer interface at compile time.
 	var _ outbox.Enqueuer = (*mockEnqueuer)(nil)
+}
+
+// ── Sprint B: Dead Letter Detection ──────────────────────────────────────────────
+
+func TestStart_DeadLetter_EventExceedsMaxRetries(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{err: assert.AnError} // all enqueue calls fail
+
+	insertEvent(t, db, "evt-dead-1", "DeadEvent", "payment")
+	// Set retries to 4 (one more failure will hit limit of 5)
+	_, err := db.Exec(`UPDATE outbox_events SET retries = 4 WHERE id = ?`, "evt-dead-1")
+	require.NoError(t, err)
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:   50 * time.Millisecond,
+		BatchSize:  10,
+		MaxRetries: 5,
+		Driver:     "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// Event should now have retries=5, making it a dead letter.
+	var retries int
+	err = db.QueryRow(`SELECT retries FROM outbox_events WHERE id = ?`, "evt-dead-1").Scan(&retries)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, retries, 5, "dead letter event should have retries >= maxRetries")
+
+	// Should no longer be picked up.
+	assert.Equal(t, 0, countUnprocessed(t, db), "dead letter should not appear in unprocessed count")
+}
+
+func TestConfig_CustomMaxRetries(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{err: assert.AnError}
+
+	insertEvent(t, db, "evt-custom-retry", "CustomEvent", "custom")
+	// Set retries to 2 (one more failure hits limit of 3)
+	_, err := db.Exec(`UPDATE outbox_events SET retries = 2 WHERE id = ?`, "evt-custom-retry")
+	require.NoError(t, err)
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:   50 * time.Millisecond,
+		BatchSize:  10,
+		MaxRetries: 3, // custom: only 3 retries
+		Driver:     "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	var retries int
+	err = db.QueryRow(`SELECT retries FROM outbox_events WHERE id = ?`, "evt-custom-retry").Scan(&retries)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, retries, 3, "event should hit custom max retries of 3")
+}
+
+// ── Sprint B: Exponential Backoff ────────────────────────────────────────────────
+
+func TestStart_ExponentialBackoff_SetsRetryAfter(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{err: assert.AnError} // force failure
+
+	insertEvent(t, db, "evt-backoff-1", "BackoffEvent", "test")
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:   50 * time.Millisecond,
+		BatchSize:  10,
+		MaxRetries: 10, // high so we test backoff, not dead letter
+		Driver:     "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// After failures, retry_after should be set (not NULL).
+	var retryAfter sql.NullString
+	err := db.QueryRow(`SELECT retry_after FROM outbox_events WHERE id = ?`, "evt-backoff-1").Scan(&retryAfter)
+	require.NoError(t, err)
+	assert.True(t, retryAfter.Valid, "retry_after should be set after enqueue failure")
+}
+
+func TestStart_BackoffPreventsImmediateRetry(t *testing.T) {
+	db := openTestDB(t)
+	enq := &mockEnqueuer{}
+
+	insertEvent(t, db, "evt-backoff-future", "FutureEvent", "test")
+	// Set retry_after far in the future — should not be picked up.
+	_, err := db.Exec(
+		`UPDATE outbox_events SET retry_after = datetime('now', '+1 hour') WHERE id = ?`,
+		"evt-backoff-future",
+	)
+	require.NoError(t, err)
+
+	p := outbox.New(db, enq, outbox.Config{
+		Interval:  50 * time.Millisecond,
+		BatchSize: 10,
+		Driver:    "sqlite3",
+	}, slog.Default())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	p.Start(ctx)
+
+	// Should not have been enqueued — it's in backoff.
+	assert.Empty(t, enq.Tasks(), "event with future retry_after should not be picked up")
 }

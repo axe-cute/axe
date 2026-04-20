@@ -23,8 +23,8 @@
 |---|---|---|
 | Language | Go | 1.25+ |
 | HTTP Router | Chi | v5 |
-| ORM (writes) | Ent | latest |
-| Query builder (reads) | sqlc | v2 |
+| ORM | Ent | latest |
+| Query builder (alt) | sqlc | v2 |
 | Database driver | pgx | v5 |
 | Config | Cleanenv | latest |
 | Background jobs | Asynq | latest |
@@ -32,7 +32,7 @@
 | Tracing | OpenTelemetry | latest |
 | Cache | Redis (go-redis) | v9 |
 | Test containers | testcontainers-go | latest |
-| Code generation | go generate (Ent + sqlc) | latest |
+| Code generation | go generate (Ent or sqlc) | latest |
 | Database driver | pgx (PostgreSQL) | v5 |
 | Database driver | go-sql-driver (MySQL) | latest |
 | Database driver | modernc.org/sqlite (CGO-free) | latest |
@@ -53,7 +53,7 @@ axe/
 │   ├── domain/              # Entities + Interfaces ONLY
 │   ├── handler/             # HTTP layer (Chi handlers)
 │   ├── service/             # Business logic
-│   └── repository/          # Data access (Ent + sqlc)
+│   └── repository/          # Data access (Ent or sqlc — pick one per project)
 ├── pkg/
 │   ├── apperror/            # Error taxonomy
 │   ├── txmanager/           # Transaction manager
@@ -110,7 +110,7 @@ import (
 
 ### internal/repository/ — Data Access
 ```
-✅ Database read/write via Ent (writes) hoặc sqlc (complex reads)
+✅ Database read/write via Ent or sqlc (choose one per project)
 ✅ Implement interfaces defined in internal/domain/
 ❌ KHÔNG: Business logic, HTTP concerns, calling other repositories
 ```
@@ -136,22 +136,22 @@ import (
 
 ---
 
-## Ent vs sqlc — Usage Rules
+## Ent vs sqlc — Choose One Per Project
+
+Axe hỗ trợ cả Ent và sqlc, nhưng **mỗi project chỉ chọn một**:
 
 ```
-WRITE operations     → Ent (always)
-READ - simple by ID  → Ent (consistency)
-READ - JOIN/aggregate → sqlc
-READ - pagination    → sqlc (LIMIT/OFFSET)
-READ - analytics     → sqlc
+Option A: Ent (recommended for most projects)
+  - Full ORM: CRUD, migrations, schema-as-code
+  - Best for: Standard REST APIs, CRUD-heavy apps
+
+Option B: sqlc (for query-heavy/analytics apps)
+  - SQL-first: write queries, generate Go code
+  - Best for: Complex JOINs, aggregations, analytics dashboards
 ```
 
-**Connection**: Cả Ent và sqlc dùng chung 1 `*sql.DB` connection pool:
-```go
-db, _ := sql.Open("pgx", cfg.DatabaseURL)
-entClient := ent.NewClient(ent.Driver(entsql.OpenDB("pgx", db)))
-queries := sqlc.New(db)
-```
+> ⚠️ Không dùng cả Ent lẫn sqlc trong cùng một project.
+> Chọn một tool phù hợp với use case của bạn.
 
 ---
 

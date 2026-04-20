@@ -19,7 +19,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [v1.0.0-rc.1] — 2026-04-19
+## [v0.5.0] — 2026-04-20
+
+**Architecture complete. Hardened. Seeking early adopters.**
+
+### Added
+- Outbox dead letter detection with `axe_outbox_dead_letters_total` Prometheus counter
+- Exponential backoff for outbox retries (`min(interval × 2^retries, 5min)`)
+- Configurable `MaxRetries` in outbox `Config` (default: 5)
+- `axe_outbox_enqueued_total` and `axe_outbox_enqueue_failed_total` metrics
+- `docs/guides/getting-started.md` — zero-to-deploy in 15 minutes
+- `docs/guides/websocket-semantics.md` — message ordering, delivery guarantees
+- `docs/plugin-maturity.md` — plugin classification (Stable/Beta/Experimental)
+- `govulncheck` security gate in CI
+- Coverage threshold gate (≥70%) in CI
+- Multi-DB integration test job (PostgreSQL + MySQL) in CI
+- `panic()` policy in architecture contract
+
+### Changed
+- Version downgraded from `v1.0.0-rc.1` to `v0.5.0` — reflects pre-1.0 maturity
+- Ent/sqlc documented as **choose one per project** (not both)
+- `project-context.md` updated to reflect Ent vs sqlc choice model
+- Architecture contract Ent/sqlc section rewritten
+
+### Fixed
+- Removed `TODO` comments from example project templates
+- Fixed `Ent (writes) + sqlc` → `Ent or sqlc` in architecture diagram
+
+> [!IMPORTANT]
+> **v1.0.0 gate**: requires ≥3 external users to validate the framework before release.
+
+---
+
+## [v1.0.0-rc.1] — 2026-04-19 *(version retracted — see v0.5.0)*
+
+> [!WARNING]
+> This version was prematurely tagged. Use `v0.5.0` instead.
+> The API is the same, but version `v0.5.0` honestly reflects the project's maturity.
 
 **First release candidate.** All library packages ≥80% test coverage, zero TODO/FIXME,
 full documentation sync, and incremental adoption path for existing Go projects.

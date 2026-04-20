@@ -55,7 +55,7 @@ import (
 // AxeVersion is the current framework version.
 // Checked against [Versioned.MinAxeVersion] during [App.Start].
 // Bump this constant on every release.
-const AxeVersion = "v1.0.0"
+const AxeVersion = "v0.5.0"
 
 // ── Core interface ────────────────────────────────────────────────────────────
 

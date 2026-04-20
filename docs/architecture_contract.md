@@ -47,6 +47,18 @@ at compile-time**. A developer reading the code should never wonder
 | Dynamic plugin loading (`plugin.Open`) | Breaks static analysis, version coupling |
 | Runtime dependency injection (containers) | Control flow becomes invisible; use Wire instead |
 
+### `panic()` Policy
+
+`panic()` is **forbidden in request-serving code paths** (`pkg/`, `internal/handler/`, `internal/service/`, `internal/repository/`).
+
+**Allowed only in:**
+| Context | Example | Rationale |
+|---|---|---|
+| `Must*` functions | `MustResolve[T]()`, `MustFromCtx()` | Go convention — caller explicitly opts into panic |
+| Startup-time registration guards | `db.Register()`, `plugin.Provide[T]()` | Mirrors `database/sql.Register()` — fail-fast before any request |
+| CLI template parsing | `template.Must()` | Startup-only, no user request involved |
+| Test helpers | `t.Fatal()` equivalent | Tests, not production |
+
 ---
 
 ## 2. Layer Architecture
@@ -76,7 +88,7 @@ at compile-time**. A developer reading the code should never wonder
                                                     │ via interface
                                         ┌───────────▼─────────────┐
                                         │   internal/repository/  │  Data Access
-                                        │  Ent (writes) + sqlc    │
+                                        │   Ent or sqlc           │
                                         └───────────┬─────────────┘
                                                     │
                                         ┌───────────▼─────────────┐
@@ -183,17 +195,19 @@ repositories, that coordination belongs in the **service layer**, not here.
 
 ## 4. Multi-Database Strategy
 
-### Ent vs sqlc Decision Matrix
+### Ent vs sqlc — Choose One Per Project
 
-| Operation | Use | Rationale |
+Axe supports both Ent and sqlc, but **each project chooses one**:
+
+| Option | Best for | Strengths |
 |---|---|---|
-| Create / Update / Delete | **Ent** (always) | Schema-safe, compile-time validated, handles relations |
-| Simple fetch by ID/unique key | **Ent** | Consistent with write path, good enough performance |
-| Complex joins, aggregations | **sqlc** | Hand-written SQL gives full control, type-safe output |
-| Cursor-based pagination | **sqlc** | Complex WHERE clauses are cleaner in raw SQL |
-| Analytics / reporting queries | **sqlc** | Aggregations, window functions, CTEs |
+| **Ent** (recommended) | CRUD-heavy REST APIs | Schema-as-code, compile-time safety, auto migrations, relations |
+| **sqlc** | Query-heavy / analytics apps | Hand-written SQL, full control, type-safe output, complex JOINs |
 
-Both Ent and sqlc share the **same `*sql.DB` connection pool**, managed by
+> ⚠️ Do not use both Ent and sqlc in the same project.
+> Choose the tool that fits your use case.
+
+Both share the **same `*sql.DB` connection pool**, managed by
 the pluggable `pkg/db` adapter.
 
 ### Pluggable DB Adapters

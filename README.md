@@ -8,7 +8,7 @@ Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · F
 
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/v1.0.0--rc.1-stable-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
+[![Release](https://img.shields.io/badge/v0.5.0-beta-6366f1?style=for-the-badge)](https://github.com/axe-cute/axe/releases)
 
 </div>
 
@@ -461,6 +461,9 @@ See also: [standalone package examples](examples/) (apperror, txmanager, plugin)
 
 | Guide | Description |
 |---|---|
+| [**Getting Started**](docs/guides/getting-started.md) | Zero to running API in 15 minutes — **start here** |
+| [WebSocket Semantics](docs/guides/websocket-semantics.md) | Message ordering, delivery guarantees, scaling |
+| [Plugin Maturity Tiers](docs/plugin-maturity.md) | Which plugins are production-ready (🟢 Stable / 🟡 Beta / 🔴 Experimental) |
 | [Incremental Adoption](docs/guides/incremental-adoption.md) | Use axe packages in your **existing** Go project — no full migration needed |
 | [JuiceFS Storage](docs/guides/juicefs-storage.md) | Production storage with JuiceFS FUSE mount |
 | [Architecture Contract](docs/architecture_contract.md) | Layer rules, import boundaries, error taxonomy |
