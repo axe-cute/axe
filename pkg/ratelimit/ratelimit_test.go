@@ -206,3 +206,215 @@ func TestStrict_429Response_IsJSON(t *testing.T) {
 	assert.Contains(t, body, "TOO_MANY_REQUESTS")
 	assert.Contains(t, body, "retry after")
 }
+
+// ── WithTrustedProxies — XFF only trusted from configured proxies ────────────
+
+func TestWithTrustedProxies_XFF_Respected(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("10.0.0.0/8"))
+	h := l.Strict()(okHandler) // 10 req/min
+
+	// Requests come from trusted proxy 10.0.0.1, XFF says real client is 203.0.113.50
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "10.0.0.1:9999" // trusted proxy
+		req.Header.Set("X-Forwarded-For", "203.0.113.50")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	// 11th from same XFF should be blocked
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:9999"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+}
+
+func TestWithTrustedProxies_UntrustedProxy_IgnoresXFF(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("10.0.0.0/8"))
+	h := l.Strict()(okHandler)
+
+	// Request from untrusted proxy — XFF should be IGNORED, use RemoteAddr
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.1:9999" // NOT in 10.0.0.0/8
+	req.Header.Set("X-Forwarded-For", "spoofed-ip")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	// Rate limit should be keyed to 192.168.1.1, not "spoofed-ip"
+}
+
+func TestWithTrustedProxies_SingleIP(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("127.0.0.1"))
+	h := l.Strict()(okHandler)
+
+	// Request from trusted single IP
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:9999"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestWithTrustedProxies_InvalidCIDR_Skipped(t *testing.T) {
+	rdb := newTestRedis(t)
+	// Invalid CIDR should be silently skipped
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("not-a-cidr", "10.0.0.0/8"))
+	h := l.Global()(okHandler)
+	rec := doRequest(t, h, "10.0.0.1")
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestWithTrustedProxies_XRealIP_Respected(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("10.0.0.0/8"))
+	h := l.Strict()(okHandler)
+
+	// No XFF, but X-Real-IP set from trusted proxy
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "10.0.0.1:9999"
+		req.Header.Set("X-Real-IP", "198.51.100.99")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	// 11th should be blocked
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:9999"
+	req.Header.Set("X-Real-IP", "198.51.100.99")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+}
+
+func TestWithTrustedProxies_XFF_MultipleIPs(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb, ratelimit.WithTrustedProxies("10.0.0.0/8"))
+	h := l.Global()(okHandler)
+
+	// XFF with multiple IPs — should use the first one (original client)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:9999"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4, 10.0.0.2, 10.0.0.1")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// ── FailMode ─────────────────────────────────────────────────────────────────
+
+func TestWithFailMode_FailClosed(t *testing.T) {
+	// Use a broken Redis addr — will fail on Allow()
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:1", DialTimeout: 100 * time.Millisecond})
+	defer rdb.Close()
+
+	l := ratelimit.New(rdb, ratelimit.WithFailMode(ratelimit.FailClosed))
+	h := l.Global()(okHandler)
+
+	rec := doRequest(t, h, "1.2.3.4")
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code,
+		"FailClosed should reject when Redis is unreachable")
+}
+
+func TestWithFailMode_FailOpen(t *testing.T) {
+	// Use a broken Redis addr
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:1", DialTimeout: 100 * time.Millisecond})
+	defer rdb.Close()
+
+	l := ratelimit.New(rdb, ratelimit.WithFailMode(ratelimit.FailOpen))
+	h := l.Global()(okHandler)
+
+	rec := doRequest(t, h, "1.2.3.4")
+	assert.Equal(t, http.StatusOK, rec.Code,
+		"FailOpen should allow when Redis is unreachable")
+}
+
+func TestWithFailMode_DefaultIsFailOpen(t *testing.T) {
+	// Use a broken Redis addr — default should be FailOpen
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:1", DialTimeout: 100 * time.Millisecond})
+	defer rdb.Close()
+
+	l := ratelimit.New(rdb) // no WithFailMode
+	h := l.Global()(okHandler)
+
+	rec := doRequest(t, h, "5.6.7.8")
+	assert.Equal(t, http.StatusOK, rec.Code,
+		"default fail mode should be FailOpen")
+}
+
+// ── Check() — exceeded limit ─────────────────────────────────────────────────
+
+func TestCheck_DeniesAfterLimit(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb)
+
+	key := "test-check-exceeded"
+	// Exhaust the limit (rate=3)
+	for i := 0; i < 3; i++ {
+		allowed, _, _, err := l.Check(t.Context(), key, 3, time.Minute)
+		require.NoError(t, err)
+		assert.True(t, allowed)
+	}
+
+	// 4th should be denied
+	allowed, _, retryAfter, err := l.Check(t.Context(), key, 3, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, allowed, "should deny after exceeding limit")
+	assert.Greater(t, retryAfter, time.Duration(0), "retryAfter should be positive")
+}
+
+func TestCheck_FailClosed_ReturnsError(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:1", DialTimeout: 100 * time.Millisecond})
+	defer rdb.Close()
+
+	l := ratelimit.New(rdb, ratelimit.WithFailMode(ratelimit.FailClosed))
+
+	allowed, _, _, err := l.Check(t.Context(), "key", 10, time.Minute)
+	assert.Error(t, err)
+	assert.False(t, allowed, "FailClosed Check should deny on error")
+}
+
+func TestCheck_FailOpen_AllowsOnError(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:1", DialTimeout: 100 * time.Millisecond})
+	defer rdb.Close()
+
+	l := ratelimit.New(rdb, ratelimit.WithFailMode(ratelimit.FailOpen))
+
+	allowed, _, _, err := l.Check(t.Context(), "key", 10, time.Minute)
+	assert.Error(t, err)
+	assert.True(t, allowed, "FailOpen Check should allow on error")
+}
+
+// ── Custom Middleware ────────────────────────────────────────────────────────
+
+func TestMiddleware_CustomRateAndWindow(t *testing.T) {
+	rdb := newTestRedis(t)
+	l := ratelimit.New(rdb)
+	h := l.Middleware(2, time.Minute, "custom")(okHandler)
+
+	ip := "172.20.0.1"
+	for i := 0; i < 2; i++ {
+		rec := doRequest(t, h, ip)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	rec := doRequest(t, h, ip)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+}
+
+// ── FailMode constants ───────────────────────────────────────────────────────
+
+func TestFailMode_Constants(t *testing.T) {
+	assert.Equal(t, ratelimit.FailMode(0), ratelimit.FailOpen)
+	assert.Equal(t, ratelimit.FailMode(1), ratelimit.FailClosed)
+	assert.NotEqual(t, ratelimit.FailOpen, ratelimit.FailClosed)
+}
+

@@ -281,3 +281,189 @@ func TestLoad_StripeSet(t *testing.T) {
 	assert.Equal(t, "sk_test_123", cfg.StripeSecretKey)
 	assert.Equal(t, "whsec_123", cfg.StripeWebhookSecret)
 }
+
+// ── RedisAddr — URL parsing ──────────────────────────────────────────────────
+
+func TestRedisAddr_SimpleURL(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("REDIS_URL", "redis://localhost:6379/0")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:6379", cfg.RedisAddr())
+}
+
+func TestRedisAddr_WithAuth(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("REDIS_URL", "redis://user:p@ssw0rd@myhost:6380/2")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "myhost:6380", cfg.RedisAddr())
+}
+
+func TestRedisAddr_WithSlashInPassword(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("REDIS_URL", "redis://user:p%2Fss@host:6379/0")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "host:6379", cfg.RedisAddr())
+}
+
+func TestRedisAddr_RedissScheme(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("REDIS_URL", "rediss://secure-host:6380/0")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "secure-host:6380", cfg.RedisAddr())
+}
+
+func TestRedisAddr_NoDatabase(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("REDIS_URL", "redis://localhost:6379")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:6379", cfg.RedisAddr())
+}
+
+// ── CORS validation ─────────────────────────────────────────────────────────
+
+func TestLoad_CORSWildcard_Production_Rejected(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS")
+}
+
+func TestLoad_CORSWildcard_Development_Allowed(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "development")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	_, err := config.Load()
+	assert.NoError(t, err, "CORS wildcard should be allowed in development")
+}
+
+func TestLoad_CORSWildcard_Staging_Allowed(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "staging")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	_, err := config.Load()
+	assert.NoError(t, err, "CORS wildcard should be allowed in staging")
+}
+
+func TestLoad_CORSExplicitOrigin_Production_Allowed(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
+	_, err := config.Load()
+	assert.NoError(t, err, "explicit CORS origins should be allowed in production")
+}
+
+// ── TTL helpers ──────────────────────────────────────────────────────────────
+
+func TestAccessTokenTTL(t *testing.T) {
+	requiredEnv(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 15*time.Minute, cfg.AccessTokenTTL())
+}
+
+func TestRefreshTokenTTL(t *testing.T) {
+	requiredEnv(t)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 7*24*time.Hour, cfg.RefreshTokenTTL())
+}
+
+func TestIsDevelopment(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "development")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.IsDevelopment())
+
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://example.com")
+	cfg2, err := config.Load()
+	require.NoError(t, err)
+	assert.False(t, cfg2.IsDevelopment())
+}
+
+func TestIsProduction(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://example.com")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.IsProduction())
+}
+
+func TestIsProduction_NotInDevelopment(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "development")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.IsProduction())
+}
+
+func TestLoadFromFile_NonExistent_ReturnsError(t *testing.T) {
+	_, err := config.LoadFromFile("/nonexistent/.env")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load from file")
+}
+
+func TestLoad_InvalidPort_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("SERVER_PORT", "99999")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SERVER_PORT")
+}
+
+func TestLoad_InvalidEnvironment_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("ENVIRONMENT", "invalid")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ENVIRONMENT")
+}
+
+func TestLoad_InvalidLogLevel_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("LOG_LEVEL", "trace")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "LOG_LEVEL")
+}
+
+func TestLoad_InvalidDBDriver_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("DB_DRIVER", "oracle")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DB_DRIVER")
+}
+
+func TestLoad_InvalidHubAdapter_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("HUB_ADAPTER", "kafka")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HUB_ADAPTER")
+}
+
+func TestLoad_InvalidStorageBackend_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("STORAGE_BACKEND", "s3")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "STORAGE_BACKEND")
+}
+
+func TestLoad_InvalidJWTExpiry_ReturnsError(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("JWT_ACCESS_TOKEN_EXPIRY_MINUTES", "0")
+	_, err := config.Load()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JWT_ACCESS_TOKEN_EXPIRY_MINUTES")
+}

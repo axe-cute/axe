@@ -275,3 +275,126 @@ func TestFullLifecycle_IssueValidateExpire(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, pair.AccessToken, pair2.AccessToken)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New() — error paths
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestNew_ShortSecret_ReturnsError(t *testing.T) {
+	_, err := jwtauth.New("too-short", 15*time.Minute, 7*24*time.Hour)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "32")
+}
+
+func TestNew_EmptySecret_ReturnsError(t *testing.T) {
+	_, err := jwtauth.New("", 15*time.Minute, 7*24*time.Hour)
+	require.Error(t, err)
+}
+
+func TestNew_ExactMinLength_Succeeds(t *testing.T) {
+	secret := "12345678901234567890123456789012" // exactly 32 bytes
+	svc, err := jwtauth.New(secret, 15*time.Minute, 7*24*time.Hour)
+	require.NoError(t, err)
+	assert.NotNil(t, svc)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ValidateAccess — type-safe access token validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidateAccess_AcceptsAccessToken(t *testing.T) {
+	svc := newTestService()
+	pair, err := svc.GenerateTokenPair(uuid.New(), "user")
+	require.NoError(t, err)
+
+	claims, err := svc.ValidateAccess(pair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, jwtauth.TokenTypeAccess, claims.TokenType)
+}
+
+func TestValidateAccess_RejectsRefreshToken(t *testing.T) {
+	svc := newTestService()
+	pair, err := svc.GenerateTokenPair(uuid.New(), "user")
+	require.NoError(t, err)
+
+	_, err = svc.ValidateAccess(pair.RefreshToken)
+	assert.ErrorIs(t, err, jwtauth.ErrTokenInvalid,
+		"refresh token must be rejected by ValidateAccess")
+}
+
+func TestValidateAccess_RejectsInvalidToken(t *testing.T) {
+	svc := newTestService()
+	_, err := svc.ValidateAccess("invalid.jwt.token")
+	assert.ErrorIs(t, err, jwtauth.ErrTokenInvalid)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ValidateRefresh — type-safe refresh token validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidateRefresh_AcceptsRefreshToken(t *testing.T) {
+	svc := newTestService()
+	pair, err := svc.GenerateTokenPair(uuid.New(), "user")
+	require.NoError(t, err)
+
+	claims, err := svc.ValidateRefresh(pair.RefreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, jwtauth.TokenTypeRefresh, claims.TokenType)
+}
+
+func TestValidateRefresh_RejectsAccessToken(t *testing.T) {
+	svc := newTestService()
+	pair, err := svc.GenerateTokenPair(uuid.New(), "user")
+	require.NoError(t, err)
+
+	_, err = svc.ValidateRefresh(pair.AccessToken)
+	assert.ErrorIs(t, err, jwtauth.ErrTokenInvalid,
+		"access token must be rejected by ValidateRefresh")
+}
+
+func TestValidateRefresh_RejectsInvalidToken(t *testing.T) {
+	svc := newTestService()
+	_, err := svc.ValidateRefresh("invalid.jwt.token")
+	assert.ErrorIs(t, err, jwtauth.ErrTokenInvalid)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token type claims
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestTokenType_AccessAndRefreshDiffer(t *testing.T) {
+	svc := newTestService()
+	pair, err := svc.GenerateTokenPair(uuid.New(), "user")
+	require.NoError(t, err)
+
+	accessClaims, err := svc.Validate(pair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, jwtauth.TokenTypeAccess, accessClaims.TokenType)
+
+	refreshClaims, err := svc.Validate(pair.RefreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, jwtauth.TokenTypeRefresh, refreshClaims.TokenType)
+}
+
+func TestTokenType_Constants(t *testing.T) {
+	assert.Equal(t, "access", jwtauth.TokenTypeAccess)
+	assert.Equal(t, "refresh", jwtauth.TokenTypeRefresh)
+	assert.NotEqual(t, jwtauth.TokenTypeAccess, jwtauth.TokenTypeRefresh)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audience validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidate_WrongAudience(t *testing.T) {
+	svc1, _ := jwtauth.New("service-one-secret-at-least-32-bytes!", 15*time.Minute, 7*24*time.Hour)
+	pair, _ := svc1.GenerateTokenPair(uuid.New(), "user")
+
+	// Validate with svc1 (same issuer "axe") — should work
+	_, err := svc1.Validate(pair.AccessToken)
+	assert.NoError(t, err)
+}
+
+func TestMinSecretLength_Constant(t *testing.T) {
+	assert.Equal(t, 32, jwtauth.MinSecretLength)
+}

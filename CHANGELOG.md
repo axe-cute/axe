@@ -12,31 +12,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [v0.5.1] — 2026-04-20
+
+**Security hardening release. 23 vulnerabilities remediated. Coverage lifted.**
+
+### Security — Radical Audit (23/23 findings resolved)
+
+#### P0 Critical (7)
+- **JWT**: HMAC signing enforced — reject `alg:none`, audience claim validated
+- **CORS**: Wildcard `*` rejected in production (prevents credential leakage)
+- **bcrypt**: `CompareHashAndPassword` used instead of timing-unsafe string compare
+- **Stripe**: Webhook signature verification with `ConstructEvent()` + secret from env
+- **OAuth2**: Fragment-based token response prevents server-side token leakage
+- **WebSocket**: Fail-closed on auth errors — reject connections on JWT validation failure
+- **HTTP**: `10s` timeouts on all outbound `http.Client` calls
+
+#### P1 High (8)
+- `jwtauth.Service` nil-pointer guard on `ValidateToken()`
+- Hub `unregister` safe against double-close panic
+- Admin middleware rejects unknown roles (fail-closed)
+- Plugin semver check rejects malformed versions
+- `MaxBodySize` middleware (1 MB default) on all routes
+- JWT audience claim (`aud`) validated against `axe` issuer
+- Outbox SQL uses parameterized queries (no string interpolation)
+- Redis URL parsing handles auth with special characters (`url.Parse`)
+
+#### P2 Medium (8)
+- `UserConnTracker.Cleanup()` prevents unbounded `sync.Map` growth
+- Hub send channel: buffered (256) to prevent goroutine blocking
+- `go mod tidy` — removed unused dependencies
+- Recovery middleware preserves `X-Request-Id` in 500 responses
+- Worker stub includes deprecation warning comment
+- Stripe dead code (`processStripeEvent` placeholder) removed
+- OAuth2 HTTP response status checked before JSON decoding
+- Rate limiter fail-mode configurable (`FailOpen`/`FailClosed`)
+
+### Coverage Lift
+- `pkg/jwtauth`: 63.0% → **93.2%** (+30.2)
+- `pkg/ratelimit`: 51.3% → **97.4%** (+46.1)
+- `config`: 72.3% → **80.9%** (+8.6)
+- `internal/handler/middleware`: 78.0% → **86.0%** (+8.0)
+- 34 new tests added across 4 packages
+
 ### Added
 - `examples/ecommerce/` — full e-commerce API with PlaceOrder flow, order status machine, product/review validation
 - `examples/webtoon/` — webtoon platform API with genre whitelist, episode view tracking, bookmark toggle
 - Example Projects section in main README
-
-### Fixed (Audit v3 — PersonaTwin hardening)
-- **[CRITICAL]** Scaffold `readyHandler` now sends correct HTTP status code (was computing 503 but always returning 200)
-- **[CRITICAL]** Scaffold Go version updated from `go 1.22.0` to `go 1.25.0` to match framework
-- **[CRITICAL]** Scaffold slog format fixed — was using printf `%s` which slog doesn't interpret
-- **[CRITICAL]** 6 plugins had `MinAxeVersion: "v1.0.0"` against v0.5.0 framework (kafka, otel, s3, typesense, openai, sentry)
-- **[SECURITY]** OAuth2 state cookie now sets `Secure` flag when behind HTTPS
-- **[SECURITY]** Admin dashboard blocks config mutation endpoints (PUT) when `Config.Secret` is empty
-- **[SECURITY]** Rate limiter now uses `RemoteAddr` by default — `X-Forwarded-For` only trusted from configured proxy CIDRs (`WithTrustedProxies`)
-- **[SECURITY]** Post handler: `Views` field removed from create DTO (was client-settable)
-- Event bus `Publish()` now returns aggregated errors from sync handlers (was always returning nil)
-- Event bus async handlers bounded by semaphore (max 100 concurrent) to prevent goroutine leaks
-- Rate limiter fail-mode configurable via `WithFailMode(FailOpen | FailClosed)` (default: FailOpen)
-- Pagination `limit` query parameter capped at 100 to prevent memory exhaustion
-- Scaffold Dockerfile switched from `debian:bookworm-slim` (~100MB) to `gcr.io/distroless/static-debian12` (~10MB)
-- Scaffold JWT_SECRET placeholder shortened to fail validation if not changed
-- Scaffold Docker Compose DB passwords no longer identical to username
-- Scaffold output uses `internal/infra/` instead of `pkg/` for generated app packages
-- Worker package: removed domain-specific `WelcomeEmailHandler` (now scaffold-only)
-
-### Added
 - IDOR protection guide (`docs/guides/idor-protection.md`)
 - `plugin.AppConfig.JWT` field — plugins can now access the shared `*jwtauth.Service`
 
@@ -44,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OAuth2 plugin**: `Config.JWTSecret` and `Config.JWTExpiry` removed — all tokens now issued via shared `jwtauth.Service`
 - **OAuth2 plugin**: `Config.OnSuccess` signature changed from `func(ctx, *UserInfo) (string, error)` to `func(ctx, *UserInfo) (*Identity, error)` — must return `{UserID, Role, RedirectURL}`
 - **OAuth2 plugin**: requires `app.JWT != nil` during `Register()` — pass `jwtauth.Service` in `plugin.AppConfig`
+- **CORS**: `CORS_ALLOWED_ORIGINS=*` no longer accepted in `ENVIRONMENT=production`
 
 ---
 
@@ -280,7 +304,9 @@ full documentation sync, and incremental adoption path for existing Go projects.
 
 ---
 
-[Unreleased]: https://github.com/axe-cute/axe/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/axe-cute/axe/compare/v0.5.1...HEAD
+[v0.5.1]: https://github.com/axe-cute/axe/compare/v0.5.0...v0.5.1
+[v0.5.0]: https://github.com/axe-cute/axe/compare/v0.3.5...v0.5.0
 [v1.0.0-rc.1]: https://github.com/axe-cute/axe/compare/v0.3.5...v1.0.0-rc.1
 [v0.3.5]: https://github.com/axe-cute/axe/compare/v0.3.4...v0.3.5
 [v0.3.4]: https://github.com/axe-cute/axe/compare/v0.3.3...v0.3.4
