@@ -166,7 +166,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "kafka" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Subscribe registers a message handler for a topic.
 // Must be called before app.Start() — consumer goroutines start in Register().

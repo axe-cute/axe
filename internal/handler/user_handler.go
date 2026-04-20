@@ -227,6 +227,11 @@ func parseUUID(r *http.Request, param string) (uuid.UUID, error) {
 	return id, nil
 }
 
+// maxPageLimit prevents clients from requesting unbounded result sets
+// that could exhaust server memory. Requests above this cap are silently
+// clamped to maxPageLimit.
+const maxPageLimit = 100
+
 func parseIntQuery(r *http.Request, key string, defaultVal int) int {
 	raw := r.URL.Query().Get(key)
 	if raw == "" {
@@ -235,6 +240,9 @@ func parseIntQuery(r *http.Request, key string, defaultVal int) int {
 	v, err := strconv.Atoi(raw)
 	if err != nil || v < 0 {
 		return defaultVal
+	}
+	if v > maxPageLimit {
+		return maxPageLimit
 	}
 	return v
 }

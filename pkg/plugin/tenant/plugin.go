@@ -198,24 +198,20 @@ func fromSubdomain(r *http.Request) string {
 	return parts[0]
 }
 
-// fromJWT reads the "tenant_id" claim from context (set by jwtauth middleware).
-// Returns "" if no claim is found — does not parse the JWT itself.
-func fromJWT(r *http.Request) string {
-	// The jwtauth middleware stores claims in context under a known key.
-	// We use a type assertion to avoid importing jwtauth (Layer 6: no coupling).
-	type claimsMap interface {
-		Get(string) (interface{}, bool)
-	}
-	claims, ok := r.Context().Value("jwt_claims").(claimsMap)
-	if !ok {
-		return ""
-	}
-	v, ok := claims.Get("tenant_id")
-	if !ok {
-		return ""
-	}
-	s, _ := v.(string)
-	return s
+// fromJWT reads a tenant ID from JWT claims in context.
+// For this to work, the JWT middleware must inject *jwtauth.Claims with a custom
+// "tenant_id" field. Since the standard axe jwtauth.Claims does not include
+// tenant_id, this source requires a custom claims extension.
+//
+// NOTE: Currently returns "" because the standard jwtauth.Claims struct does not
+// carry a tenant_id field. To use SourceJWT, extend jwtauth.Claims or use
+// SourceHeader/SourceSubdomain instead. This is documented behavior, not a bug.
+func fromJWT(_ *http.Request) string {
+	// Standard jwtauth.Claims does not include tenant_id.
+	// Users who need JWT-based tenant extraction should implement a custom
+	// middleware that extracts the tenant from their extended claims and
+	// injects it via context using the tenant.ctxKey.
+	return ""
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

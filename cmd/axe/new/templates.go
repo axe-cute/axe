@@ -13,7 +13,7 @@ import (
 
 const tmplGoMod = `module {{.Module}}
 
-go 1.22.0
+go 1.25.0
 
 require (
 	entgo.io/ent v0.14.6
@@ -177,7 +177,7 @@ docs/
 `
 
 const tmplDockerfile = `# ── Build stage ──────────────────────────────────────────────────────────────
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
@@ -192,31 +192,20 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" -o /app-server ./cmd/api/main.go
 
-# ── Final stage ────────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+# ── Final stage (distroless — ~10MB, no shell, no package manager) ─────────
+# CGO_ENABLED=0 produces a static binary — no libc needed.
+# CA certificates are included in distroless/static.
+FROM gcr.io/distroless/static-debian12
 
-# Security: non-root user
-RUN groupadd -r app && useradd -r -g app app
-
-WORKDIR /app
-
-# CA certificates for TLS calls
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy binary
-COPY --from=builder /app-server ./app-server
-
-# Own files
-RUN chown -R app:app /app
-USER app
+COPY --from=builder /app-server /app-server
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:8080/health || exit 1
+# distroless has no shell — use container orchestrator health checks instead.
+# Kubernetes: livenessProbe/readinessProbe httpGet on /health and /ready.
+# Docker Compose: healthcheck via curl from a sidecar or docker-compose test.
 
-ENTRYPOINT ["./app-server"]
+ENTRYPOINT ["/app-server"]
 `
 
 const tmplReadme = `# {{.Name}}
@@ -349,7 +338,7 @@ LOG_LEVEL=debug           # debug | info | warn | error
 %s
 %s
 # Auth
-JWT_SECRET=your-256-bit-secret-change-in-production
+JWT_SECRET=CHANGE_ME_BEFORE_DEPLOY
 JWT_ACCESS_TOKEN_EXPIRY_MINUTES=15
 JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
 %s%s
@@ -379,7 +368,7 @@ services: {}
     restart: unless-stopped
     environment:
       POSTGRES_USER: %s
-      POSTGRES_PASSWORD: %s
+      POSTGRES_PASSWORD: %s_dev_password
       POSTGRES_DB: %s_dev
     ports:
       - "5432:5432"
@@ -398,16 +387,16 @@ services: {}
     container_name: %s_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: root_dev_password
       MYSQL_USER: %s
-      MYSQL_PASSWORD: %s
+      MYSQL_PASSWORD: %s_dev_password
       MYSQL_DATABASE: %s_dev
     ports:
       - "3306:3306"
     volumes:
       - %s_mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u%s", "-p%s"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u%s", "-p%s_dev_password"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -645,7 +634,7 @@ func main() {
 	// ── Logger ────────────────────────────────────────────────────────────────
 	log := logger.New(cfg.Environment)
 	slog.SetDefault(log)
-	log.Info("%s starting", "port", cfg.ServerPort, "env", cfg.Environment)
+	log.Info("`+data.Name+` starting", "port", cfg.ServerPort, "env", cfg.Environment)
 %s%s%s
 	_ = log
 
@@ -779,8 +768,9 @@ func readyHandler(sqlDB *sql.DB) http.HandlerFunc {
 		if resp["status"] == "degraded" {
 			status = http.StatusServiceUnavailable
 		}
-		writeJSON(w, resp)
-		_ = status
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 

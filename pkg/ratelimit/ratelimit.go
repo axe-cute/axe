@@ -6,11 +6,20 @@
 //	limiter := ratelimit.New(redisClient)
 //	r.Use(limiter.Global())                   // 100 req/min per IP
 //	r.With(limiter.Strict()).Post("/login", h) // 10 req/min per IP (auth routes)
+//
+// IP extraction:
+//
+//	By default, the limiter uses RemoteAddr for IP identification (safe default).
+//	If running behind a trusted reverse proxy, call WithTrustedProxies to allow
+//	X-Forwarded-For / X-Real-IP header inspection:
+//
+//	limiter := ratelimit.New(redisClient, ratelimit.WithTrustedProxies("10.0.0.0/8", "172.16.0.0/12"))
 package ratelimit
 
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,18 +31,76 @@ import (
 	"github.com/axe-cute/axe/pkg/apperror"
 )
 
+// FailMode controls behaviour when Redis is temporarily unavailable.
+type FailMode int
+
+const (
+	// FailOpen allows the request through when Redis errors (default).
+	// Safe for non-critical routes; preserves availability over security.
+	FailOpen FailMode = iota
+
+	// FailClosed rejects the request with 429 when Redis errors.
+	// Use for security-critical routes where allowing unmetered traffic is dangerous.
+	FailClosed
+)
+
 // Limiter wraps redis_rate.Limiter with pre-configured limits.
 type Limiter struct {
-	rl *redis_rate.Limiter
+	rl             *redis_rate.Limiter
+	trustedNets    []*net.IPNet
+	failMode       FailMode
+}
+
+// Option configures Limiter behaviour.
+type Option func(*Limiter)
+
+// WithTrustedProxies sets CIDRs whose X-Forwarded-For / X-Real-IP headers are trusted.
+// Without this, the limiter always uses RemoteAddr (safe default).
+//
+// Example:
+//
+//	ratelimit.WithTrustedProxies("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+func WithTrustedProxies(cidrs ...string) Option {
+	return func(l *Limiter) {
+		for _, cidr := range cidrs {
+			_, ipNet, err := net.ParseCIDR(cidr)
+			if err != nil {
+				// Try as single IP (e.g. "127.0.0.1")
+				ip := net.ParseIP(cidr)
+				if ip != nil {
+					mask := net.CIDRMask(128, 128)
+					if ip.To4() != nil {
+						mask = net.CIDRMask(32, 32)
+					}
+					ipNet = &net.IPNet{IP: ip, Mask: mask}
+				} else {
+					continue // skip invalid CIDR
+				}
+			}
+			l.trustedNets = append(l.trustedNets, ipNet)
+		}
+	}
+}
+
+// WithFailMode sets the behaviour when Redis is unavailable.
+// Default: FailOpen (allow requests through).
+func WithFailMode(mode FailMode) Option {
+	return func(l *Limiter) {
+		l.failMode = mode
+	}
 }
 
 // New creates a Limiter backed by the given Redis client.
 // If rdb is nil, all middleware calls are no-ops (disabled).
-func New(rdb *redis.Client) *Limiter {
-	if rdb == nil {
-		return &Limiter{}
+func New(rdb *redis.Client, opts ...Option) *Limiter {
+	l := &Limiter{}
+	for _, opt := range opts {
+		opt(l)
 	}
-	return &Limiter{rl: redis_rate.NewLimiter(rdb)}
+	if rdb != nil {
+		l.rl = redis_rate.NewLimiter(rdb)
+	}
+	return l
 }
 
 // Global returns a middleware limiting each IP to 100 requests per minute.
@@ -63,7 +130,7 @@ func (l *Limiter) Middleware(rate int, window time.Duration, label string) func(
 				return
 			}
 
-			ip := realIP(r)
+			ip := l.realIP(r)
 			key := fmt.Sprintf("rl:%s:%s", label, ip)
 
 			result, err := l.rl.Allow(r.Context(), key, redis_rate.Limit{
@@ -72,7 +139,11 @@ func (l *Limiter) Middleware(rate int, window time.Duration, label string) func(
 				Burst:  rate, // burst = rate: no burst above the rate limit
 			})
 			if err != nil {
-				// Fail-open: log and pass through if Redis is unhealthy
+				if l.failMode == FailClosed {
+					middleware.WriteError(w, apperror.ErrTooManyRequests.WithMessage("rate limit service unavailable"))
+					return
+				}
+				// Fail-open: pass through if Redis is unhealthy
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -101,22 +172,52 @@ func (l *Limiter) Middleware(rate int, window time.Duration, label string) func(
 // ── IP extraction ─────────────────────────────────────────────────────────────
 
 // realIP extracts the client's real IP address.
-// Respects X-Forwarded-For and X-Real-IP headers set by reverse proxies.
-func realIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For may contain multiple IPs: "client, proxy1, proxy2"
-		for i, c := range xff {
-			if c == ',' {
-				return xff[:i]
+//
+// Security: By default, only RemoteAddr is used. X-Forwarded-For / X-Real-IP
+// headers are only trusted when the request arrives from a trusted proxy
+// (configured via WithTrustedProxies). This prevents IP spoofing attacks
+// where clients set arbitrary X-Forwarded-For headers to bypass rate limits.
+func (l *Limiter) realIP(r *http.Request) string {
+	remoteIP := stripPort(r.RemoteAddr)
+
+	// Only trust forwarded headers if the direct connection is from a trusted proxy.
+	if l.isTrustedProxy(remoteIP) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// X-Forwarded-For may contain multiple IPs: "client, proxy1, proxy2"
+			for i, c := range xff {
+				if c == ',' {
+					return xff[:i]
+				}
 			}
+			return xff
 		}
-		return xff
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return xri
+		}
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+
+	return remoteIP
+}
+
+// isTrustedProxy checks if the given IP is within any configured trusted CIDR.
+func (l *Limiter) isTrustedProxy(ip string) bool {
+	if len(l.trustedNets) == 0 {
+		return false
 	}
-	// Strip port from RemoteAddr
-	addr := r.RemoteAddr
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, n := range l.trustedNets {
+		if n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// stripPort removes the port from an address string.
+func stripPort(addr string) string {
 	for i := len(addr) - 1; i >= 0; i-- {
 		if addr[i] == ':' {
 			return addr[:i]
@@ -147,6 +248,9 @@ func (l *Limiter) Check(ctx context.Context, key string, rate int, window time.D
 		Burst:  rate,
 	})
 	if err != nil {
+		if l.failMode == FailClosed {
+			return false, 0, 0, err
+		}
 		return true, 0, 0, err // fail-open
 	}
 	return result.Allowed > 0, result.Remaining, result.RetryAfter, nil

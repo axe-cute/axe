@@ -26,6 +26,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -136,11 +137,17 @@ type subscription struct {
 }
 
 // InProcessBus implements Bus with in-process sync and async delivery.
+// Async handlers are bounded by a semaphore to prevent goroutine leaks
+// under high event throughput.
 type InProcessBus struct {
 	mu   sync.RWMutex
 	subs []subscription
 	log  *slog.Logger
+	sem  chan struct{} // bounds concurrent async handlers
 }
+
+// defaultAsyncConcurrency limits the number of concurrent async event handlers.
+const defaultAsyncConcurrency = 100
 
 // NewInProcessBus creates a new in-process event bus.
 // defaultDelivery controls whether Subscribe() creates Sync or Async handlers
@@ -149,7 +156,10 @@ func NewInProcessBus(log *slog.Logger) *InProcessBus {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &InProcessBus{log: log}
+	return &InProcessBus{
+		log: log,
+		sem: make(chan struct{}, defaultAsyncConcurrency),
+	}
 }
 
 // Subscribe registers a Sync handler for the given topic pattern.
@@ -170,7 +180,10 @@ func (b *InProcessBus) subscribe(topic string, h Handler, d Delivery) {
 }
 
 // Publish delivers the event to all matching subscribers.
-// Sync handlers are called inline; Async handlers are launched in goroutines.
+// Sync handlers are called inline; errors from sync handlers are collected
+// and returned as a joined error (via errors.Join).
+// Async handlers are launched in goroutines — their errors are logged but
+// not returned (fire-and-forget).
 func (b *InProcessBus) Publish(ctx context.Context, e Event) error {
 	if e.Meta.Timestamp.IsZero() {
 		e.Meta.Timestamp = time.Now()
@@ -185,10 +198,15 @@ func (b *InProcessBus) Publish(ctx context.Context, e Event) error {
 	}
 	b.mu.RUnlock()
 
+	var errs []error
 	for _, sub := range matched {
 		switch sub.delivery {
 		case Async:
+			// Acquire semaphore to bound concurrent async handlers.
+			// If all slots are occupied, this blocks until one completes.
+			b.sem <- struct{}{}
 			go func(s subscription) {
+				defer func() { <-b.sem }()
 				if err := s.handler(ctx, e); err != nil {
 					b.log.Error("event handler error (async)",
 						"topic", e.Topic,
@@ -204,10 +222,11 @@ func (b *InProcessBus) Publish(ctx context.Context, e Event) error {
 					"source", e.Meta.PluginSource,
 					"error", err,
 				)
+				errs = append(errs, err)
 			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // ── Wildcard matching ─────────────────────────────────────────────────────────

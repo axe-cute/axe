@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,11 +26,12 @@ func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func withTestTransport(t *testing.T, srvURL string) func() {
 	t.Helper()
-	orig := http.DefaultClient
-	http.DefaultClient = &http.Client{
+	orig := oauth2HTTPClient
+	oauth2HTTPClient = &http.Client{
+		Timeout:   10 * time.Second,
 		Transport: &testTransport{base: http.DefaultTransport, targetURL: srvURL},
 	}
-	return func() { http.DefaultClient = orig }
+	return func() { oauth2HTTPClient = orig }
 }
 
 // ── exchangeToken ────────────────────────────────────────────────────────────

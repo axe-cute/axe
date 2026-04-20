@@ -144,7 +144,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "storage:s3" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register registers the S3 store under the storage.ServiceKey service locator key.
 // Downstream plugins using plugin.Resolve[storage.Store](app, storage.ServiceKey)

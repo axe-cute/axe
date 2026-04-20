@@ -33,13 +33,13 @@ type dbConfig struct {
 var dbConfigs = map[string]dbConfig{
 	"postgres": {
 		Driver:      "postgres",
-		ExampleURL:  "postgres://{{.Name}}:{{.Name}}@localhost:5432/{{.Name}}_dev?sslmode=disable",
+		ExampleURL:  "postgres://{{.Name}}:{{.Name}}_dev_password@localhost:5432/{{.Name}}_dev?sslmode=disable",
 		DockerImage: "postgres:16-alpine",
 		EnvName:     "PostgreSQL",
 	},
 	"mysql": {
 		Driver:      "mysql",
-		ExampleURL:  "{{.Name}}:{{.Name}}@tcp(localhost:3306)/{{.Name}}_dev?parseTime=true",
+		ExampleURL:  "{{.Name}}:{{.Name}}_dev_password@tcp(localhost:3306)/{{.Name}}_dev?parseTime=true",
 		DockerImage: "mysql:8-debian",
 		EnvName:     "MySQL",
 	},

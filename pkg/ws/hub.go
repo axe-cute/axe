@@ -44,6 +44,12 @@ type Hub struct {
 	// adapter handles cross-instance pub/sub (MemoryAdapter or RedisAdapter).
 	adapter Adapter
 
+	// allowedOrigins controls which origins may connect via WebSocket.
+	// Empty = reject all cross-origin (safe default).
+	// []string{"*"} = allow all origins (development only).
+	// []string{"https://app.example.com"} = explicit whitelist.
+	allowedOrigins []string
+
 	// ctx is the hub's root context; cancel() triggers graceful shutdown.
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -62,6 +68,14 @@ func WithAdapter(a Adapter) HubOption {
 // WithLogger sets the logger used by the hub and its clients.
 func WithLogger(l *slog.Logger) HubOption {
 	return func(h *Hub) { h.log = l }
+}
+
+// WithAllowedOrigins sets the origins permitted to connect via WebSocket.
+// Default: empty (reject all cross-origin requests — safe default).
+// Use []string{"*"} to allow all origins (development/testing only).
+// Production should list explicit origins: []string{"https://app.example.com"}.
+func WithAllowedOrigins(origins []string) HubOption {
+	return func(h *Hub) { h.allowedOrigins = origins }
 }
 
 // NewHub constructs a Hub with optional configuration.
@@ -87,9 +101,14 @@ func NewHub(opts ...HubOption) *Hub {
 // Call this in a dedicated goroutine: go hub.Run(ctx).
 func (h *Hub) Run(ctx context.Context) {
 	// Merge external context with hub's internal cancel.
+	// The goroutine exits when either context is done, preventing leaks.
 	go func() {
-		<-ctx.Done()
-		h.cancel()
+		select {
+		case <-ctx.Done():
+			h.cancel()
+		case <-h.ctx.Done():
+			// Hub was shut down directly — exit cleanly.
+		}
 	}()
 
 	for {
@@ -142,10 +161,7 @@ func (h *Hub) Run(ctx context.Context) {
 // client with the hub, and starts its read/write pumps.
 // Returns the new Client so callers can Join rooms and register OnMessage.
 func (h *Hub) Upgrade(w http.ResponseWriter, r *http.Request) (*Client, error) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Allow all origins by default; restrict in production via InsecureSkipVerify=false.
-		InsecureSkipVerify: true,
-	})
+	conn, err := websocket.Accept(w, r, h.acceptOptions())
 	if err != nil {
 		wsConnectRejectedTotal.Inc()
 		h.log.Warn("ws: upgrade failed", "error", err, "remote", r.RemoteAddr)
@@ -174,9 +190,7 @@ func (h *Hub) Upgrade(w http.ResponseWriter, r *http.Request) (*Client, error) {
 //
 // Pass a nil tracker to skip connection-count accounting (e.g. in tests).
 func (h *Hub) UpgradeAuthenticated(w http.ResponseWriter, r *http.Request, tracker *UserConnTracker) (*Client, error) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
+	conn, err := websocket.Accept(w, r, h.acceptOptions())
 	if err != nil {
 		wsConnectRejectedTotal.Inc()
 		h.log.Warn("ws: upgrade failed", "error", err, "remote", r.RemoteAddr)
@@ -257,16 +271,26 @@ func (h *Hub) Leave(client *Client, roomID string) {
 
 // Broadcast sends msg to all clients in roomID on this instance and publishes
 // it to the adapter so that other instances also deliver it.
+//
+// For MemoryAdapter (single-instance): delivers directly to local clients.
+// For RedisAdapter (multi-instance): publishes to Redis only — the subscription
+// handler in Join() delivers to local clients, avoiding double delivery.
 func (h *Hub) Broadcast(ctx context.Context, roomID string, msg []byte) error {
-	// Deliver to local clients.
-	h.mu.RLock()
-	room, ok := h.rooms[roomID]
-	h.mu.RUnlock()
-	if ok {
-		room.broadcast(msg)
+	// For MemoryAdapter, Publish is a no-op so we must deliver locally.
+	// For RedisAdapter, the subscription handler already delivers to local
+	// clients — delivering here would cause double delivery.
+	if _, isMemory := h.adapter.(MemoryAdapter); isMemory {
+		h.mu.RLock()
+		room, ok := h.rooms[roomID]
+		h.mu.RUnlock()
+		if ok {
+			room.broadcast(msg)
+		}
+		return nil
 	}
 
-	// Publish to adapter (no-op for MemoryAdapter; Redis for multi-instance).
+	// Publish to adapter — subscription handler delivers to all instances
+	// including this one.
 	if err := h.adapter.Publish(ctx, roomID, msg); err != nil {
 		return fmt.Errorf("ws: broadcast to %q: %w", roomID, err)
 	}
@@ -310,4 +334,24 @@ func (h *Hub) RoomSize(roomID string) int {
 		return 0
 	}
 	return room.Size()
+}
+
+// acceptOptions builds websocket.AcceptOptions from the hub's allowed origins.
+//
+//   - Empty allowedOrigins → reject all cross-origin (safe default).
+//   - {"*"} → InsecureSkipVerify=true (dev/testing only).
+//   - Explicit list → OriginPatterns whitelist.
+func (h *Hub) acceptOptions() *websocket.AcceptOptions {
+	if len(h.allowedOrigins) == 0 {
+		// Safe default: reject cross-origin WebSocket connections.
+		return &websocket.AcceptOptions{InsecureSkipVerify: false}
+	}
+	for _, o := range h.allowedOrigins {
+		if o == "*" {
+			return &websocket.AcceptOptions{InsecureSkipVerify: true}
+		}
+	}
+	return &websocket.AcceptOptions{
+		OriginPatterns: h.allowedOrigins,
+	}
 }

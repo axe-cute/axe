@@ -117,7 +117,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "otel" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register initialises the TracerProvider and wraps the chi router with OTel middleware.
 func (p *Plugin) Register(ctx context.Context, app *plugin.App) error {

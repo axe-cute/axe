@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
+
+// emailHTTPClient is used for outbound email API calls.
+// Has a 10-second timeout to prevent goroutine leaks.
+var emailHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // newJSONRequest creates an HTTP request with JSON content type.
 func newJSONRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
@@ -20,7 +25,7 @@ func newJSONRequest(ctx context.Context, method, url string, body io.Reader) (*h
 // doRequest executes the request and checks for the expected status code.
 // Reads and discards the response body to allow connection reuse.
 func doRequest(req *http.Request, wantStatus int) error {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := emailHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}

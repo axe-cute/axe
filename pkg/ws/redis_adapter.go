@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -17,6 +18,8 @@ type RedisAdapter struct {
 	prefix string
 	log    *slog.Logger
 
+	// mu protects pubsubs map from concurrent read/write.
+	mu sync.Mutex
 	// pubsub holds active subscriptions keyed by channel.
 	pubsubs map[string]*redis.PubSub
 }
@@ -71,7 +74,9 @@ func (a *RedisAdapter) Subscribe(ctx context.Context, channel string, handler fu
 		return fmt.Errorf("ws/redis: subscribe to %q: %w", channel, err)
 	}
 
+	a.mu.Lock()
 	a.pubsubs[channel] = ps
+	a.mu.Unlock()
 
 	go func() {
 		defer ps.Close() //nolint:errcheck
@@ -95,6 +100,8 @@ func (a *RedisAdapter) Subscribe(ctx context.Context, channel string, handler fu
 
 // Close unsubscribes from all channels and releases resources.
 func (a *RedisAdapter) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	var errs []error
 	for ch, ps := range a.pubsubs {
 		if err := ps.Unsubscribe(context.Background(), a.channel(ch)); err != nil {

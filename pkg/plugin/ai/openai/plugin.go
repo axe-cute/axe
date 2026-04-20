@@ -151,7 +151,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "ai:openai" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register provides ai.Completer via the service locator.
 func (p *Plugin) Register(_ context.Context, app *plugin.App) error {

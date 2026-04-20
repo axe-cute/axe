@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,11 +36,12 @@ func TestSendGrid_FullSend_PlainTextBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	origClient := http.DefaultClient
-	http.DefaultClient = &http.Client{
+	origClient := emailHTTPClient
+	emailHTTPClient = &http.Client{
+		Timeout:   10 * time.Second,
 		Transport: &rewriteTransport{base: http.DefaultTransport, targetURL: srv.URL},
 	}
-	defer func() { http.DefaultClient = origClient }()
+	defer func() { emailHTTPClient = origClient }()
 
 	s := &sendgridSender{apiKey: "SG.full-test", from: "sender@x.com"}
 	err := s.Send(context.Background(), Message{
@@ -62,11 +64,12 @@ func TestSendGrid_FullSend_HTMLBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	origClient := http.DefaultClient
-	http.DefaultClient = &http.Client{
+	origClient := emailHTTPClient
+	emailHTTPClient = &http.Client{
+		Timeout:   10 * time.Second,
 		Transport: &rewriteTransport{base: http.DefaultTransport, targetURL: srv.URL},
 	}
-	defer func() { http.DefaultClient = origClient }()
+	defer func() { emailHTTPClient = origClient }()
 
 	s := &sendgridSender{apiKey: "key", from: "a@b.com"}
 	err := s.Send(context.Background(), Message{
@@ -84,11 +87,12 @@ func TestSendGrid_FullSend_ServerRejects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	origClient := http.DefaultClient
-	http.DefaultClient = &http.Client{
+	origClient := emailHTTPClient
+	emailHTTPClient = &http.Client{
+		Timeout:   10 * time.Second,
 		Transport: &rewriteTransport{base: http.DefaultTransport, targetURL: srv.URL},
 	}
-	defer func() { http.DefaultClient = origClient }()
+	defer func() { emailHTTPClient = origClient }()
 
 	s := &sendgridSender{apiKey: "key", from: "a@b.com"}
 	err := s.Send(context.Background(), Message{To: "c@d.com", Subject: "Fail", Body: "x"})

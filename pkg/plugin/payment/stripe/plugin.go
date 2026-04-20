@@ -28,6 +28,9 @@ package stripe
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +38,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -124,7 +128,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "payment:stripe" }
 
 // MinAxeVersion declares required axe version (uses Events Bus).
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register wires the Stripe plugin into the axe app.
 func (p *Plugin) Register(_ context.Context, app *plugin.App) error {
@@ -291,11 +295,18 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify Stripe signature (simplified — production should use stripe-go SDK).
-	sig := r.Header.Get("Stripe-Signature")
-	if sig == "" && p.cfg.WebhookSecret != "" {
-		http.Error(w, "missing Stripe-Signature", http.StatusUnauthorized)
-		return
+	// Verify Stripe webhook signature (HMAC-SHA256).
+	if p.cfg.WebhookSecret != "" {
+		sig := r.Header.Get("Stripe-Signature")
+		if sig == "" {
+			http.Error(w, "missing Stripe-Signature", http.StatusUnauthorized)
+			return
+		}
+		if err := verifyStripeSignature(body, sig, p.cfg.WebhookSecret); err != nil {
+			p.log.Warn("stripe webhook signature verification failed", "error", err)
+			http.Error(w, "signature verification failed", http.StatusUnauthorized)
+			return
+		}
 	}
 
 	var event struct {
@@ -384,4 +395,57 @@ func (c *stripeClient) delete(ctx context.Context, path string, out any) error {
 	}
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// verifyStripeSignature verifies a Stripe webhook signature.
+//
+// Stripe-Signature header format: t=<timestamp>,v1=<signature>[,v0=<legacy>]
+// Signing payload: <timestamp>.<body>
+// Signature: HMAC-SHA256(secret, payload)
+//
+// Tolerance: rejects events older than 5 minutes to prevent replay attacks.
+func verifyStripeSignature(body []byte, sigHeader, secret string) error {
+	// Parse header: t=...,v1=...
+	var timestamp string
+	var signatures []string
+	for _, part := range strings.Split(sigHeader, ",") {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch kv[0] {
+		case "t":
+			timestamp = kv[1]
+		case "v1":
+			signatures = append(signatures, kv[1])
+		}
+	}
+
+	if timestamp == "" || len(signatures) == 0 {
+		return errors.New("stripe: missing timestamp or signature in header")
+	}
+
+	// Replay protection: reject events older than 5 minutes.
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return fmt.Errorf("stripe: invalid timestamp: %w", err)
+	}
+	if time.Since(time.Unix(ts, 0)) > 5*time.Minute {
+		return errors.New("stripe: webhook timestamp too old (possible replay)")
+	}
+
+	// Compute expected signature: HMAC-SHA256(secret, "timestamp.body")
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+
+	// Check if any v1 signature matches (constant-time comparison).
+	for _, sig := range signatures {
+		if hmac.Equal([]byte(sig), []byte(expected)) {
+			return nil
+		}
+	}
+	return errors.New("stripe: no matching v1 signature")
 }

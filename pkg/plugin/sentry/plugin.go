@@ -102,7 +102,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "sentry" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register initializes the Sentry SDK and injects the HTTP middleware.
 func (p *Plugin) Register(ctx context.Context, app *plugin.App) error {

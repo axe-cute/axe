@@ -13,7 +13,7 @@
 - CLI generator (`axe generate resource`) tạo CRUD endpoint < 10 phút
 - Production-grade từ ngày đầu: transactions, observability, error handling
 
-**Status**: Phase 2 (Plugin Ecosystem) — Sprint 33
+**Status**: Phase 2 (Plugin Ecosystem) — Sprint 34 (Audit v3 Hardening)
 
 ---
 
@@ -251,6 +251,18 @@ slog.Info("creating order") // mất request_id
 
 ---
 
+## API Safety Rules (audit v3)
+
+```
+RULE: Pagination limit PHẢI có upper bound (default: 100)
+RULE: Create DTO KHÔNG expose server-managed fields (views, created_at)
+RULE: Rate limiter dùng RemoteAddr mặc định (không trust X-Forwarded-For)
+RULE: Event Bus Publish() trả error từ sync handlers
+RULE: Framework code KHÔNG chứa domain logic (WelcomeEmailHandler etc.)
+```
+
+---
+
 ## PR Checklist (AI tự apply trước khi hoàn thành)
 
 ```
@@ -264,6 +276,8 @@ slog.Info("creating order") // mất request_id
 □ Outbox nếu có side effect?
 □ Context propagate qua tất cả function calls?
 □ Logger inject qua context?
+□ Pagination có limit cap (max 100)?
+□ Create DTO không expose server fields?
 □ go vet ./... pass?
 □ go test ./... pass?
 ```

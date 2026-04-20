@@ -27,7 +27,9 @@ package oauth2
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -46,6 +48,10 @@ import (
 
 // ServiceKey is the typed service locator key for [*Manager].
 const ServiceKey = "oauth2"
+
+// oauth2HTTPClient is used for all outbound HTTP calls (token exchange, user info).
+// Has a 10-second timeout to prevent goroutine leaks from slow/unresponsive providers.
+var oauth2HTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // ── Provider interface ────────────────────────────────────────────────────────
 
@@ -255,12 +261,14 @@ func (p *Plugin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store state in HttpOnly cookie for CSRF protection (15 min TTL).
+	// Secure flag is set when behind HTTPS (direct TLS or reverse proxy).
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth2_state",
 		Value:    state,
 		Path:     "/",
 		MaxAge:   900,
 		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -354,26 +362,31 @@ func (p *Plugin) redirectURI(r *http.Request, providerName string) string {
 	return base + "/auth/" + providerName + "/callback"
 }
 
-// issueJWT creates a minimal HS256 JWT for the authenticated user.
-// In production, plugins would use jwtauth.Service — kept minimal here
-// to avoid a hard import dependency.
+// issueJWT creates an HS256-signed JWT for the authenticated user.
+// Uses HMAC-SHA256 with the configured JWTSecret for real signature verification.
 func (p *Plugin) issueJWT(user *UserInfo) (string, error) {
-	// Build a simple JWT header.claims.signature token.
-	// Real implementations should use jwtauth.Service.GenerateTokenPair.
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	exp := time.Now().Add(p.cfg.JWTExpiry).Unix()
-	claimsJSON, _ := json.Marshal(map[string]interface{}{
+	claimsJSON, err := json.Marshal(map[string]interface{}{
 		"sub":      user.ProviderID,
 		"email":    user.Email,
 		"name":     user.Name,
 		"provider": user.Provider,
 		"exp":      exp,
+		"iat":      time.Now().Unix(),
 	})
+	if err != nil {
+		return "", fmt.Errorf("oauth2: marshal claims: %w", err)
+	}
 	claims := base64.RawURLEncoding.EncodeToString(claimsJSON)
-	_ = p.cfg.JWTSecret // used for signing in a real impl; kept for interface clarity
-	// NOTE: For production, replace this with jwtauth.Service.
-	// This returns an unsigned token valid for test/demo purposes only.
-	return header + "." + claims + ".signature", nil
+
+	// HMAC-SHA256 signature using the configured secret.
+	signingInput := header + "." + claims
+	mac := hmac.New(sha256.New, []byte(p.cfg.JWTSecret))
+	mac.Write([]byte(signingInput))
+	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	return signingInput + "." + sig, nil
 }
 
 // generateState returns a 16-byte URL-safe random string for CSRF protection.
@@ -421,7 +434,7 @@ func (g *googleProvider) ExchangeCode(ctx context.Context, code, redirectURI str
 
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +486,7 @@ func (g *githubProvider) ExchangeCode(ctx context.Context, code, redirectURI str
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +523,7 @@ func exchangeToken(ctx context.Context, endpoint string, params url.Values) (str
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauth2HTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("oauth2: token exchange: %w", err)
 	}

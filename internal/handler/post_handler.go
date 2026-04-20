@@ -40,7 +40,7 @@ type createPostRequest struct {
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	Published bool   `json:"published"`
-	Views     int64  `json:"views"`
+	// Views is server-managed — not accepted from clients.
 }
 
 // postResponse is the API response shape.
@@ -76,7 +76,6 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Title:     req.Title,
 		Body:      req.Body,
 		Published: req.Published,
-		Views:     req.Views,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)

@@ -102,23 +102,35 @@ func Recoverer(next http.Handler) http.Handler {
 	})
 }
 
-// ── ErrorHandler ──────────────────────────────────────────────────────────────
+// ── MaxBodySize ───────────────────────────────────────────────────────────────
+
+// DefaultMaxBodySize is the default request body limit (1 MB).
+const DefaultMaxBodySize int64 = 1 << 20
+
+// MaxBodySize limits the size of incoming request bodies.
+// Returns 413 Request Entity Too Large if exceeded.
+// Use 0 for the default (1 MB), or pass a custom size in bytes.
+//
+//	r.Use(middleware.MaxBodySize(0))        // 1 MB default
+//	r.Use(middleware.MaxBodySize(5<<20))    // 5 MB
+func MaxBodySize(maxBytes int64) func(http.Handler) http.Handler {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxBodySize
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ── Error Response ────────────────────────────────────────────────────────────
 
 // errorResponse is the canonical JSON error envelope.
 type errorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-}
-
-// ErrorHandler is a Chi-compatible middleware that handles errors written
-// to the response. For handler-level errors, prefer using WriteError directly.
-//
-// NOTE: Chi does not have built-in error propagation; handlers call
-// WriteError(w, err) directly rather than returning errors.
-func ErrorHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-	})
 }
 
 // WriteError writes an *apperror.AppError as a JSON response.

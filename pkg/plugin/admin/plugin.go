@@ -181,13 +181,25 @@ func (p *Plugin) Register(_ context.Context, app *plugin.App) error {
 	r := chi.NewRouter()
 	if p.cfg.Secret != "" {
 		r.Use(middleware.BasicAuth("axe-admin", map[string]string{"admin": p.cfg.Secret}))
+	} else {
+		p.log.Warn("admin dashboard has NO authentication — config mutations are blocked. Set Config.Secret for full access.")
 	}
 
+	// Read-only endpoints (always available).
 	r.Get("/api/plugins", p.handleListPlugins)
 	r.Get("/api/nav", p.handleNav)
-	r.Put("/api/plugins/{id}/nav", p.handleToggleNav)
 	r.Get("/api/plugins/{id}/config-schema", p.handleConfigSchema)
-	r.Put("/api/plugins/{id}/config", p.handleApplyConfig)
+
+	// Mutation endpoints — require Secret for access.
+	if p.cfg.Secret != "" {
+		r.Put("/api/plugins/{id}/nav", p.handleToggleNav)
+		r.Put("/api/plugins/{id}/config", p.handleApplyConfig)
+	} else {
+		// Block mutations when no secret is configured (read-only mode).
+		r.Put("/*", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, `{"error":"admin secret required for mutations — set Config.Secret"}`, http.StatusForbidden)
+		})
+	}
 
 	// Serve embedded SPA placeholder (real SPA would be go:embed).
 	r.Get("/*", p.handleSPA)

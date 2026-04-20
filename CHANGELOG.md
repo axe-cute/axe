@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/webtoon/` — webtoon platform API with genre whitelist, episode view tracking, bookmark toggle
 - Example Projects section in main README
 
+### Fixed (Audit v3 — PersonaTwin hardening)
+- **[CRITICAL]** Scaffold `readyHandler` now sends correct HTTP status code (was computing 503 but always returning 200)
+- **[CRITICAL]** Scaffold Go version updated from `go 1.22.0` to `go 1.25.0` to match framework
+- **[CRITICAL]** Scaffold slog format fixed — was using printf `%s` which slog doesn't interpret
+- **[CRITICAL]** 6 plugins had `MinAxeVersion: "v1.0.0"` against v0.5.0 framework (kafka, otel, s3, typesense, openai, sentry)
+- **[SECURITY]** OAuth2 state cookie now sets `Secure` flag when behind HTTPS
+- **[SECURITY]** Admin dashboard blocks config mutation endpoints (PUT) when `Config.Secret` is empty
+- **[SECURITY]** Rate limiter now uses `RemoteAddr` by default — `X-Forwarded-For` only trusted from configured proxy CIDRs (`WithTrustedProxies`)
+- **[SECURITY]** Post handler: `Views` field removed from create DTO (was client-settable)
+- Event bus `Publish()` now returns aggregated errors from sync handlers (was always returning nil)
+- Event bus async handlers bounded by semaphore (max 100 concurrent) to prevent goroutine leaks
+- Rate limiter fail-mode configurable via `WithFailMode(FailOpen | FailClosed)` (default: FailOpen)
+- Pagination `limit` query parameter capped at 100 to prevent memory exhaustion
+- Scaffold Dockerfile switched from `debian:bookworm-slim` (~100MB) to `gcr.io/distroless/static-debian12` (~10MB)
+- Scaffold JWT_SECRET placeholder shortened to fail validation if not changed
+- Scaffold Docker Compose DB passwords no longer identical to username
+
 ---
 
 ## [v0.5.0] — 2026-04-20

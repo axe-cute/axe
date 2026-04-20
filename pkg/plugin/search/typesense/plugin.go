@@ -138,7 +138,7 @@ func New(cfg Config) (*Plugin, error) {
 func (p *Plugin) Name() string { return "search:typesense" }
 
 // MinAxeVersion declares required axe version.
-func (p *Plugin) MinAxeVersion() string { return "v1.0.0" }
+func (p *Plugin) MinAxeVersion() string { return "v0.5.0" }
 
 // Register wires the Typesense plugin into the axe app.
 func (p *Plugin) Register(_ context.Context, app *plugin.App) error {

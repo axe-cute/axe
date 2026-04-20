@@ -67,8 +67,11 @@ func JWTAuth(svc *jwtauth.Service, blocklist Blocklist) func(http.Handler) http.
 			if blocklist != nil && claims.JTI() != "" {
 				blocked, blErr := blocklist.IsTokenBlocked(r.Context(), claims.JTI())
 				if blErr != nil {
-					log.Warn("blocklist check failed", "error", blErr)
-					// Fail-open: if Redis is down, allow request but log the issue
+					// Fail-closed: reject request when blocklist is unavailable
+					// to prevent revoked tokens from being accepted.
+					log.Warn("blocklist check failed — rejecting request (fail-closed)", "error", blErr)
+					WriteError(w, apperror.ErrUnauthorized.WithMessage("authentication service unavailable"))
+					return
 				} else if blocked {
 					log.Info("token revoked", "jti", claims.JTI(), "user_id", claims.UserID)
 					WriteError(w, apperror.ErrUnauthorized.WithMessage("token revoked"))
@@ -102,16 +105,6 @@ func RequireRole(requiredRole string) func(http.Handler) http.Handler {
 	}
 }
 
-// ── Auth handler helpers (login / refresh / logout) ───────────────────────────
-
-// These are lightweight handler functions — mount in main.go under /api/v1/auth.
-
-// LoginResponse is returned on successful authentication.
-type LoginResponse struct {
-	*jwtauth.TokenPair
-	UserID string `json:"user_id"`
-	Role   string `json:"role"`
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
