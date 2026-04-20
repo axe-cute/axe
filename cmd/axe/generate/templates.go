@@ -81,9 +81,9 @@ import (
 
 	"{{.Module}}/internal/domain"
 	"{{.Module}}/internal/handler/middleware"
-	"{{.Module}}/pkg/apperror"
+	"{{.Module}}/internal/infra/apperror"
 {{- if .WithAuth}}
-	"{{.Module}}/pkg/jwtauth"
+	"{{.Module}}/internal/infra/jwtauth"
 {{- end}}
 )
 
@@ -326,8 +326,8 @@ import (
 	"github.com/google/uuid"
 
 	"{{.Module}}/internal/domain"
-	"{{.Module}}/pkg/apperror"
-	"{{.Module}}/pkg/logger"
+	"{{.Module}}/internal/infra/apperror"
+	"{{.Module}}/internal/infra/logger"
 )
 
 // {{.Name}}Service implements domain.{{.Name}}Service.
@@ -443,7 +443,7 @@ import (
 
 	ent "{{.Module}}/ent"
 	"{{.Module}}/internal/domain"
-	"{{.Module}}/pkg/apperror"
+	"{{.Module}}/internal/infra/apperror"
 )
 
 // {{.Name}}Repo implements domain.{{.Name}}Repository using Ent.
@@ -583,7 +583,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"{{.Module}}/pkg/ws"
+	"{{.Module}}/internal/infra/ws"
 )
 
 // {{.Name}}WSHandler handles WebSocket connections scoped to the {{.Name}} resource.
@@ -1255,8 +1255,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"{{.Module}}/pkg/jwtauth"
-	"{{.Module}}/pkg/logger"
+	"{{.Module}}/internal/infra/jwtauth"
+	"{{.Module}}/internal/infra/logger"
 )
 
 type wsContextKey string

@@ -45,7 +45,7 @@
 ## Folder Structure
 
 ```
-axe/
+axe/                          # FRAMEWORK repo structure
 ├── cmd/
 │   └── api/
 │       └── main.go          # Composition Root (Wire)
@@ -54,11 +54,11 @@ axe/
 │   ├── handler/             # HTTP layer (Chi handlers)
 │   ├── service/             # Business logic
 │   └── repository/          # Data access (Ent or sqlc — pick one per project)
-├── pkg/
+├── pkg/                     # FRAMEWORK library packages (imported by generated projects)
 │   ├── apperror/            # Error taxonomy
 │   ├── txmanager/           # Transaction manager
 │   ├── logger/              # Structured logging (slog)
-│   └── validator/           # Input validation
+│   └── plugin/              # Plugin system
 ├── ent/
 │   └── schema/              # Ent schema definitions
 ├── db/
@@ -68,6 +68,20 @@ axe/
 │   └── config.go            # Cleanenv struct
 ├── _bmad-output/            # BMAD artifacts (không commit code vào đây)
 └── docs/                    # Architecture docs
+
+# SCAFFOLD output (axe new) uses internal/infra/ instead of pkg/:
+my-app/
+├── internal/
+│   ├── domain/
+│   ├── handler/
+│   ├── service/
+│   ├── repository/
+│   └── infra/               # App-internal packages (NOT for external import)
+│       ├── apperror/
+│       ├── jwtauth/
+│       ├── logger/
+│       ├── cache/
+│       └── ws/
 ```
 
 ---

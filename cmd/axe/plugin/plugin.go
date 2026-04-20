@@ -38,7 +38,7 @@ func goCommand() string {
 //   - "planned"     → not yet implemented
 var registry = []registryEntry{
 	// Production-ready (real SDK, tested, documented)
-	{Name: "storage", Description: "File uploads (local filesystem or JuiceFS mount)", ImportSuffix: "pkg/storage", Maturity: "production", Installable: true},
+	{Name: "storage", Description: "File uploads (local filesystem or JuiceFS mount)", ImportSuffix: "internal/infra/storage", Maturity: "production", Installable: true},
 	{Name: "stripe", Description: "Stripe Payment Processor & Webhooks", ImportSuffix: "pkg/plugin/payment/stripe", Maturity: "production", Installable: true},
 
 	// Scaffold-only (interface + stub backend, needs real SDK)
@@ -597,7 +597,7 @@ func addStorage() error {
 
 	fmt.Println("\n📦 Adding storage plugin...")
 
-	storageDir := filepath.Join("pkg", "storage")
+	storageDir := filepath.Join("internal", "infra", "storage")
 	if err := os.MkdirAll(storageDir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", storageDir, err)
 	}
@@ -635,8 +635,8 @@ func addStorage() error {
 
 	mainPath := filepath.Join("cmd", "api", "main.go")
 	injected := false
-	storageImport := fmt.Sprintf("\t\"%s/pkg/storage\"", module)
-	if err := injectContentAfterMarker(mainPath, "// axe:wire:import", storageImport, "pkg/storage"); err == nil {
+	storageImport := fmt.Sprintf("\t\"%s/internal/infra/storage\"", module)
+	if err := injectContentAfterMarker(mainPath, "// axe:wire:import", storageImport, "internal/infra/storage"); err == nil {
 		injected = true
 	}
 	storageInit := `

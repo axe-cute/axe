@@ -268,7 +268,7 @@ axe generate resource Order --fields="amount:float" --with-auth
 │   ├── handler/        ← HTTP handlers
 │   ├── repository/     ← Data access layer
 │   └── service/        ← Business logic
-├── pkg/                ← Reusable packages
+├── internal/infra/     ← App-internal reusable packages
 ├── ent/schema/         ← Ent ORM schemas
 └── docs/               ← OpenAPI specification
 ` + "```" + `
@@ -473,27 +473,27 @@ func tmplMainAPIGo(data TemplateData) string {
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"{{.Module}}/config"
-	"{{.Module}}/pkg/devroutes"
-	"{{.Module}}/pkg/logger"
-	"{{.Module}}/pkg/ws"`
+	"{{.Module}}/internal/infra/devroutes"
+	"{{.Module}}/internal/infra/logger"
+	"{{.Module}}/internal/infra/ws"`
 
 	if data.WithCache {
 		imports += `
-	"{{.Module}}/pkg/cache"
-	"{{.Module}}/pkg/ratelimit"
+	"{{.Module}}/internal/infra/cache"
+	"{{.Module}}/internal/infra/ratelimit"
 	"github.com/redis/go-redis/v9"`
 	}
 	if data.WithWorker {
 		imports += `
-	"{{.Module}}/pkg/worker"`
+	"{{.Module}}/internal/infra/worker"`
 	}
 	if data.WithStorage {
 		imports += `
-	"{{.Module}}/pkg/storage"`
+	"{{.Module}}/internal/infra/storage"`
 	}
 	imports += `
-	"{{.Module}}/pkg/jwtauth"
-	"{{.Module}}/pkg/metrics"
+	"{{.Module}}/internal/infra/jwtauth"
+	"{{.Module}}/internal/infra/metrics"
 	// axe:wire:import
 `
 
@@ -1750,8 +1750,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"{{.Module}}/pkg/apperror"
-	"{{.Module}}/pkg/logger"
+	"{{.Module}}/internal/infra/apperror"
+	"{{.Module}}/internal/infra/logger"
 	"github.com/google/uuid"
 )
 
@@ -1857,9 +1857,9 @@ import (
 	"strings"
 	"time"
 
-	"{{.Module}}/pkg/apperror"
-	"{{.Module}}/pkg/jwtauth"
-	"{{.Module}}/pkg/logger"
+	"{{.Module}}/internal/infra/apperror"
+	"{{.Module}}/internal/infra/jwtauth"
+	"{{.Module}}/internal/infra/logger"
 )
 
 type Blocklist interface {
@@ -1956,7 +1956,7 @@ func hasRole(userRole, required string) bool {
 `
 
 // ─────────────────────────────────────────────────────────────────────────────
-// pkg/ws templates — scaffolded into every new project
+// internal/infra/ws templates — scaffolded into every new project
 // ─────────────────────────────────────────────────────────────────────────────
 
 const tmplWSAdapter = `package ws
@@ -2329,8 +2329,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"{{.Module}}/pkg/jwtauth"
-	"{{.Module}}/pkg/logger"
+	"{{.Module}}/internal/infra/jwtauth"
+	"{{.Module}}/internal/infra/logger"
 )
 
 type wsContextKey string

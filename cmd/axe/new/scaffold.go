@@ -89,22 +89,22 @@ func scaffold(name, target string, opts Options) error {
 		"internal/setup",
 		"internal/repository",
 		"internal/service",
-		"pkg/apperror",
-		"pkg/jwtauth",
-		"pkg/logger",
-		"pkg/metrics",
-		"pkg/txmanager",
-		"pkg/ws",
-		"pkg/devroutes",
+		"internal/infra/apperror",
+		"internal/infra/jwtauth",
+		"internal/infra/logger",
+		"internal/infra/metrics",
+		"internal/infra/txmanager",
+		"internal/infra/ws",
+		"internal/infra/devroutes",
 	}
 	if data.WithCache {
-		dirs = append(dirs, "pkg/cache", "pkg/ratelimit")
+		dirs = append(dirs, "internal/infra/cache", "internal/infra/ratelimit")
 	}
 	if data.WithWorker {
-		dirs = append(dirs, "pkg/worker")
+		dirs = append(dirs, "internal/infra/worker")
 	}
 	if data.WithStorage {
-		dirs = append(dirs, "pkg/storage", "uploads")
+		dirs = append(dirs, "internal/infra/storage", "uploads")
 	}
 
 	for _, d := range dirs {
@@ -215,19 +215,19 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		// {"cmd/axe/main.go", tmplMainAxeGo(data)},  ← written directly via os.WriteFile
 
 		// Pkg stubs — apperror
-		{"pkg/apperror/apperror.go", tmplApperror},
+		{"internal/infra/apperror/apperror.go", tmplApperror},
 
 		// Logger stub
-		{"pkg/logger/logger.go", tmplLogger},
+		{"internal/infra/logger/logger.go", tmplLogger},
 
 		// Metrics stub
-		{"pkg/metrics/metrics.go", tmplMetrics},
+		{"internal/infra/metrics/metrics.go", tmplMetrics},
 
 		// Txmanager stub
-		{"pkg/txmanager/txmanager.go", tmplTxmanager},
+		{"internal/infra/txmanager/txmanager.go", tmplTxmanager},
 
 		// JWT stub
-		{"pkg/jwtauth/jwtauth.go", tmplJwtauth},
+		{"internal/infra/jwtauth/jwtauth.go", tmplJwtauth},
 
 		// Internal — domain shared types (Pagination, etc.)
 		{"internal/domain/pagination.go", tmplDomainPagination},
@@ -248,34 +248,34 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		{"internal/handler/router.go", tmplRouterLeader},
 
 		// WebSocket hub — always scaffolded (used by cmd/api/main.go)
-		{"pkg/ws/adapter.go", tmplWSAdapter},
-		{"pkg/ws/metrics.go", tmplWSMetrics},
-		{"pkg/ws/room.go", tmplWSRoom},
-		{"pkg/ws/client.go", tmplWSClient},
-		{"pkg/ws/hub.go", tmplWSHub},
-		{"pkg/ws/auth.go", tmplWSAuth},
-		{"pkg/ws/redis_adapter.go", tmplWSRedisAdapter},
+		{"internal/infra/ws/adapter.go", tmplWSAdapter},
+		{"internal/infra/ws/metrics.go", tmplWSMetrics},
+		{"internal/infra/ws/room.go", tmplWSRoom},
+		{"internal/infra/ws/client.go", tmplWSClient},
+		{"internal/infra/ws/hub.go", tmplWSHub},
+		{"internal/infra/ws/auth.go", tmplWSAuth},
+		{"internal/infra/ws/redis_adapter.go", tmplWSRedisAdapter},
 
 		// Dev routes — Rails-like route listing on 404
-		{"pkg/devroutes/devroutes.go", tmplDevRoutes},
+		{"internal/infra/devroutes/devroutes.go", tmplDevRoutes},
 	}
 
 	if data.WithCache {
 		files = append(files,
-			fileEntry{"pkg/cache/cache.go", tmplCache},
-			fileEntry{"pkg/ratelimit/ratelimit.go", tmplRatelimit},
+			fileEntry{"internal/infra/cache/cache.go", tmplCache},
+			fileEntry{"internal/infra/ratelimit/ratelimit.go", tmplRatelimit},
 		)
 	}
 	if data.WithWorker {
 		files = append(files,
-			fileEntry{"pkg/worker/worker.go", tmplWorker},
+			fileEntry{"internal/infra/worker/worker.go", tmplWorker},
 		)
 	}
 	if data.WithStorage {
 		files = append(files,
-			fileEntry{"pkg/storage/storage.go", TmplStorageCore},
-			fileEntry{"pkg/storage/handler.go", TmplStorageHandler},
-			fileEntry{"pkg/storage/metrics.go", TmplStorageMetrics},
+			fileEntry{"internal/infra/storage/storage.go", TmplStorageCore},
+			fileEntry{"internal/infra/storage/handler.go", TmplStorageHandler},
+			fileEntry{"internal/infra/storage/metrics.go", TmplStorageMetrics},
 		)
 	}
 
