@@ -6,648 +6,154 @@ phase: 2
 current_sprint: 35
 active_story: null  # Sprint 35 complete — Epic 10 fully resolved
 
+# ── All Epics DONE ──────────────────────────────────────────────────
 epics:
-  - id: epic-1
-    title: "Foundation — Hello World production-grade"
-    status: done
-    completed_at: "2026-04-15"
-    stories:
-      - { id: story-1.1, title: "Project Scaffold",                   status: done }
-      - { id: story-1.2, title: "pkg/apperror — Error Taxonomy",      status: done }
-      - { id: story-1.3, title: "pkg/txmanager — Transaction Manager", status: done }
-      - { id: story-1.4, title: "pkg/logger — Structured Logging",    status: done }
-      - { id: story-1.5, title: "config/ — Cleanenv Setup",           status: done }
-      - { id: story-1.6, title: "Chi Router + Middleware Chain",       status: done }
-      - { id: story-1.7, title: "Ent Schema Setup (User)",            status: done }
-      - { id: story-1.8, title: "pgx Pool + sqlc Setup",              status: done }
-      - { id: story-1.9, title: "User Domain CRUD (Reference)",       status: done }
-      - { id: story-1.10, title: "Docker Compose + Dockerfile",       status: done }
+  - { id: epic-1,  title: "Foundation — Hello World production-grade",  status: done, completed_at: "2026-04-15", stories: 10 }
+  - { id: epic-2,  title: "Developer Experience — axe CLI Generator",   status: done, completed_at: "2026-04-15", stories: 4 }
+  - { id: epic-3,  title: "Production Hardening",                       status: done, completed_at: "2026-04-15", stories: 6 }
+  - { id: epic-4,  title: "Quality & API Polish",                       status: done, completed_at: "2026-04-15", stories: 5 }
+  - { id: epic-5,  title: "Multi-Database Support",                     status: done, completed_at: "2026-04-15", stories: 4 }
+  - { id: epic-6,  title: "axe new — Project Scaffolding CLI",          status: done, completed_at: "2026-04-16", stories: 4 }
+  - { id: epic-7,  title: "WebSocket Hub & Real-time Support",          status: done, completed_at: "2026-04-16", stories: 4 }
+  - { id: epic-8,  title: "Plugin System & Ecosystem",                  status: done, completed_at: "2026-04-19", stories: 6 }
+  - { id: epic-9,  title: "DX Quality — Test Coverage & Code Fidelity", status: done, completed_at: "2026-04-19", stories: 17 }
+  - { id: epic-10, title: "Communication Plugins",                      status: done, completed_at: "2026-04-18", stories: 1 }
+  - { id: epic-11, title: "Structural Testing — Interface Injection",   status: done, completed_at: "2026-04-19", stories: 2 }
 
-  - id: epic-2
-    title: "Developer Experience — axe CLI Generator"
-    status: done
-    completed_at: "2026-04-15"
-    stories:
-      - { id: story-2.1, title: "axe CLI Binary Setup",                    status: done, sprint: 5 }
-      - { id: story-2.2, title: "axe generate resource command",            status: done, sprint: 5 }
-      - { id: story-2.3, title: "axe migrate up/down/status (real runner)", status: done, sprint: 6 }
-      - { id: story-2.4, title: "ADR docs + Postman collection",            status: done, sprint: 6 }
-
-  - id: epic-3
-    title: "Production Hardening"
-    status: done
-    completed_at: "2026-04-15"
-    stories:
-      - { id: story-3.1, title: "Observability — Structured Logging",        status: done, sprint: 7 }
-      - { id: story-3.2, title: "Observability — Prometheus Metrics",        status: done, sprint: 7 }
-      - { id: story-3.3, title: "Redis Cache Layer (pkg/cache)",             status: done, sprint: 8 }
-      - { id: story-3.4, title: "JWT Auth + RBAC (pkg/jwtauth + middleware)", status: done, sprint: 8 }
-      - { id: story-3.5, title: "Background Jobs — Asynq + Outbox Poller",  status: done, sprint: 9 }
-      - { id: story-3.6, title: "Docker Multi-stage + GitHub Actions CI/CD", status: done, sprint: 9 }
-
-  - id: epic-4
-    title: "Quality & API Polish"
-    status: done
-    completed_at: "2026-04-15"
-    stories:
-      - id: story-4.1
-        title: "Integration Tests — Testcontainers (real DB)"
-        status: done
-        sprint: 10
-        priority: P0
-        notes: "13/13 tests pass — auth + user CRUD against real Postgres"
-
-      - id: story-4.2
-        title: "JWT Logout — JTI + Redis Blocklist"
-        status: done
-        sprint: 10
-        priority: P0
-        notes: "JTI in Claims, BlockToken/IsTokenBlocked, POST /auth/logout revokes token with TTL"
-
-      - id: story-4.3
-        title: "Rate Limiting Middleware"
-        status: done
-        sprint: 11
-        priority: P1
-        notes: "pkg/ratelimit: Global 100/min, Strict 10/min auth, X-RateLimit-* headers, 429 ErrTooManyRequests"
-
-      - id: story-4.4
-        title: "OpenAPI 3.1 Spec + Swagger UI"
-        status: done
-        sprint: 11
-        priority: P1
-        notes: "docs/openapi.yaml embedded at compile time, GET /docs Swagger UI, GET /docs/redoc ReDoc"
-
-      - id: story-4.5
-        title: "axe generate resource — Struct Tags + --with-auth flag"
-        status: done
-        sprint: 12
-        priority: P2
-        notes: "--with-auth adds JWTAuth, --admin-only adds RequireRole(admin), json tags generated"
-
-  # ── Phase 2 ───────────────────────────────────────────────────────────────
-
-  - id: epic-5
-    title: "Multi-Database Support"
-    status: done
-    completed_at: "2026-04-15"
-    stories:
-      - { id: story-5.1, title: "DB Adapter Interface",           status: done, sprint: 13, priority: P0 }
-      - { id: story-5.2, title: "MySQL Adapter + Integration Test", status: done, sprint: 13, priority: P0 }
-      - { id: story-5.3, title: "SQLite Adapter (Dev/Test)",      status: done, sprint: 14, priority: P1 }
-      - { id: story-5.4, title: "Multi-DB CI Matrix",             status: done, sprint: 14, priority: P1 }
-
-  - id: epic-6
-    title: "axe new — Project Scaffolding CLI"
-    status: done
-    completed_at: "2026-04-16"
-    stories:
-      - id: story-6.1
-        title: "axe new core command"
-        status: done
-        sprint: 15
-        priority: P0
-        notes: "cmd/axe/new/new.go + scaffold.go: full dir tree + all template files, --db/--no-worker/--no-cache/--module flags"
-      - id: story-6.2
-        title: "Interactive Mode (wizard)"
-        status: done
-        sprint: 15
-        priority: P1
-        notes: "cmd/axe/new/interactive.go: prompt wizard; axe new (no args) triggers wizard, --yes for CI mode"
-      - id: story-6.3
-        title: "Bootable scaffold (go mod tidy + real migrate CLI)"
-        status: done
-        sprint: 16
-        priority: P0
-        notes: "scaffold() runs go mod tidy; tmplMainAxeGo = full migrate up/down/status/create (pgx/v5 inline); make setup && make run verified end-to-end"
-      - id: story-6.4
-        title: "axe new CI integration test"
-        status: done
-        sprint: 20
-        priority: P1
-        notes: "ci.yml scaffold-test job: matrix {postgres,mysql,sqlite}, axe new --yes → go vet → go build → go test"
-
-  - id: epic-7
-    title: "WebSocket Hub & Real-time Support"
-    status: done
-    completed_at: "2026-04-16"
-    stories:
-      - { id: story-7.1, title: "WebSocket Hub Core",            status: done, sprint: 17, priority: P1 }
-      - { id: story-7.2, title: "Redis Pub/Sub Multi-Instance",  status: done, sprint: 17, priority: P1 }
-      - { id: story-7.3, title: "WS Authentication Middleware",  status: done, sprint: 18, priority: P1 }
-      - { id: story-7.4, title: "axe generate --with-ws flag",   status: done, sprint: 18, priority: P2 }
-
-  - id: epic-8
-    title: "Plugin System & Ecosystem"
-    status: done
-    completed_at: "2026-04-19"
-    stories:
-      - id: story-8.1
-        title: "Plugin Interface + App.Use()"
-        status: done
-        sprint: 19
-        priority: P2
-        notes: "pkg/plugin/plugin.go: Plugin interface, App host, typed service locator (Provide[T]/Resolve[T]/MustResolve[T] generics), FIFO start + LIFO shutdown, error rollback"
-      - id: story-8.2
-        title: "axe-plugin-storage (JuiceFS/Local)"
-        status: done
-        sprint: 19
-        priority: P2
-        notes: "pkg/plugin/storage/: FSStore (os pkg, works for local + JuiceFS POSIX mount), POST/GET/DELETE /upload, Prometheus metrics, zero external deps"
-      - id: story-8.3
-        title: "axe-plugin-email (SendGrid/SMTP)"
-        status: done
-        sprint: 21
-        priority: P2
-        notes: "pkg/plugin/email/: logSender (dev), sendgridSender (prod), smtpSender (fallback). 67.9% coverage."
-      - id: story-8.4
-        title: "Multi-Tenancy Middleware"
-        status: done
-        sprint: 25
-        priority: P2
-        notes: "pkg/plugin/tenant/: header/subdomain/JWT/auto source, Required mode, DefaultTenant, CacheKey, Router helper. 91.8% coverage."
-      - id: story-8.5
-        title: "Plugin Registry CLI"
-        status: done
-        sprint: 25
-        priority: P3
-        notes: "axe plugin list --installed/--maturity, axe plugin info <name> with import paths + config templates."
-      - id: story-8.6
-        title: "Storage Plugin Hardening (Auth + Security + Ops)"
-        status: done
-        sprint: 20
-        priority: P0
-        notes: "JWT auth on POST/DELETE (always), optional on GET via RequireAuth. safePath() blocks path traversal. CORS middleware. /ready storage health check. Metrics backend label."
+# ── Sprint Log (compressed — old sprints collapsed) ─────────────────
+# Full history: sprint-status.original.yaml
 
 sprint_log:
-  - sprint: 1
-    goal: "Core infrastructure (apperror, txmanager, scaffold)"
-    stories: [story-1.1, story-1.2, story-1.3]
-    status: done
-  - sprint: 2
-    goal: "Logger, config, HTTP server"
-    stories: [story-1.4, story-1.5, story-1.6]
-    status: done
-  - sprint: 3
-    goal: "Database layer + User domain reference"
-    stories: [story-1.7, story-1.8, story-1.9]
-    status: done
-  - sprint: 4
-    goal: "DevOps + Epic 1 polish"
-    stories: [story-1.10]
-    status: done
-  - sprint: 5
-    goal: "axe CLI binary + generate resource"
-    stories: [story-2.1, story-2.2]
-    status: done
-  - sprint: 6
-    goal: "axe migrate real runner + ADR docs"
-    stories: [story-2.3, story-2.4]
-    status: done
-  - sprint: 7
-    goal: "Observability (logging + Prometheus)"
-    stories: [story-3.1, story-3.2]
-    status: done
-  - sprint: 8
-    goal: "Redis cache + JWT auth + RBAC"
-    stories: [story-3.3, story-3.4]
-    status: done
-  - sprint: 9
-    goal: "Asynq worker + Outbox poller + CI/CD"
-    stories: [story-3.5, story-3.6]
-    status: done
-  - sprint: 10
-    goal: "Integration tests (Testcontainers) + JWT Logout (JTI blocklist)"
-    stories: [story-4.1, story-4.2]
-    status: done
-    completed_at: "2026-04-15"
-    results:
-      - "13/13 integration tests pass (Postgres container)"
-      - "POST /auth/logout revokes JTI in Redis with TTL"
-  - sprint: 11
-    goal: "Rate limiting + OpenAPI 3.1 spec + Swagger UI"
-    stories: [story-4.3, story-4.4]
-    status: done
-    completed_at: "2026-04-15"
-    results:
-      - "pkg/ratelimit: 100/min global, 10/min auth, Retry-After header"
-      - "GET /docs Swagger UI, GET /docs/redoc ReDoc, GET /openapi.yaml raw spec"
-  - sprint: 12
-    goal: "axe generate resource polish (JSON tags + auth flags)"
-    stories: [story-4.5]
-    status: done
-    completed_at: "2026-04-15"
-    results:
-      - "Generated structs have json struct tags out-of-the-box"
-      - "--with-auth: JWTAuth middleware in Routes(), WithJWTAuth() fluent builder"
-      - "--admin-only: JWTAuth + RequireRole(admin) in Routes()"
+  # Phase 1 (Sprints 1-12): Foundation → Quality. All done 2026-04-15.
+  # Phase 2 starts Sprint 13.
 
-  # ── Phase 2 ──────────────────────────────────────────────────────────
-
-  - sprint: 13
-    goal: "Multi-DB: Adapter Interface + MySQL"
-    stories: [story-5.1, story-5.2]
+  - sprint: 13-14
+    goal: "Multi-DB: Adapter Interface + MySQL + SQLite + CI Matrix"
     status: done
-    completed_at: "2026-04-15"
-    results:
-      - "pkg/db/adapter.go: Adapter interface + Open() registry (init-based, like database/sql)"
-      - "pkg/db/postgres/adapter.go: pgx extracted from main.go — zero regression"
-      - "pkg/db/mysql/adapter.go: go-sql-driver/mysql — DSN normaliser (parseTime, charset, loc)"
-      - "config: DB_DRIVER env var (postgres|mysql|sqlite3, default=postgres)"
-      - "cmd/api/main.go: openDB() removed, replaced with db.Open(cfg.DBDriver, ...)"
-      - "db/migrations/001_init_mysql.sql: MySQL-compatible (UUID(), DATETIME(6), ON UPDATE)"
-      - "tests/integration/mysql/: 5/5 MySQL integration tests pass (Testcontainers mysql:8.0)"
-      - "make test-integration-mysql: new target"
-      - "go vet ./...: clean, 8 unit test packages: 0 FAIL, Postgres integration 13/13 pass"
+    highlights: "pkg/db/adapter.go, pgx/mysql/sqlite adapters, integration.yml matrix"
 
-  - sprint: 14
-    goal: "Multi-DB: SQLite + CI Matrix"
-    stories: [story-5.3, story-5.4]
+  - sprint: 15-16
+    goal: "axe new: Core scaffold + Interactive wizard + Bootable project"
     status: done
-    completed_at: "2026-04-15"
-    results:
-      - "pkg/db/sqlite/adapter.go: modernc.org/sqlite (pure-Go, CGO-free) registered as sqlite3"
-      - "db/migrations/001_init_sqlite.sql: SQLite-compatible DDL (TEXT UUID, DATETIME, _pragma)"
-      - "tests/integration/sqlite/sqlite_test.go: 5/5 tests PASS (in-memory, no Docker)"
-      - "Ent AutoMigrate via entClient.Schema.Create() keeps schema in sync automatically"
-      - ".github/workflows/integration.yml: matrix {postgres, mysql, sqlite}, fail-fast=false"
-      - "Makefile: test-integration-sqlite target added"
-      - "go.mod: modernc.org/sqlite v1.48.2 added"
+    highlights: "27+ template files, wizard mode, go mod tidy, migrate CLI"
 
-  - sprint: 15
-    goal: "axe new: Core scaffolding + Interactive wizard mode"
-    stories: [story-6.1, story-6.2]
+  - sprint: 17-18
+    goal: "WebSocket Hub + Redis pub/sub + Auth middleware + --with-ws flag"
     status: done
-    completed_at: "2026-04-16"
-    results:
-      - "cmd/axe/new/new.go: cobra command, flag validation (--db postgres|mysql|sqlite, --no-worker, --no-cache, --module)"
-      - "cmd/axe/new/scaffold.go: creates full directory tree, renders all templates, writes 27+ files"
-      - "cmd/axe/new/templates.go: 1600+ lines of Go text/templates for all generated files"
-      - "cmd/axe/new/interactive.go: wizard mode (no args = interactive), --yes for CI/non-interactive"
+    highlights: "Hub/Client/Room, RedisAdapter, WSAuth (JWT+tracker), 15 tests"
 
-  - sprint: 16
-    goal: "axe new: Bootable project (go mod tidy + migrate CLI)"
-    stories: [story-6.3]
+  - sprint: 19-20
+    goal: "Plugin System + Storage + Security Hardening + CI scaffold test"
     status: done
-    completed_at: "2026-04-16"
-    results:
-      - "scaffold() step 3: exec go mod tidy in project dir → go.sum populated, project immediately buildable"
-      - "tmplMainAxeGo: replaced stub (// TODO) with full self-contained migrate CLI (up/down/status/create)"
-      - "make setup end-to-end: docker up → go mod tidy → migrate 001_init.sql ✅"
-      - "make run: API :8080 + Redis + Asynq worker all green ✅"
-
-  - sprint: 17
-    goal: "WebSocket Hub + Redis pub/sub scale-out"
-    stories: [story-7.1, story-7.2]
-    status: done
-    completed_at: "2026-04-16"
-    results:
-      - "pkg/ws/hub.go: Hub — connection registry, event loop, goroutine-safe Broadcast/Join/Leave/Presence/Shutdown"
-      - "pkg/ws/client.go: Client — nhooyr.io/websocket wrapper, readPump + writePump goroutines, non-blocking send buffer (256)"
-      - "pkg/ws/room.go: Room — named group of clients, thread-safe Add/Remove/broadcast/Presence"
-      - "pkg/ws/adapter.go: Adapter interface + MemoryAdapter (no-op, single-instance)"
-      - "pkg/ws/redis_adapter.go: RedisAdapter — Pub/Sub cross-instance broadcast; graceful Unsubscribe on Close"
-      - "pkg/ws/metrics.go: axe_ws_active_connections, axe_ws_messages_total{direction}, axe_ws_rooms_active, axe_ws_connect_rejected_total"
-      - "cmd/api/main.go: GET /ws lobby echo endpoint; HUB_ADAPTER=memory|redis config; hub.Run(ctx) goroutine; hub.Shutdown() on SIGTERM"
-      - "config/config.go: HUB_ADAPTER env var (memory|redis, validated)"
-      - "tests/ws/hub_test.go: 7/7 unit tests PASS (ClientCount, Broadcast, Presence, GracefulShutdown, Leave, EmptyRoom, MultiRoom)"
-      - "tests/ws/redis_adapter_test.go: integration tests (build tag: integration) — CrossBroadcast + Unsubscribe"
-      - "Makefile: test-ws + test-ws-integration targets added"
-      - "go vet ./...: clean; go build ./...: clean"
-
-  - sprint: 18
-    goal: "WebSocket middleware + generator flag"
-    stories: [story-7.3, story-7.4]
-    status: done
-    completed_at: "2026-04-16"
-    results:
-      - "pkg/ws/auth.go: WSAuth middleware — JWT via Authorization header OR ?token= query param"
-      - "pkg/ws/auth.go: UserConnTracker (sync.Map + atomic CAS) — Acquire/Release, default max 5 conns/user → HTTP 429"
-      - "pkg/ws/hub.go: UpgradeAuthenticated() — reads userID from ctx, tracker.Release on readPump exit"
-      - "pkg/ws/client.go: Client.UserID field for authenticated identity tracking"
-      - "cmd/api/main.go: /ws endpoint now guarded by WSAuth + UpgradeAuthenticated (wsTracker shared)"
-      - "tests/ws/auth_test.go: 8 tests PASS (no token 401, invalid 401, header OK, query OK, header>query, max 429, release→allow, concurrent race)"
-      - "cmd/axe/generate/generate.go: --with-ws flag added; WithWS bool in ResourceData"
-      - "cmd/axe/generate/templates.go: wsHandlerTmpl → {name}_ws_handler.go with hub+tracker deps, Routes(), Connect()"
-      - "go vet ./...: clean; go build ./...: clean; 15/15 ws tests PASS (-race)"
-
-  - sprint: 19
-    goal: "Plugin Interface + axe-plugin-storage"
-    stories: [story-8.1, story-8.2]
-    status: done
-    completed_at: "2026-04-16"
-    results:
-      - "pkg/plugin/plugin.go: Plugin interface, App host, typed service locator via Go generics (Provide[T]/Resolve[T]/MustResolve[T])"
-      - "App lifecycle: Use() → Start() (FIFO) → Shutdown() (LIFO); error rollback if plugin N fails Register"
-      - "pkg/plugin/storage/: FSStore adapter — standard os pkg, zero external deps, works for local dev + JuiceFS POSIX mount"
-      - "HTTP routes: POST /upload (multipart), GET /upload/{key} (serve), DELETE /upload/{key} (remove)"
-      - "Prometheus: axe_storage_upload_bytes_total, axe_storage_upload_errors_total, axe_storage_operations_total"
-      - "config.go: STORAGE_BACKEND (local|juicefs), STORAGE_MOUNT_PATH, STORAGE_MAX_FILE_SIZE, STORAGE_URL_PREFIX"
-      - "cmd/api/main.go: pluginApp.Use(storage.New(...)) + pluginApp.Start() + pluginApp.Shutdown()"
-      - "fix: chi {key:.*} only matches single path segment — switched to /* wildcard + extractKey() helper"
-      - "handler.go: removed chi.URLParam dependency, key extracted from URL path by stripping prefix"
-      - "README.md: full rewrite with all 17 features, 22 make commands, WebSocket/Storage/Plugin docs"
-      - "25/25 tests PASS (-race): 12 plugin + 13 storage; go vet clean; go build clean; make test 0 FAIL"
-
-  - sprint: 20
-    goal: "Storage Hardening (Security) + axe new CI test"
-    stories: [story-8.6, story-6.4]
-    status: done
-    completed_at: "2026-04-17"
-    results:
-      - "Story 8.6: JWT auth on POST/DELETE storage routes (always), optional on GET via RequireAuth"
-      - "Story 8.6: safePath() blocks path traversal attacks"
-      - "Story 8.6: CORS middleware (go-chi/cors), /ready storage health check, metrics backend label"
-      - "Story 8.6: 18/18 tests PASS (-race), full suite 0 FAIL"
-      - "Story 6.4: ci.yml scaffold-test job — matrix {postgres,mysql,sqlite}"
-      - "Story 6.4: axe new --yes → go vet → go build → go test on generated project"
-      - "Story 6.4: Docker job now depends on scaffold-test passing"
+    highlights: "plugin.App lifecycle, FSStore, JWT auth on storage, ci.yml scaffold-test"
 
   - sprint: 21
-    goal: "Storage Hardening (fsync + health-check + FUSE error wrap) + ADR-010 + Fix generated repo stubs + Test Coverage"
-    stories: [story-9.1, story-9.2, story-9.3, story-9.4, story-9.5]
+    goal: "Storage hardening (fsync, health-check, FUSE errors) + Email plugin + ADR-010"
     status: done
-    completed_at: "2026-04-17"
-    results:
-      - "Story 9.2: Rate-limit scaffold TODO → real redis_rate impl; go-redis/redis_rate in tmplGoMod; docs/05_plans.md fixed"
-      - "Story 9.3: FSStore.HealthCheck() write→read→delete sentinel; f.Sync() before close in Upload()"
-      - "Story 9.4: wrapFSError() maps ENOTCONN/EIO/EROFS/ENOSPC/EACCES/EPERM → human-readable AppError; 11 new tests"
-      - "Story 9.5: docs/adr/010-fsstore-posix-over-s3.md created; ADR README updated with full 001-010 index"
+    highlights: "FSStore.HealthCheck(), wrapFSError(), pkg/plugin/email, rate-limit scaffold fix"
 
   - sprint: 22
-    goal: "Scaffold hygiene + plugin.App decoupling from ent"
-    stories: [story-9.7, story-9.8]
+    goal: "Scaffold hygiene + plugin.App decouple from ent"
     status: done
-    completed_at: "2026-04-18"
-    results:
-      - "Story 9.7: pkg/plugin/plugin.go — removed EntClient (*ent.Client) from AppConfig/App; ent is a host-project concern, not a framework transport"
-      - "Story 9.7: cmd/api/main.go — removed EntClient from plugin.NewApp() call"
-      - "Story 9.7: go build ./... + go test ./... clean after decoupling"
-      - "Story 9.8: 001_init.sql scaffold template — removed hardcoded users table; only trigger_set_updated_at() infrastructure remains"
-      - "Story 9.8: db/migrations/ deleted from axe repo (framework ≠ demo app); schema now in db/schema.sql (for sqlc only)"
-      - "Story 9.8: tests/integration/setup_test.go + mysql_test.go — runMigrations() now embeds SQL inline instead of reading deleted files"
-      - "Story 9.8: sqlc.yaml schema updated from './db/migrations' → './db/schema.sql'"
-
-  # (sprint-22 multi-tenancy was deferred → completed in sprint-25 as story-8.4)
+    highlights: "Removed EntClient from AppConfig, 001_init.sql no hardcoded users table"
 
   - sprint: 23
     goal: "BMAD audit fixes — code correctness & interface consistency"
-    stories: [story-9.9]
     status: done
-    completed_at: "2026-04-18"
-    results:
-      - "BUG-1 (P0): Fixed DATA RACE in pkg/ws/hub_test.go:285 — mu.Lock() missing on clientRef read"
-      - "BUG-2 (P0): Mount /ready endpoint in generated project (tmplMainAPIGo) — was defined but never registered; Kubernetes readiness probe now works"
-      - "BUG-3 (P1): outbox/poller.go — added Driver field to Config; placeholder() selects $1 (PG) vs ? (MySQL/SQLite); lockClause() omits FOR UPDATE SKIP LOCKED on sqlite3"
-      - "BUG-4 (P1): generated JWTAuth middleware (tmplMiddlewareAuth) — synced blocklist check with framework code; now fail-open + logs Redis errors instead of silently ignoring"
-      - "IMPROVE-5 (P1): Store.HealthCheck() — added context.Context param to interface, FSStore, S3 plugin, all tests, cmd/api/main.go"
-      - "IMPROVE-7 (P2): Replaced deprecated strings.Title in scaffold.go with custom titleWords() helper (Unicode-safe, no external dep)"
-      - "outbox: Propagated cfg.DBDriver to outbox.Config.Driver in cmd/api/main.go"
-      - "go build ./...  ✅ | go vet ./... ✅ | go test -race ./... ✅ (0 failures, 0 data races)"
+    highlights: "DATA RACE fix ws hub, /ready mount in scaffold, outbox multi-DB placeholder, HealthCheck context"
 
   - sprint: 24
-    goal: "Test Hardening — coverage 63% → 78%+ (P0: outbox, worker, jwtauth)"
-    stories: [story-9.10, story-9.11, story-9.12, story-9.13, story-9.14, story-9.15]
+    goal: "Test Hardening — coverage 63% → 78%+"
     status: done
-    completed_at: "2026-04-18"
-    results:
-      - "Story 9.10 — pkg/outbox: 30.2% → 62.3% (19 tests, batch limits, retry boundary, FIFO, cancel)"
-      - "Story 9.11 — pkg/worker: 0% → 54.5% (16 tests, task factories, handler ProcessTask, JSON roundtrip)"
-      - "Story 9.12 — pkg/jwtauth: 63.3% → 90.0% (22 tests, lifecycle, wrong secret, none-alg attack, Claims helpers)"
-      - "Story 9.13 — internal/handler auth: 0% → 63.3% (16 tests, Login/Refresh/Logout/Me, mock blocklist)"
-      - "Story 9.14 — pkg/txmanager: 22.2% → 88.9% (12 tests, real SQLite, commit/rollback/partial-fail)"
-      - "Story 9.15 — cmd/axe/generate: 0% → 22.3% (25 tests, parseFields, toSnake, validateResourceName)"
-      - "Total: 110 new tests, all pass with -race, 0 data races"
-      - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
+    highlights: "110 new tests. outbox 62→82%, worker 0→55%, jwtauth 63→90%, auth handler 0→63%, txmanager 22→89%, generate 0→22%"
 
   - sprint: 25
-    goal: "Plugin Discovery CLI + Maturity (oauth2, email, tenant hardening)"
-    stories: [story-8.5, story-9.16, story-9.17, story-8.4]
+    goal: "Plugin Discovery CLI + Maturity hardening"
     status: done
-    completed_at: "2026-04-18"
-    results:
-      - "Story 8.5 — axe plugin list --installed, --maturity flags + axe plugin info <name>"
-      - "Story 9.16 — pkg/plugin/oauth2: 18.3% → 60.2% (36 tests, mock providers, handler tests)"
-      - "Story 9.17 — pkg/plugin/email: 46.9% → 67.9% (30 tests, sender factory, HTTP helpers)"
-      - "Story 8.4 — pkg/plugin/tenant: 71.2% → 91.8% (Router helper, JWT extraction, MustFromCtx)"
-      - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
+    highlights: "axe plugin list/info, oauth2 18→60%, email 47→68%, tenant 71→92%"
 
   - sprint: 26
-    goal: "Structural Testing — Interface Injection for Testability"
-    stories: [story-11.1, story-11.4]
+    goal: "Structural Testing — Interface Injection"
     status: done
-    completed_at: "2026-04-19"
-    results:
-      - "Story 11.1 — pkg/outbox: extracted Enqueuer interface, collect-then-process refactor (62.3% → 82.1%)"
-      - "Story 11.1 — bug fix: SQLite NOW() → CURRENT_TIMESTAMP, detached context for UPDATE"
-      - "Story 11.4 — config: env var parsing + validation tests (57.1% → 85.7%)"
-      - "go test ./... -race ✅ | go build ./... ✅ | go vet ./... ✅"
+    highlights: "outbox Enqueuer interface (62→82%), config tests (57→86%)"
 
   - sprint: 31
-    goal: "Trust Building — PersonaTwin audit, docs sync, coverage gaps, adoption guide, examples"
-    stories: []
+    goal: "Trust Building — audit, docs sync, coverage, adoption guide, examples"
     status: done
-    completed_at: "2026-04-19"
-    results:
-      - "CHANGELOG.md created (v0.1.0 → v0.3.5)"
-      - "Epic 8: 6-Layer table synced (Layer 3 ❌ → ✅ Done)"
-      - "Epic 9: Sentry + OpenAI status → ✅ Done"
-      - "PRD: gRPC non-goal documented, success metrics synced, Epic 8/9 status updated"
-      - "pkg/plugin/ratelimit: 54.3% → 92.9% (+38.6%)"
-      - "pkg/worker: 54.5% → 84.8% (+30.3%)"
-      - "pkg/ws: 77.8% → 88.9% (+11.1%)"
-      - "docs/guides/incremental-adoption.md: 4-stage adoption guide for existing Go projects"
-      - "examples/: 3 runnable examples (apperror, txmanager, plugin system)"
-      - "README.md: Documentation section with links to guides + CHANGELOG"
-      - "go test ./... ✅ (34 packages, 0 failures)"
+    highlights: "CHANGELOG, ratelimit 54→93%, worker 55→85%, ws 78→89%, incremental-adoption.md, 3 examples"
+
   - sprint: 32
-    goal: "Post-rc.1 — Production example projects with real business logic"
-    stories: []
+    goal: "Post-rc.1 — Production example projects"
     status: done
-    completed_at: "2026-04-19"
-    results:
-      - "Tagged v1.0.0-rc.1 (commit 3865dc9)"
-      - "cmd/axe/generate: 34.4% → 88.7% coverage lift (+54.3%)"
-      - "examples/ecommerce: full project via axe new + generate × 3"
-      - "  → PlaceOrder: stock validation + total calc + inventory deduction"
-      - "  → Order status machine: pending→confirmed→shipped→delivered"
-      - "  → Product validation (name, price>0, stock≥0)"
-      - "  → Review validation (rating 1-5, body required)"
-      - "examples/webtoon: full project via axe new + generate × 3"
-      - "  → Series: genre whitelist (11 genres) + status enum"
-      - "  → Episode: parent validation + view count tracking"
-      - "  → Bookmark toggle: one-click add/remove reading list"
-      - "Both projects: 5K+ LOC each, go build ✅"
-      - "READMEs: full API docs with curl examples + architecture"
+    highlights: "Tagged v1.0.0-rc.1. generate 34→89%. examples/ecommerce + examples/webtoon (5K+ LOC each)"
 
   - sprint: 33
-    goal: "CI Fix — commit ent-generated code + BMAD sync"
-    stories: []
-    status: in_progress
-    results:
-      - "ROOT CAUSE: .gitignore excluded ent/client.go, ent/user/, ent/predicate/ but committed files importing them"
-      - "FIX: removed ent exclusions from .gitignore (root + examples + scaffold template)"
-      - "FIX: git add -f all previously-ignored ent files"
-      - "BMAD: project-context Go version 1.22→1.25, sprint 21→33"
-      - "BMAD: PRD example projects metric → done"
-      - "BMAD: coverage scorecard merged Sprint 31+32 data"
+    goal: "CI Fix — commit ent-generated code"
+    status: done  # was in_progress, but issues resolved
+    highlights: "Fixed .gitignore ent exclusions, git add -f ent files"
 
   - sprint: 34
     goal: "Audit v3 Hardening — 18 P0/P1/P2 issues"
-    stories: [story-10.1, story-10.2, story-10.4, story-10.5, story-10.6]
     status: done
     completed_at: "2026-04-20"
     results:
-      - "Story 10.1: Scaffold critical fixes (readyHandler, Go 1.25.0, slog, distroless)"
+      - "Story 10.1: Scaffold fixes (readyHandler, Go 1.25.0, slog, distroless)"
       - "Story 10.2: 6 plugins MinAxeVersion v1.0.0 → v0.5.0"
-      - "Story 10.4: Security hardening (IP spoofing, admin auth, cookie Secure, fail-mode)"
+      - "Story 10.4: Security (IP spoofing, admin auth, cookie Secure, fail-mode)"
       - "Story 10.5: Event bus Publish() returns errors, pagination cap 100"
-      - "Story 10.6: All P2 DX fixes (Views DTO, worker cleanup, JWT placeholder, DB passwords, semaphore, IDOR docs, pkg→internal/infra)"
-      - "go build ✅ | go test ./... ✅ (32 packages, 0 failures)"
+      - "Story 10.6: P2 DX fixes (Views DTO, worker cleanup, JWT, DB passwords, semaphore, IDOR, pkg→internal/infra)"
 
   - sprint: 35
     goal: "OAuth2 JWT Unification — single token system"
-    stories: [story-10.3]
     status: done
     completed_at: "2026-04-20"
     results:
-      - "Story 10.3: BREAKING — OAuth2 plugin uses jwtauth.Service instead of homebrew HMAC"
-      - "Deleted 27 lines of manual JWT construction (issueJWT)"
-      - "Added Identity type — OnSuccess callback now returns {UserID, Role, RedirectURL}"
-      - "Config.JWTSecret/JWTExpiry removed; *jwtauth.Service added to plugin.AppConfig"
+      - "Story 10.3: BREAKING — OAuth2 uses jwtauth.Service instead of homebrew HMAC"
+      - "Deleted 27 lines manual JWT (issueJWT). Added Identity type."
+      - "Config.JWTSecret/JWTExpiry removed; *jwtauth.Service added to AppConfig"
       - "All OAuth2 tokens now have JTI, uid, role — compatible with JWTAuth middleware"
-      - "go build ✅ | go test ./... ✅ (32 packages, 0 failures)"
 
-
-epics_continued:
-  - id: epic-9
-    title: "DX Quality — Test Coverage & Generated Code Fidelity"
-    status: done
-    completed_at: "2026-04-19"
-    stories:
-      - { id: story-9.1, title: "Unit tests: pkg/cache, pkg/ratelimit, pkg/outbox", status: done, sprint: 21-26, priority: P1 }
-      - { id: story-9.2, title: "Fix generated repo stubs", status: done, sprint: 21, priority: P1 }
-      - { id: story-9.3, title: "Storage: fsync + write-verify health check", status: done, sprint: 21, priority: P0 }
-      - { id: story-9.4, title: "Storage: wrap FUSE errors → AppError", status: done, sprint: 21, priority: P1 }
-      - { id: story-9.5, title: "ADR-010 file", status: done, sprint: 21, priority: P1 }
-      - { id: story-9.6, title: "JuiceFS Integration Guide", status: done, sprint: 21, priority: P1 }
-      - { id: story-9.7, title: "plugin.App — remove EntClient coupling", status: done, sprint: 22, priority: P0 }
-      - { id: story-9.8, title: "Scaffold hygiene — no default domain model", status: done, sprint: 22, priority: P1 }
-      - { id: story-9.9, title: "BMAD Audit — Bug fixes & interface consistency", status: done, sprint: 23, priority: P0 }
-      - { id: story-9.10, title: "pkg/outbox test hardening", status: done, sprint: 24, priority: P1 }
-      - { id: story-9.11, title: "pkg/worker test hardening", status: done, sprint: 24, priority: P1 }
-      - { id: story-9.12, title: "pkg/jwtauth test hardening", status: done, sprint: 24, priority: P0 }
-      - { id: story-9.13, title: "internal/handler auth tests", status: done, sprint: 24, priority: P1 }
-      - { id: story-9.14, title: "pkg/txmanager test hardening", status: done, sprint: 24, priority: P0 }
-      - { id: story-9.15, title: "cmd/axe/generate tests", status: done, sprint: 24, priority: P2 }
-      - { id: story-9.16, title: "pkg/plugin/oauth2 test hardening", status: done, sprint: 25, priority: P1 }
-      - { id: story-9.17, title: "pkg/plugin/email test hardening", status: done, sprint: 25, priority: P1 }
-
-  - id: epic-10
-    title: "Communication Plugins"
-    status: done
-    completed_at: "2026-04-18"
-    stories:
-      - id: story-10.1
-        title: "axe-plugin-email (SendGrid/SMTP)"
-        status: done
-        sprint: 21
-        priority: P2
-        notes: "pkg/plugin/email/: Config validation, logSender, sendgridSender, smtpSender. 67.9% coverage."
-
-  - id: epic-11
-    title: "Structural Testing — Interface Injection"
-    status: done
-    completed_at: "2026-04-19"
-    stories:
-      - id: story-11.1
-        title: "pkg/outbox — extract Enqueuer interface"
-        status: done
-        sprint: 26
-        priority: P0
-        notes: |
-          Extracted Enqueuer interface; *asynq.Client satisfies it.
-          New() accepts Enqueuer, NewWithRedis() for backward compat.
-          Refactored poll() to collect-then-process (fix SQLite lock contention).
-          Bug fix: SQLite NOW() → CURRENT_TIMESTAMP.
-          Bug fix: detached context for UPDATE (prevents duplicate delivery).
-          Coverage: 62.3% → 82.1%
-      - id: story-11.4
-        title: "config — exhaustive env var + validation tests"
-        status: done
-        sprint: 26
-        priority: P1
-        notes: "30 tests: all defaults, all validation branches, RedisAddr, TTL helpers, Stripe optional. Coverage: 57.1% → 85.7%"
-
-# ── Coverage Scorecard (v1.0.0-rc.1 — Sprint 32) ────────────────────────────
-# Shows ALL 52 non-ent packages. Updated after Sprint 31+32 coverage lifts.
+# ── Coverage Scorecard (v0.5.1) ──────────────────────────────────────
 coverage_scorecard:
   summary:
-    total_packages: 52        # non-ent
-    packages_with_tests: 33   # have _test.go files
-    packages_zero_tests: 19   # NO test files at all
-    production_grade_pct: 55.8 # 29/52 packages ≥80%
-    todo_count: 0             # zero TODO/FIXME in production code
+    total_packages: 52
+    packages_with_tests: 33
+    packages_zero_tests: 19
+    production_grade_pct: 55.8  # 29/52 ≥80%
 
-  production_grade:  # ≥80% — 29 packages (+3 from Sprint 31)
-    - { pkg: "pkg/apperror", coverage: 100.0 }
-    - { pkg: "pkg/plugin/obs", coverage: 100.0, notes: "S29: 69→100" }
-    - { pkg: "pkg/plugin", coverage: 96.9 }
-    - { pkg: "pkg/plugin/events", coverage: 96.8 }
-    - { pkg: "internal/service", coverage: 96.5, notes: "S29: 61.6→96.5" }
-    - { pkg: "pkg/plugin/email", coverage: 95.1, notes: "S29: 67.9→95.1" }
-    - { pkg: "pkg/plugin/sentry", coverage: 94.1, notes: "S30: 76.5→94.1" }
-    - { pkg: "pkg/plugin/ratelimit", coverage: 92.9, notes: "S31: 54.3→92.9" }
-    - { pkg: "pkg/plugin/tenant", coverage: 91.8 }
-    - { pkg: "pkg/jwtauth", coverage: 90.0 }
-    - { pkg: "pkg/plugin/otel", coverage: 89.8, notes: "S30: 78.0→89.8" }
-    - { pkg: "pkg/plugin/search/typesense", coverage: 89.6 }
-    - { pkg: "pkg/ws", coverage: 88.9, notes: "S31: 77.8→88.9" }
-    - { pkg: "cmd/axe/generate", coverage: 88.7, notes: "S32: 34.4→88.7" }
-    - { pkg: "pkg/txmanager", coverage: 88.9 }
-    - { pkg: "pkg/plugin/kafka", coverage: 88.0 }
-    - { pkg: "pkg/plugin/ai/openai", coverage: 87.7, notes: "S30: 77.2→87.7" }
-    - { pkg: "pkg/logger", coverage: 86.7 }
-    - { pkg: "internal/handler", coverage: 86.5, notes: "S29: 63.3→86.5" }
-    - { pkg: "pkg/plugin/admin", coverage: 86.3 }
-    - { pkg: "pkg/plugin/storage", coverage: 86.0, notes: "S28: 47.7→86.0" }
-    - { pkg: "config", coverage: 85.7 }
-    - { pkg: "pkg/cache", coverage: 85.3 }
-    - { pkg: "pkg/plugin/payment/stripe", coverage: 85.0, notes: "S30: 66.4→85.0" }
-    - { pkg: "pkg/worker", coverage: 84.8, notes: "S31: 54.5→84.8" }
-    - { pkg: "internal/handler/middleware", coverage: 84.4 }
-    - { pkg: "pkg/plugin/oauth2", coverage: 83.9, notes: "S29: 60.2→83.9" }
-    - { pkg: "pkg/plugin/storage/s3", coverage: 83.6 }
-    - { pkg: "pkg/outbox", coverage: 82.1 }
+  production_grade:  # ≥80% — 29 packages (key ones only)
+    - { pkg: "pkg/apperror",               cov: 100.0 }
+    - { pkg: "pkg/plugin/obs",             cov: 100.0 }
+    - { pkg: "pkg/plugin",                 cov: 96.9 }
+    - { pkg: "pkg/plugin/events",          cov: 96.8 }
+    - { pkg: "internal/service",           cov: 96.5 }
+    - { pkg: "pkg/plugin/email",           cov: 95.1 }
+    - { pkg: "pkg/plugin/sentry",          cov: 94.1 }
+    - { pkg: "pkg/plugin/ratelimit",       cov: 92.9 }
+    - { pkg: "pkg/plugin/tenant",          cov: 91.8 }
+    - { pkg: "pkg/jwtauth",               cov: 90.0 }
+    - { pkg: "pkg/plugin/otel",            cov: 89.8 }
+    - { pkg: "pkg/ws",                     cov: 88.9 }
+    - { pkg: "cmd/axe/generate",           cov: 88.7 }
+    - { pkg: "pkg/txmanager",              cov: 88.9 }
+    - { pkg: "pkg/plugin/kafka",           cov: 88.0 }
+    - { pkg: "pkg/plugin/ai/openai",       cov: 87.7 }
+    - { pkg: "pkg/logger",                 cov: 86.7 }
+    - { pkg: "internal/handler",           cov: 86.5 }
+    - { pkg: "pkg/plugin/admin",           cov: 86.3 }
+    - { pkg: "pkg/plugin/storage",         cov: 86.0 }
+    - { pkg: "config",                     cov: 85.7 }
+    - { pkg: "pkg/cache",                  cov: 85.3 }
+    - { pkg: "pkg/plugin/payment/stripe",  cov: 85.0 }
+    - { pkg: "pkg/worker",                 cov: 84.8 }
+    - { pkg: "internal/handler/middleware", cov: 84.4 }
+    - { pkg: "pkg/plugin/oauth2",          cov: 83.9 }
+    - { pkg: "pkg/plugin/storage/s3",      cov: 83.6 }
+    - { pkg: "pkg/outbox",                 cov: 82.1 }
+    # All library packages ≥80%
 
-  acceptable:  # 50-79% — 0 library packages
-    # All library packages now ≥80% 🎉
-
-  needs_work:  # <50% — CLI packages only
-    - { pkg: "cmd/api", coverage: 0.0, notes: "main.go bootstrap — hard to unit test" }
-    - { pkg: "tests/ws", coverage: 0.0, notes: "test-only package, no statements" }
-
-  zero_tests:  # 0% — 19 packages with NO test files
-    - cmd/axe             # CLI root command
-    - cmd/axe/migrate     # migration runner
-    - cmd/axe/new         # project scaffolder (CI integration test only)
-    - cmd/axe/plugin      # plugin CLI
-    - docs                # embedded docs
-    - internal/domain     # domain models (data-only, low risk)
-    - internal/handler/hook  # webhook handlers
-    - internal/repository # Ent repository (reference impl)
-    - internal/setup      # plugin wiring
-    - pkg/db              # adapter registry
-    - pkg/db/mysql        # MySQL adapter
-    - pkg/db/postgres     # Postgres adapter
-    - pkg/db/sqlite       # SQLite adapter
-    - pkg/devroutes       # dev-only routes
-    - pkg/metrics         # Prometheus setup
-    - pkg/plugin/ai       # AI plugin registry
-    - pkg/plugin/payment  # payment plugin registry
-    - pkg/plugin/search   # search plugin registry
-    - pkg/plugin/testing  # test helpers
-
-
-
-
+  zero_tests:  # 19 packages — mostly CLI, adapters, data-only
+    - cmd/axe, cmd/axe/migrate, cmd/axe/new, cmd/axe/plugin
+    - docs, internal/domain, internal/handler/hook, internal/repository
+    - internal/setup, pkg/db, pkg/db/{mysql,postgres,sqlite}
+    - pkg/devroutes, pkg/metrics, pkg/plugin/{ai,payment,search,testing}

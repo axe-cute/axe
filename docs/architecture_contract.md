@@ -1,219 +1,75 @@
-# 📜 Architecture Contract
+# Architecture Contract — axe
 
-> The constitution of the axe framework.
-> Every pull request, every AI-generated code, and every technical decision
-> **must** comply with this document. No exceptions.
+> Constitution of axe framework. Every PR, AI-generated code, and technical decision MUST comply. No exceptions.
 
----
-
-## Table of Contents
-
-1. [The "No Magic" Principle](#1-the-no-magic-principle)
-2. [Layer Architecture](#2-layer-architecture)
-3. [Layer Rules (in detail)](#3-layer-rules-in-detail)
-4. [Multi-Database Strategy](#4-multi-database-strategy)
-5. [Error Handling Contract](#5-error-handling-contract)
-6. [Transaction Contract](#6-transaction-contract)
-7. [Plugin Contract](#7-plugin-contract)
-8. [WebSocket Contract](#8-websocket-contract)
-9. [Observability Contract](#9-observability-contract)
-10. [PR Checklist](#10-pr-checklist)
+> *Compressed copy.* Original at `architecture_contract.original.md`.
 
 ---
 
-## 1. The "No Magic" Principle
+## 1. "No Magic" Principle
 
-The single most important rule in axe: **every behavior must be traceable
-at compile-time**. A developer reading the code should never wonder
-"where does this come from?" or "when does this run?".
+Every behavior traceable at compile-time. Developer never wonders "where does this come from?"
 
-### ✅ Allowed (compile-time, inspectable, generates static code)
+**✅ Allowed** (compile-time, inspectable):
 
-| Pattern | Why it's OK |
+| Pattern | Why OK |
 |---|---|
-| Struct tags (`json:"..."`, `db:"..."`, `validate:"..."`) | Declarative, visible in source, processed by known libraries |
-| `go generate` + Ent/sqlc/Wire codegen | Generates **static Go files** that you can read and debug |
-| Implicit interface satisfaction | The compiler verifies the contract — no runtime surprise |
-| Build constraints (`//go:build integration`) | Conditional compilation, explicit in source |
-| `init()` for driver registration (`database/sql` style) | Idiomatic Go pattern, side-effect is adding to a registry |
+| Struct tags (`json`, `db`, `validate`) | Declarative, visible, processed by known libs |
+| `go generate` + Ent/sqlc codegen | Generates static Go files |
+| Implicit interface satisfaction | Compiler verifies contract |
+| Build constraints (`//go:build`) | Explicit conditional compilation |
+| `init()` for driver registration | Idiomatic Go, `database/sql` pattern |
 
-### ❌ Forbidden (runtime, opaque, hides control flow)
+**❌ Forbidden** (runtime, opaque):
 
-| Pattern | Why it's banned |
+| Pattern | Why banned |
 |---|---|
-| `reflect.ValueOf` / `reflect.TypeOf` in hot paths | Invisible behavior, hard to debug, poor performance |
-| `init()` with complex side effects | Order-dependent, hard to test, surprising |
-| Global mutable state after startup | Concurrency hazard, makes testing non-deterministic |
-| Dynamic plugin loading (`plugin.Open`) | Breaks static analysis, version coupling |
-| Runtime dependency injection (containers) | Control flow becomes invisible; use Wire instead |
+| `reflect.ValueOf/TypeOf` in hot paths | Invisible behavior, poor perf |
+| Complex `init()` side effects | Order-dependent, surprising |
+| Global mutable state post-startup | Concurrency hazard |
+| `plugin.Open` dynamic loading | Breaks static analysis |
+| Runtime DI containers | Invisible control flow |
 
-### `panic()` Policy
-
-`panic()` is **forbidden in request-serving code paths** (`pkg/`, `internal/handler/`, `internal/service/`, `internal/repository/`).
-
-**Allowed only in:**
-| Context | Example | Rationale |
-|---|---|---|
-| `Must*` functions | `MustResolve[T]()`, `MustFromCtx()` | Go convention — caller explicitly opts into panic |
-| Startup-time registration guards | `db.Register()`, `plugin.Provide[T]()` | Mirrors `database/sql.Register()` — fail-fast before any request |
-| CLI template parsing | `template.Must()` | Startup-only, no user request involved |
-| Test helpers | `t.Fatal()` equivalent | Tests, not production |
+**`panic()` Policy:** Forbidden in request-serving code. Allowed only in: `Must*` functions, startup registration guards, CLI `template.Must()`, test helpers.
 
 ---
 
 ## 2. Layer Architecture
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                      cmd/api/main.go                          │
-│            Orchestrator (infra setup + Leader calls)           │
-│  Creates: config, DB, cache, JWT, WS Hub │ then delegates:    │
-└──────────────┬─────────────────┬─────────────────┬────────────┘
-               │                 │                 │
-    ┌──────────▼───────┐ ┌──────▼────────┐ ┌──────▼────────────┐
-    │ setup/plugin.go  │ │ hook/hook.go  │ │ handler/router.go │
-    │  Plugin Leader   │ │  Hook Leader  │ │  Router Leader    │
-    │  RegisterPlugins │ │  RegisterAll  │ │  Controllers{}    │
-    └──────────────────┘ └───────────────┘ └───────┬───────────┘
-         🔌 plugins           🎣 events            │
-                                        ┌──────────▼──────────────┐
-                                        │    internal/handler/    │  HTTP Layer
-                                        │ Parse → Validate → Call │
-                                        └───────────┬─────────────┘
-                                                    │ via interface
-                                        ┌───────────▼─────────────┐
-                                        │    internal/service/    │  Business Logic
-                                        │ Rules, auth, tx, outbox │
-                                        └───────────┬─────────────┘
-                                                    │ via interface
-                                        ┌───────────▼─────────────┐
-                                        │   internal/repository/  │  Data Access
-                                        │   Ent or sqlc           │
-                                        └───────────┬─────────────┘
-                                                    │
-                                        ┌───────────▼─────────────┐
-                                        │ PostgreSQL/MySQL/SQLite │
-                                        └─────────────────────────┘
+cmd/api/main.go (Orchestrator — infra setup + Leader calls)
+    ├── setup/plugin.go   (Plugin Leader)
+    ├── hook/hook.go      (Hook Leader)
+    └── handler/router.go (Router Leader)
+            ↓
+    internal/handler/  (HTTP: Parse → Validate → Call → Write)
+            ↓ via interface
+    internal/service/  (Business logic, auth, tx, outbox)
+            ↓ via interface
+    internal/repository/ (Data access: Ent or sqlc)
+            ↓
+    DB (PostgreSQL | MySQL | SQLite)
 ```
 
-**Leaders are independent.** No Leader imports another. `main.go` is the sole
-orchestrator that connects them. This prevents composition root bloat as the
-plugin ecosystem grows.
-
-**The dependency arrow always points downward.** A lower layer must never
-import or reference a higher layer. Interfaces are defined in `domain/`
-(or in the consuming layer) so that the dependency is inverted.
+**Leaders independent.** No Leader imports another. `main.go` sole orchestrator. Dependency arrow always downward. Interfaces in `domain/` for DI.
 
 ---
 
-## 3. Layer Rules (in detail)
+## 3. Layer Rules
 
-### 3.1 `internal/domain/` — The Core
+**domain/** — Entities, value objects, interfaces only. Zero infra knowledge. Allowed: context, errors, fmt, strings, time, uuid. Forbidden: database, net/http, slog, ORM, framework, validation libs.
 
-The domain layer contains **entities, value objects, and interfaces only**.
-It has zero knowledge of databases, HTTP, or any infrastructure.
+**handler/** — Thin HTTP adapter. 4 steps: Parse → Validate → Call service → Write response. No DB calls, no business logic, no direct repo calls.
 
-**Allowed imports:**
-```go
-import (
-    "context"
-    "errors"
-    "fmt"
-    "strings"
-    "time"
-    "github.com/google/uuid"  // type definition only
-)
-```
+**service/** — All business rules. Auth checks, tx coordination via `TxManager`, outbox events in tx. No HTTP concerns, no direct DB driver calls.
 
-**Forbidden imports:** anything from `database/`, `net/http`, `log/slog`,
-any ORM, any framework, any validation library.
-
-**What goes here:**
-- Entity structs (e.g. `User`, `Post`) with business methods
-- Repository interfaces (e.g. `UserRepository`)
-- Service interfaces (if needed for mocking)
-- Domain errors (e.g. `ErrInsufficientBalance`)
-- Value objects and enums
-
-**What does NOT go here:**
-- Database queries, SQL, Ent client calls
-- HTTP request/response types
-- Logging
-- Configuration
-
-### 3.2 `internal/handler/` — HTTP Layer
-
-The handler layer is the **thin adapter** between HTTP and the service layer.
-Each handler method follows the same 4-step pattern:
-
-```
-1. Parse    → Extract data from HTTP request (JSON body, path params, query params)
-2. Validate → Check input format (required fields, types, ranges)
-3. Call     → Invoke a service method via its interface
-4. Write    → Return an HTTP response (status code + JSON body)
-```
-
-| ✅ Allowed | ❌ Forbidden |
-|---|---|
-| Parse request body/params | Direct database calls |
-| Input format validation | Business logic |
-| Call service interface | Direct repository calls |
-| Write HTTP response | Transaction management |
-| Set response headers | Outbox event creation |
-
-### 3.3 `internal/service/` — Business Logic
-
-The service layer contains **all business rules**. This is where the real
-work happens. Services coordinate between repositories, enforce invariants,
-and manage transactions.
-
-| ✅ Allowed | ❌ Forbidden |
-|---|---|
-| Business rules and invariants | HTTP concerns (headers, status codes, request parsing) |
-| Authorization checks | Direct database driver calls (`sql.DB.Query(...)`) |
-| Transaction coordination via `TxManager` | Importing `net/http` |
-| Calling repository interfaces | Returning HTTP status codes |
-| Appending outbox events (within tx) | |
-| Logging business-relevant information | |
-
-### 3.4 `internal/repository/` — Data Access
-
-The repository layer is a **pure data access adapter**. It implements the
-interfaces defined in `domain/` and talks to the database.
-
-| ✅ Allowed | ❌ Forbidden |
-|---|---|
-| Database read/write via Ent or sqlc | Business logic (conditions, calculations) |
-| Implement domain interfaces | HTTP concerns |
-| Extract transaction from context | Calling other repositories directly |
-| Map DB entities to domain entities | Creating outbox events |
-
-**Important:** If an operation requires coordination between multiple
-repositories, that coordination belongs in the **service layer**, not here.
+**repository/** — Pure data access adapter. Implements domain interfaces. No business logic, no HTTP, no cross-repo calls. Multi-repo coordination → service layer.
 
 ---
 
 ## 4. Multi-Database Strategy
 
-### Ent vs sqlc — Choose One Per Project
-
-Axe supports both Ent and sqlc, but **each project chooses one**:
-
-| Option | Best for | Strengths |
-|---|---|---|
-| **Ent** (recommended) | CRUD-heavy REST APIs | Schema-as-code, compile-time safety, auto migrations, relations |
-| **sqlc** | Query-heavy / analytics apps | Hand-written SQL, full control, type-safe output, complex JOINs |
-
-> ⚠️ Do not use both Ent and sqlc in the same project.
-> Choose the tool that fits your use case.
-
-Both share the **same `*sql.DB` connection pool**, managed by
-the pluggable `pkg/db` adapter.
-
-### Pluggable DB Adapters
-
-The `pkg/db` package provides an adapter interface. Drivers register
-themselves via `init()` (same pattern as `database/sql`):
+**Ent vs sqlc — choose one per project.** Ent: CRUD-heavy, schema-as-code. sqlc: query-heavy, analytics. Both share `*sql.DB` via `pkg/db` adapter.
 
 ```go
 import (
@@ -221,7 +77,6 @@ import (
     _ "github.com/axe-cute/axe/pkg/db/mysql"      // registers "mysql"
     _ "github.com/axe-cute/axe/pkg/db/sqlite"     // registers "sqlite3"
 )
-
 sqlDB, entDialect, err := db.Open(cfg.DBDriver, db.AdapterConfig{...})
 ```
 
@@ -229,163 +84,62 @@ sqlDB, entDialect, err := db.Open(cfg.DBDriver, db.AdapterConfig{...})
 
 ## 5. Error Handling Contract
 
-Errors flow upward through the layers, gaining context at each level:
-
 ```
-Repository  →  wraps with context:  fmt.Errorf("create order: %w", err)
-     ↓
-Service     →  maps to app error:   apperror.ErrNotFound.WithMessage("order not found")
-     ↓
+Repository  →  wraps: fmt.Errorf("operation: %w", err)
+Service     →  maps to: apperror.ErrNotFound.WithMessage("...")
 Handler     →  central middleware maps *AppError → HTTP status + JSON
 ```
 
-### Rules
-
-1. **Repository** — returns `fmt.Errorf("operation: %w", err)`.
-   Never returns `apperror` types directly.
-
-2. **Service** — catches repository errors and maps them to the appropriate
-   `apperror` type (`ErrNotFound`, `ErrConflict`, `ErrForbidden`, etc.)
-
-3. **Handler** — does NOT manually map errors to HTTP status codes.
-   The central error middleware (`middleware.Recoverer`) inspects
-   `*apperror.AppError` and writes the correct status + JSON.
-
-4. **Never use raw `errors.New()` at the handler level.** Always use the
-   `apperror` taxonomy so that error responses are consistent.
+Rules: Repo returns `fmt.Errorf` (never apperror directly). Service catches + maps to apperror type. Handler does NOT manually map errors. Never raw `errors.New()` at handler level.
 
 ---
 
 ## 6. Transaction Contract
 
-### Rule 1: Multiple writes require a transaction
-
-If a service method performs **more than one write operation**, it **must**
-be wrapped in `TxManager.WithinTransaction()`:
-
-```go
-func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) error {
-    return s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
-        order, err := s.orderRepo.Create(ctx, ...)
-        if err != nil { return err }
-
-        // The outbox event is in the SAME transaction as the order insert.
-        return s.outboxRepo.Append(ctx, outbox.Event{...})
-    })
-}
-```
-
-### Rule 2: Repositories accept `context.Context` and extract the tx
-
-Repositories must **never** start their own transactions. Instead, they
-extract the transaction from context (falling back to the connection pool
-if no transaction is active):
-
-```go
-func (r *orderRepo) Create(ctx context.Context, order domain.Order) error {
-    db := extractTxOrDB(ctx, r.db)  // tx if present, otherwise pool
-    // ...
-}
-```
-
-### Rule 3: Outbox events are appended within the same transaction
-
-The outbox event and the primary DB write must be **atomic**. If either
-fails, both are rolled back.
+**Rule 1:** >1 write → wrap in `TxManager.WithinTransaction()`.
+**Rule 2:** Repos accept `context.Context`, extract tx (never start own).
+**Rule 3:** Outbox events in same tx as primary write — atomic.
 
 ---
 
 ## 7. Plugin Contract
 
-Plugins extend axe without modifying core code. The lifecycle is:
-
 ```
-app.Use(plugin)     →  registers (before Start)
-app.Start(ctx)      →  calls Register() on each plugin, FIFO order
-app.Shutdown(ctx)   →  calls Shutdown() on each plugin, LIFO order
+app.Use(plugin)   → registers (before Start)
+app.Start(ctx)    → Register() each plugin, FIFO
+app.Shutdown(ctx) → Shutdown() each plugin, LIFO
 ```
 
-### Rules
-
-1. **Every plugin implements `plugin.Plugin`** — `Name()`, `Register()`, `Shutdown()`.
-2. **Register is called once** — plugins must not register routes or services outside of `Register()`.
-3. **Typed service locator** — use `plugin.Provide[T]()` / `plugin.Resolve[T]()` for cross-plugin communication.
-4. **Fail-fast at startup** — if a plugin fails in `Register()`, all previously registered plugins are rolled back via `Shutdown()`.
-5. **Plugins must not depend on registration order** — use the service locator to resolve optional dependencies.
+Rules: Every plugin implements `plugin.Plugin`. Register called once. Typed service locator (`Provide[T]/Resolve[T]`). Fail-fast at startup (rollback via Shutdown). Plugins must not depend on registration order.
 
 ---
 
 ## 8. WebSocket Contract
 
-### Connection lifecycle
-
 ```
-Client connects → WSAuth middleware (JWT validation + conn limit)
-    → Hub.UpgradeAuthenticated() → nhooyr.io/websocket upgrade
-    → Client readPump + writePump goroutines start
-    → Hub.Join(client, "room-name")
-    → client.OnMessage(handler)
-    → ... messages flow ...
-    → client disconnects → readPump exits → tracker.Release()
+Connect → WSAuth (JWT) → Hub.UpgradeAuthenticated() → readPump + writePump
+    → Hub.Join(client, "room") → messages flow → disconnect → tracker.Release()
 ```
 
-### Rules
-
-1. **All WS connections require authentication** — `WSAuth` middleware validates JWT (header or `?token=` query param).
-2. **Per-user connection limits are enforced** — default max 5 connections per user.
-3. **Messages are non-blocking** — `client.Send()` writes to a buffered channel (256); slow clients are dropped.
-4. **Multi-instance broadcasting** — set `HUB_ADAPTER=redis` for cross-instance broadcast via Redis Pub/Sub.
-5. **Graceful shutdown** — `Hub.Shutdown()` closes all connections and waits for goroutines to exit.
+Rules: All WS require auth. Max 5 conns/user. Non-blocking send (buffered 256). Multi-instance via `HUB_ADAPTER=redis`. Graceful shutdown waits for goroutines.
 
 ---
 
 ## 9. Observability Contract
 
-### Logging
+**Logging:** slog everywhere, structured fields, JSON in prod, `request_id` in all request-scoped logs. Never `fmt.Println` or `log.Printf`.
 
-- Use `log/slog` (stdlib) everywhere — never `fmt.Println` or `log.Printf`.
-- Structured fields: `slog.Info("msg", "key", "value")`.
-- In production, logs are JSON; in development, human-readable text.
-- Include `request_id` in all request-scoped logs.
+**Metrics:** `axe_` namespace. Key metrics: `axe_http_requests_total`, `axe_http_request_duration_seconds`, `axe_ws_active_connections`, `axe_storage_*`.
 
-### Metrics
-
-All Prometheus metrics use the `axe_` namespace:
-
-| Metric | Type | Description |
-|---|---|---|
-| `axe_http_requests_total{method,path,status}` | Counter | Total HTTP requests |
-| `axe_http_request_duration_seconds{method,path}` | Histogram | Request latency |
-| `axe_ws_active_connections` | Gauge | Current WebSocket connections |
-| `axe_ws_messages_total{direction}` | Counter | WS messages sent/received |
-| `axe_storage_upload_bytes_total` | Counter | Total bytes uploaded |
-| `axe_storage_operations_total{operation,status}` | Counter | Storage operations |
-
-### Health endpoints
-
-- `GET /health` — liveness probe (always returns 200 if the process is running)
-- `GET /ready` — readiness probe (checks DB + Redis connectivity)
-- `GET /metrics` — Prometheus scrape endpoint
+**Health:** `GET /health` (liveness), `GET /ready` (readiness: DB+Redis), `GET /metrics` (Prometheus).
 
 ---
 
 ## 10. PR Checklist
 
-Every pull request to `main` must pass the following checks:
-
 ```
-□ go vet ./...              — no issues
-□ golangci-lint run ./...   — no warnings
-□ go test ./...             — all green
-□ go test -race ./...       — no data races
-□ No forbidden imports in internal/domain/
-□ apperror taxonomy used — no raw errors at handler level
-□ Transactions wrapped if multiple writes in one service call
-□ ADR updated if an architectural decision was changed
-□ Test coverage did not decrease compared to the previous commit
-□ New public APIs are documented with GoDoc comments
+□ go vet ./...    □ golangci-lint ./...    □ go test ./...    □ go test -race
+□ No forbidden imports in domain/    □ apperror taxonomy used
+□ Tx wrapped if multiple writes      □ ADR updated if arch decision changed
+□ Coverage not decreased             □ New public APIs have GoDoc comments
 ```
-
----
-
-*Last updated: 2026-04-16*

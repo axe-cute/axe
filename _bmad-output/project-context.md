@@ -1,211 +1,115 @@
 # Project Context — axe
 
-> File này được inject vào mọi AI agent session.
-> Mọi code generate phải tuân thủ các rules dưới đây.
-> Không được overwrite hay skip phần nào trong file này.
+> Injected into every AI agent session. All generated code MUST comply. No overwrite/skip.
+
+> *Compressed copy.* Original at `project-context.original.md`.
 
 ---
 
-## Project Overview
+## Overview
 
-**axe** là một Go web framework nội bộ (internal platform):
-- Clean Architecture baked-in, zero runtime magic
-- CLI generator (`axe generate resource`) tạo CRUD endpoint < 10 phút
-- Production-grade từ ngày đầu: transactions, observability, error handling
+**axe** — Go web framework (internal platform). Clean Architecture baked-in, zero runtime magic. CLI generator (`axe generate resource`) → CRUD endpoint <10 min. Production-grade day one: transactions, observability, error handling.
 
-**Status**: Phase 2 (Plugin Ecosystem) — Sprint 34 (Audit v3 Hardening)
+**Status**: Phase 2 (Plugin Ecosystem) — Sprint 34+
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Version |
+| Layer | Tech | Version |
 |---|---|---|
 | Language | Go | 1.25+ |
-| HTTP Router | Chi | v5 |
+| HTTP | Chi | v5 |
 | ORM | Ent | latest |
-| Query builder (alt) | sqlc | v2 |
-| Database driver | pgx | v5 |
+| Query (alt) | sqlc | v2 |
+| DB | pgx (PG), go-sql-driver (MySQL), modernc.org/sqlite (CGO-free) | v5/latest |
 | Config | Cleanenv | latest |
-| Background jobs | Asynq | latest |
-| Logging | slog (stdlib) | Go 1.21+ |
+| Jobs | Asynq | latest |
+| Logging | slog (stdlib) | 1.21+ |
 | Tracing | OpenTelemetry | latest |
 | Cache | Redis (go-redis) | v9 |
-| Test containers | testcontainers-go | latest |
-| Code generation | go generate (Ent or sqlc) | latest |
-| Database driver | pgx (PostgreSQL) | v5 |
-| Database driver | go-sql-driver (MySQL) | latest |
-| Database driver | modernc.org/sqlite (CGO-free) | latest |
+| Test | testcontainers-go | latest |
+| Codegen | go generate (Ent or sqlc) | latest |
 | WebSocket | nhooyr.io/websocket | latest |
 
-**Go module**: `github.com/axe-cute/axe`
+**Module**: `github.com/axe-cute/axe`
 
 ---
 
 ## Folder Structure
 
 ```
-axe/                          # FRAMEWORK repo structure
-├── cmd/
-│   └── api/
-│       └── main.go          # Composition Root (Wire)
+axe/                            # FRAMEWORK repo
+├── cmd/api/main.go             # Composition Root
 ├── internal/
-│   ├── domain/              # Entities + Interfaces ONLY
-│   ├── handler/             # HTTP layer (Chi handlers)
-│   ├── service/             # Business logic
-│   └── repository/          # Data access (Ent or sqlc — pick one per project)
-├── pkg/                     # FRAMEWORK library packages (imported by generated projects)
-│   ├── apperror/            # Error taxonomy
-│   ├── txmanager/           # Transaction manager
-│   ├── logger/              # Structured logging (slog)
-│   └── plugin/              # Plugin system
-├── ent/
-│   └── schema/              # Ent schema definitions
-├── db/
-│   ├── migrations/          # SQL migration files
-│   └── queries/             # sqlc SQL queries
-├── config/
-│   └── config.go            # Cleanenv struct
-├── _bmad-output/            # BMAD artifacts (không commit code vào đây)
-└── docs/                    # Architecture docs
+│   ├── domain/                 # Entities + Interfaces ONLY
+│   ├── handler/                # HTTP layer (Chi)
+│   ├── service/                # Business logic
+│   └── repository/             # Data access (Ent or sqlc — pick one)
+├── pkg/                        # Framework libs (imported by generated projects)
+│   ├── apperror/ | txmanager/ | logger/ | plugin/
+├── ent/schema/                 # Ent schemas
+├── db/{migrations,queries}     # SQL files
+├── config/config.go            # Cleanenv struct
+└── _bmad-output/               # BMAD artifacts
 
-# SCAFFOLD output (axe new) uses internal/infra/ instead of pkg/:
-my-app/
-├── internal/
-│   ├── domain/
-│   ├── handler/
-│   ├── service/
-│   ├── repository/
-│   └── infra/               # App-internal packages (NOT for external import)
-│       ├── apperror/
-│       ├── jwtauth/
-│       ├── logger/
-│       ├── cache/
-│       └── ws/
+# SCAFFOLD (axe new) → internal/infra/ instead of pkg/:
+my-app/internal/infra/{apperror,jwtauth,logger,cache,ws}
 ```
 
 ---
 
-## Layer Rules (STRICT — không được vi phạm)
+## Layer Rules (STRICT)
 
-### internal/domain/ — Pure Domain
-```go
-// ✅ CHỈ import:
-import (
-    "context"
-    "errors"
-    "fmt"
-    "strings"
-    "time"
-    "github.com/google/uuid"  // type only
-)
-// ❌ KHÔNG BAO GIỜ: database, logging, framework, HTTP, validation libs
-```
-**Trách nhiệm**: Entity definitions + Repository interfaces + Service interfaces
+**domain/** — Pure. Only imports: context, errors, fmt, strings, time, uuid. NEVER: database, logging, framework, HTTP. Contains: entities, repo interfaces, service interfaces.
 
-### internal/handler/ — HTTP Layer
-```
-✅ Parse HTTP request (JSON, query params, path params)
-✅ Validate input format (required fields, type checks)
-✅ Call service layer via interface
-✅ Write HTTP response (status code + JSON body)
-❌ KHÔNG: Database calls, business logic, direct repository calls
-```
+**handler/** — Thin HTTP adapter. Parse → Validate → Call service interface → Write response. NEVER: DB calls, business logic, direct repo calls.
 
-### internal/service/ — Business Logic
-```
-✅ Business rules và validations (email tồn tại?)
-✅ Authorization checks (ownership)
-✅ Transaction coordination (TxManager.WithinTransaction)
-✅ Outbox event appending (trong cùng transaction)
-✅ Calling repository interfaces
-❌ KHÔNG: HTTP concerns (headers, status codes), direct DB driver calls
-```
+**service/** — Business rules, auth checks, tx coordination (`TxManager.WithinTransaction`), outbox event append. NEVER: HTTP concerns, direct DB driver calls.
 
-### internal/repository/ — Data Access
-```
-✅ Database read/write via Ent or sqlc (choose one per project)
-✅ Implement interfaces defined in internal/domain/
-❌ KHÔNG: Business logic, HTTP concerns, calling other repositories
-```
+**repository/** — Data access via Ent or sqlc. Implements domain interfaces. NEVER: business logic, HTTP, calling other repos.
 
 ---
 
-## "No Magic" Decision Matrix
+## "No Magic" Matrix
 
-```
-✅ ALLOWED (Compile-time, inspectable):
-  - Struct tags (json, db, validate)
-  - go generate + Ent codegen + sqlc codegen + Wire codegen
-  - Implicit interface satisfaction (compiler-verified)
-  - Build constraints //go:build
+✅ Struct tags, go generate (Ent/sqlc/Wire), implicit interface satisfaction, build constraints.
 
-❌ FORBIDDEN (Runtime, opaque):
-  - reflect.ValueOf / reflect.TypeOf trong hot path
-  - init() với side effects phức tạp
-  - Global mutable state sau startup
-  - Dynamic plugin loading
-  - Runtime dependency injection
-```
+❌ reflect in hot path, complex init() side effects, global mutable state post-startup, dynamic plugin loading, runtime DI.
 
 ---
 
 ## Ent vs sqlc — Choose One Per Project
 
-Axe hỗ trợ cả Ent và sqlc, nhưng **mỗi project chỉ chọn một**:
-
-```
-Option A: Ent (recommended for most projects)
-  - Full ORM: CRUD, migrations, schema-as-code
-  - Best for: Standard REST APIs, CRUD-heavy apps
-
-Option B: sqlc (for query-heavy/analytics apps)
-  - SQL-first: write queries, generate Go code
-  - Best for: Complex JOINs, aggregations, analytics dashboards
-```
-
-> ⚠️ Không dùng cả Ent lẫn sqlc trong cùng một project.
-> Chọn một tool phù hợp với use case của bạn.
+**Ent** (recommended): full ORM, schema-as-code, CRUD-heavy. **sqlc**: SQL-first, complex JOINs/analytics. ⚠️ Never both in same project.
 
 ---
 
-## Error Taxonomy (pkg/apperror)
+## Error Taxonomy (pkg/apperror) — AI MUST use
 
-AI **PHẢI** dùng taxonomy này, không được tự tạo error format:
-
-| Tình huống | Error type |
+| Situation | Error |
 |---|---|
-| Record not found | `apperror.ErrNotFound` |
-| Invalid input format | `apperror.ErrInvalidInput` |
-| JWT expired/missing | `apperror.ErrUnauthorized` |
-| User lacks permission | `apperror.ErrForbidden` |
-| DB/external failure | `apperror.ErrInternal` |
-| Business rule violated | `apperror.ErrConflict` |
+| Not found | `ErrNotFound` (404) |
+| Bad input | `ErrInvalidInput` (400) |
+| JWT expired | `ErrUnauthorized` (401) |
+| No permission | `ErrForbidden` (403) |
+| DB/external fail | `ErrInternal` (500) |
+| Business rule violated | `ErrConflict` (409) |
 
 ```go
-// ✅ Đúng
-return apperror.ErrNotFound.WithMessage("user not found").WithCause(err)
-
-// ❌ Sai — tuyệt đối không làm
-return errors.New("not found")
-return c.JSON(400, map[string]string{"error": "user not found"})
+// ✅ apperror.ErrNotFound.WithMessage("user not found").WithCause(err)
+// ❌ errors.New("not found")  |  c.JSON(400, map[string]string{...})
 ```
 
 ---
 
 ## Transaction Contract
 
-```
-RULE: Service method với > 1 write operation PHẢI dùng TxManager.WithinTransaction()
-
-RULE: Repository methods PHẢI accept context.Context
-      và extract transaction từ context (không tự mở tx)
-
-RULE: Outbox event PHẢI append trong cùng transaction với DB write chính
-```
+- >1 write → MUST `TxManager.WithinTransaction()`
+- Repos accept `context.Context`, extract tx from context (never self-open)
+- Outbox event MUST be in same tx as primary write
 
 ```go
-// Pattern chuẩn:
 func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) error {
     return s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
         order, err := s.orderRepo.Create(ctx, ...)
@@ -217,90 +121,38 @@ func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) er
 
 ---
 
-## Outbox Pattern — Khi nào dùng
+## Outbox — When to use
 
-```
-Trigger AI phải suggest Outbox (không direct call):
-  "Sau khi tạo user, gửi email"         → Outbox
-  "Sau khi payment success, notify"     → Outbox
-  "Sau khi update, trigger analytics"   → Outbox
-```
+Side effects after DB write → always Outbox: send email after user create, notify after payment, trigger analytics after update.
 
 ---
 
-## Interface-First Design
+## Interface-First: define in `domain/` → implement in `repository/`/`service/` → wire in `main.go`.
 
-AI luôn phải:
-1. Define interface trong `internal/domain/` TRƯỚC
-2. Implement trong `internal/repository/` hoặc `internal/service/`
-3. Wire trong `cmd/api/main.go`
+## Testing: Integration (testcontainers) → Service unit (mock repo) → Handler unit (httptest) → Domain (pure). AI MUST generate tests alongside code.
 
----
-
-## Testing Pyramid
-
-```
-Layer 3: Integration — testcontainers-go + real PostgreSQL
-Layer 2: Service unit — mock Repository interface (testify/mock)
-Layer 1: Handler unit — httptest + mock Service interface
-Layer 0: Domain unit — pure functions, no mock
-```
-
-AI generate code PHẢI generate test cùng lúc (không tách riêng).
+## Logger: `logger.FromCtx(ctx).With("key", val)` — never global `slog.Info()`.
 
 ---
 
-## Logger Pattern (Context-Aware)
+## API Safety (audit v3)
 
-```go
-// ✅ Đúng: logger từ context (có request_id)
-func (s *OrderService) CreateOrder(ctx context.Context, ...) error {
-    logger := logger.FromCtx(ctx).With("order_id", order.ID)
-    logger.Info("creating order")
-}
-
-// ❌ Sai: global logger
-slog.Info("creating order") // mất request_id
-```
+- Pagination: upper bound 100
+- Create DTO: no server fields (views, created_at)
+- Rate limiter: RemoteAddr default (no X-Forwarded-For trust)
+- Event Bus Publish(): returns sync handler errors
+- Framework: no domain logic
 
 ---
 
-## API Safety Rules (audit v3)
+## PR Checklist
 
 ```
-RULE: Pagination limit PHẢI có upper bound (default: 100)
-RULE: Create DTO KHÔNG expose server-managed fields (views, created_at)
-RULE: Rate limiter dùng RemoteAddr mặc định (không trust X-Forwarded-For)
-RULE: Event Bus Publish() trả error từ sync handlers
-RULE: Framework code KHÔNG chứa domain logic (WelcomeEmailHandler etc.)
+□ Correct layer? □ Interface in domain/ first? □ Tx wrap if >1 write?
+□ apperror taxonomy? □ Domain no infra imports? □ Tests with code?
+□ Explicit SQL columns? □ Outbox for side effects? □ Context propagated?
+□ Logger via context? □ Pagination capped? □ No server fields in Create DTO?
+□ go vet pass? □ go test pass?
 ```
 
----
-
-## PR Checklist (AI tự apply trước khi hoàn thành)
-
-```
-□ Code ở đúng layer?
-□ Interface define trong domain/ trước implement?
-□ Transaction wrap nếu > 1 write?
-□ Error dùng apperror taxonomy?
-□ Domain layer không import infra packages?
-□ Test viết cùng production code?
-□ SQL có explicit columns, không SELECT *?
-□ Outbox nếu có side effect?
-□ Context propagate qua tất cả function calls?
-□ Logger inject qua context?
-□ Pagination có limit cap (max 100)?
-□ Create DTO không expose server fields?
-□ go vet ./... pass?
-□ go test ./... pass?
-```
-
----
-
-## Reference Implementation
-
-`internal/domain/user.go`, `internal/handler/user_handler.go`,
-`internal/service/user_service.go`, `internal/repository/user_repo.go`
-
-→ Khi có doubt, đọc User domain làm mẫu.
+**Reference**: User domain (`internal/domain/user.go` → `handler/` → `service/` → `repository/`).
