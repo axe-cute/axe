@@ -57,3 +57,16 @@ tmp/
 
 # Build artifacts
 dist/
+
+# BMAD compressed backups
+*.original.md
+*.original.yaml
+
+# Smoke test artifacts
+smoketest_*/
+
+# AI agent skills (installed per-machine)
+.agents/
+.claude/skills/
+.windsurf/
+skills-lock.json
