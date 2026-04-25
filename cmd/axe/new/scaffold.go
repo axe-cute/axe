@@ -207,6 +207,7 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		// DB migrations
 		{"db/migrations/001_init.sql", tmplInitSQL},
 		{"docs/openapi.yaml", tmplOpenAPIYaml},
+		{"docs/docker.md", tmplDockerDocs},
 
 		// cmd/api
 		{"cmd/api/main.go", tmplMainAPIGo(data)},

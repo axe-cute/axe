@@ -208,6 +208,89 @@ EXPOSE 8080
 ENTRYPOINT ["/app-server"]
 `
 
+const tmplDockerDocs = "# Docker for {{.Name}}\n\n" + `One-page reference for the docker-compose layout that ships with this
+project. The compose file itself is heavily commented — this doc is the
+long-form version of why those comments exist.
+
+## Anatomy
+
+` + "```" + `
+docker-compose.yml
+├── postgres   (service name = in-cluster DNS name)
+├── redis      (only if --no-cache wasn't passed)
+└── asynqmon   (only if --no-worker wasn't passed)
+` + "```" + `
+
+## The #1 trap: ` + "`" + `localhost` + "`" + ` vs the service name
+
+Inside the compose network, every service gets a DNS name equal to its
+key in ` + "`" + `services:` + "`" + `. From a container's point of view, ` + "`" + `localhost` + "`" + `
+is **the container itself**, not "the host machine".
+
+| Where the API process runs   | Connect to DB at                 |
+|------------------------------|----------------------------------|
+| Your laptop (` + "`" + `make dev` + "`" + `)        | ` + "`" + `localhost:5432` + "`" + `                 |
+| ` + "`" + `docker compose up api` + "`" + `         | ` + "`" + `postgres:5432` + "`" + `                  |
+| ` + "`" + `kubectl run` + "`" + ` in the same ns    | ` + "`" + `postgres:5432` + "`" + ` (same DNS rule)  |
+
+Concretely, your ` + "`" + `.env` + "`" + ` will look different in the two cases:
+
+` + "```" + `bash
+# .env on the host
+DATABASE_URL=postgres://{{.Name}}:{{.Name}}_dev_password@localhost:5432/{{.Name}}_dev?sslmode=disable
+
+# .env baked into the api container (or passed via --env-file at compose time)
+DATABASE_URL=postgres://{{.Name}}:{{.Name}}_dev_password@postgres:5432/{{.Name}}_dev?sslmode=disable
+` + "```" + `
+
+If you see ` + "`" + `dial tcp 127.0.0.1:5432: connect: connection refused` + "`" + ` from a
+container, this is the bug. The container is dialing **its own** loopback.
+
+## Common commands
+
+` + "```" + `bash
+# Start everything in the background.
+docker compose up -d
+
+# Tail logs for one service.
+docker compose logs -f postgres
+
+# Open a shell in the DB.
+docker compose exec postgres psql -U {{.Name}} -d {{.Name}}_dev
+
+# Reset the database — preserves volumes.
+docker compose down
+
+# Reset the database — wipes volumes (⚠ data gone).
+docker compose down -v
+` + "```" + `
+
+## Build-time vs runtime config
+
+A separate trap (E12 in the axe roadmap): if you bake configuration into
+the image at ` + "`" + `docker build` + "`" + ` time (via ` + "`" + `ARG` + "`" + ` + ` + "`" + `ENV` + "`" + `), changing the
+value forces a rebuild every time.
+
+**Rule of thumb:**
+
+- **Build-time** (` + "`" + `ARG` + "`" + `): things baked into the binary (Go version,
+  module path).
+- **Runtime** (` + "`" + `environment:` + "`" + ` in compose, or ` + "`" + `--env-file` + "`" + `): everything
+  that varies between dev/staging/prod (DB URLs, secrets, feature flags).
+
+If you need a value to be available **both** at build and runtime (rare —
+e.g. a Next.js ` + "`" + `NEXT_PUBLIC_*` + "`" + `), pass it as ` + "`" + `ARG` + "`" + ` and immediately
+re-export as ` + "`" + `ENV` + "`" + ` in the Dockerfile. axe's own template does NOT need
+this; it's a Next.js companion concern.
+
+## See also
+
+- ` + "`" + `docker-compose.yml` + "`" + ` — the compose file with line-level comments.
+- ` + "`" + `.env.example` + "`" + ` — host vs service-name guidance near each URL.
+- ` + "`" + `Makefile` + "`" + ` ` + "`" + `db-shell` + "`" + ` target (if present) — opens a psql/mysql
+  shell against the running container without retyping credentials.
+`
+
 const tmplReadme = `# {{.Name}}
 
 A production-ready Go API built with the [axe](https://github.com/axe-cute/axe) framework.
@@ -289,6 +372,15 @@ MIT
 // tmplEnvExample builds the .env.example content for the selected DB driver.
 func tmplEnvExample(data TemplateData, dbc dbConfig) string {
 	dbSection := fmt.Sprintf(`# Database (%s)
+#
+# This URL is used by `+"`"+`cmd/api`+"`"+`. Pick the host depending on where
+# the API process runs:
+#
+#   • host process (`+"`"+`go run ./cmd/api`+"`"+`, `+"`"+`make dev`+"`"+`)  → host = "localhost"
+#   • compose container (`+"`"+`docker compose up api`+"`"+`)     → host = service name
+#                                                            (e.g. "postgres")
+#
+# See docs/docker.md for the full reasoning. Same rule for REDIS_URL below.
 DATABASE_URL=%s
 DATABASE_MAX_OPEN_CONNS=25
 DATABASE_MAX_IDLE_CONNS=5
@@ -298,7 +390,7 @@ DB_DRIVER=%s`, dbc.EnvName, renderInlineTemplate(dbc.ExampleURL, data), dbc.Driv
 	redisSection := ""
 	if data.WithCache || data.WithWorker {
 		redisSection = `
-# Redis
+# Redis — same host/service-name rule applies as DATABASE_URL above.
 REDIS_URL=redis://localhost:6379/0
 REDIS_MAX_RETRIES=3
 `
@@ -349,6 +441,11 @@ OTEL_SERVICE_NAME=%s
 }
 
 // tmplDockerCompose builds docker-compose.yml dynamically based on DB and feature flags.
+//
+// Comments inside the YAML address E6 (in-cluster DNS confusion: localhost
+// vs service name). They are aimed at the developer who opens this file
+// after `axe new` and wonders why their app can't reach the DB. See also
+// `docs/docker.md` for the long-form version.
 func tmplDockerCompose(data TemplateData, dbc dbConfig) string {
 	if dbc.Driver == "sqlite3" && !data.WithCache && !data.WithWorker {
 		return `# SQLite project — no Docker services required for local development.
@@ -357,12 +454,26 @@ services: {}
 `
 	}
 
+	header := `# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — local development services for ` + data.Name + `.
+#
+# Service names below (` + dockerServiceList(data, dbc) + `) double as DNS
+# names INSIDE the compose network. Treat them like hostnames:
+#
+#   • From your laptop → use   localhost:<host-port>
+#   • From a sibling container → use   <service-name>:<container-port>
+#
+# Mixing the two is the #1 ECONNREFUSED in this stack. See docs/docker.md.
+# ─────────────────────────────────────────────────────────────────────────────
+`
+
 	services := ""
 
 	// DB service
 	switch dbc.Driver {
 	case "postgres":
-		services += fmt.Sprintf(`  postgres:
+		services += fmt.Sprintf(`  # Postgres — in-cluster URL is "postgres://%s:...@postgres:5432/%s_dev"
+  postgres:
     image: %s
     container_name: %s_postgres
     restart: unless-stopped
@@ -371,18 +482,23 @@ services: {}
       POSTGRES_PASSWORD: %s_dev_password
       POSTGRES_DB: %s_dev
     ports:
+      # host:container — host (psql, your IDE) connects via localhost:5432;
+      # sibling containers MUST use "postgres:5432" — the service name above.
       - "5432:5432"
     volumes:
+      # Named volume is project-scoped; survives "docker compose down" but
+      # is wiped by "docker compose down -v". See docs/docker.md "Reset DB".
       - %s_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U %s -d %s_dev"]
       interval: 5s
       timeout: 3s
       retries: 10
-`, dbc.DockerImage, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name)
+`, data.Name, data.Name, dbc.DockerImage, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name)
 
 	case "mysql":
-		services += fmt.Sprintf(`  mysql:
+		services += fmt.Sprintf(`  # MySQL — in-cluster URL is "%s:...@tcp(mysql:3306)/%s_dev"
+  mysql:
     image: %s
     container_name: %s_mysql
     restart: unless-stopped
@@ -392,6 +508,8 @@ services: {}
       MYSQL_PASSWORD: %s_dev_password
       MYSQL_DATABASE: %s_dev
     ports:
+      # host:container — host clients use localhost:3306; siblings use
+      # "mysql:3306" — the service name above.
       - "3306:3306"
     volumes:
       - %s_mysql_data:/var/lib/mysql
@@ -400,17 +518,19 @@ services: {}
       interval: 5s
       timeout: 3s
       retries: 10
-`, dbc.DockerImage, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name)
+`, data.Name, data.Name, dbc.DockerImage, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name, data.Name)
 	}
 
 	// Redis service
 	if data.WithCache || data.WithWorker {
 		services += `
+  # Redis — in-cluster URL is "redis://redis:6379/0"
   redis:
     image: redis:7-alpine
     container_name: ` + data.Name + `_redis
     restart: unless-stopped
     ports:
+      # host:container — host uses localhost:6379; siblings use "redis:6379".
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -423,16 +543,23 @@ services: {}
 	// Asynqmon (only if worker enabled)
 	if data.WithWorker {
 		services += `
+  # Asynqmon — web UI for Asynq job queue. Sibling of redis, so it
+  # references "redis:6379" (NOT localhost) via REDIS_ADDR below.
   asynqmon:
     image: hibiken/asynqmon:latest
     platform: linux/amd64
     container_name: ` + data.Name + `_asynqmon
     restart: unless-stopped
     ports:
+      # Host opens http://localhost:8081 ; container itself listens on 8080.
       - "8081:8080"
     environment:
+      # "redis" = service-name DNS inside the compose network. Do NOT use
+      # "localhost" here — that would be asynqmon's own container.
       REDIS_ADDR: redis:6379
     depends_on:
+      # Wait for redis healthcheck to pass before starting; prevents
+      # asynqmon from looping on connection refused at boot.
       redis:
         condition: service_healthy
 `
@@ -443,17 +570,41 @@ services: {}
 	switch dbc.Driver {
 	case "postgres":
 		volumes = fmt.Sprintf(`
+# Named volumes (project-scoped). "docker compose down" preserves them;
+# "docker compose down -v" wipes them. Use the latter to nuke local DB.
 volumes:
   %s_postgres_data:
 `, data.Name)
 	case "mysql":
 		volumes = fmt.Sprintf(`
+# Named volumes (project-scoped). "docker compose down" preserves them;
+# "docker compose down -v" wipes them. Use the latter to nuke local DB.
 volumes:
   %s_mysql_data:
 `, data.Name)
 	}
 
-	return "services:\n" + services + volumes
+	return header + "\nservices:\n" + services + volumes
+}
+
+// dockerServiceList renders a comma-separated list of service names that
+// will appear in the generated compose file. Used in the file header to
+// remind developers what hostnames are available inside the network.
+func dockerServiceList(data TemplateData, dbc dbConfig) string {
+	var names []string
+	switch dbc.Driver {
+	case "postgres":
+		names = append(names, "postgres")
+	case "mysql":
+		names = append(names, "mysql")
+	}
+	if data.WithCache || data.WithWorker {
+		names = append(names, "redis")
+	}
+	if data.WithWorker {
+		names = append(names, "asynqmon")
+	}
+	return strings.Join(names, ", ")
 }
 
 // tmplMainAPIGo builds the cmd/api/main.go composition root.
