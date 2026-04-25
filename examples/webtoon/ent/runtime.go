@@ -18,12 +18,16 @@ import (
 func init() {
 	bookmarkFields := schema.Bookmark{}.Fields()
 	_ = bookmarkFields
+	// bookmarkDescUserID is the schema descriptor for user_id field.
+	bookmarkDescUserID := bookmarkFields[1].Descriptor()
+	// bookmark.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	bookmark.UserIDValidator = bookmarkDescUserID.Validators[0].(func(string) error)
 	// bookmarkDescCreatedAt is the schema descriptor for created_at field.
-	bookmarkDescCreatedAt := bookmarkFields[2].Descriptor()
+	bookmarkDescCreatedAt := bookmarkFields[3].Descriptor()
 	// bookmark.DefaultCreatedAt holds the default value on creation for the created_at field.
 	bookmark.DefaultCreatedAt = bookmarkDescCreatedAt.Default.(func() time.Time)
 	// bookmarkDescUpdatedAt is the schema descriptor for updated_at field.
-	bookmarkDescUpdatedAt := bookmarkFields[3].Descriptor()
+	bookmarkDescUpdatedAt := bookmarkFields[4].Descriptor()
 	// bookmark.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	bookmark.DefaultUpdatedAt = bookmarkDescUpdatedAt.Default.(func() time.Time)
 	// bookmark.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

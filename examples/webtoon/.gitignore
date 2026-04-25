@@ -5,6 +5,13 @@
 *.so
 *.dylib
 /bin/
+/api
+/webtoon-api
+
+# Next.js / TypeScript build cache
+web/tsconfig.tsbuildinfo
+web/.next/
+web/node_modules/
 
 # Test binary, built with `go test -c`
 *.test

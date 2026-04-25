@@ -18,8 +18,18 @@ type Series struct {
 	Author      string
 	CoverUrl    string
 	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// TrendingScore is maintained by the periodic job in internal/jobs/trending.go.
+	// 0 for series that have never been read. Only populated on reads that
+	// explicitly request it (e.g. ListTrending); normal List/GetByID leave it 0.
+	TrendingScore float64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+// SeriesFilter narrows a catalog listing.
+type SeriesFilter struct {
+	Genre  string // empty = any
+	Status string // empty = any
 }
 
 // ── Series status constants ─────────────────────────────────────────────────
@@ -82,6 +92,12 @@ type SeriesRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Series, error)
 	List(ctx context.Context, pagination Pagination) ([]*Series, int, error)
+	// ListFiltered narrows by optional genre/status. Zero-value filter = ListAll.
+	ListFiltered(ctx context.Context, filter SeriesFilter, pagination Pagination) ([]*Series, int, error)
+	// ListTrending returns series ordered by trending_score DESC. Implemented
+	// with raw SQL because trending_score lives outside the Ent schema
+	// (see db/migrations/20260424180000_scale_indexes_and_trending.sql).
+	ListTrending(ctx context.Context, limit int) ([]*Series, error)
 }
 
 // SeriesService defines business operations for Series.
@@ -92,6 +108,8 @@ type SeriesService interface {
 	UpdateSeries(ctx context.Context, id uuid.UUID, input UpdateSeriesInput) (*Series, error)
 	DeleteSeries(ctx context.Context, id uuid.UUID) error
 	ListSeriess(ctx context.Context, pagination Pagination) ([]*Series, int, error)
+	ListSeriesFiltered(ctx context.Context, filter SeriesFilter, pagination Pagination) ([]*Series, int, error)
+	ListTrending(ctx context.Context, limit int) ([]*Series, error)
 }
 
 // CreateSeriesInput holds fields required to create a Series.

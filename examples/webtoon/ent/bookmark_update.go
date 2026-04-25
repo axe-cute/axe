@@ -29,6 +29,20 @@ func (_u *BookmarkUpdate) Where(ps ...predicate.Bookmark) *BookmarkUpdate {
 	return _u
 }
 
+// SetUserID sets the "user_id" field.
+func (_u *BookmarkUpdate) SetUserID(v string) *BookmarkUpdate {
+	_u.mutation.SetUserID(v)
+	return _u
+}
+
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (_u *BookmarkUpdate) SetNillableUserID(v *string) *BookmarkUpdate {
+	if v != nil {
+		_u.SetUserID(*v)
+	}
+	return _u
+}
+
 // SetSeriesID sets the "series_id" field.
 func (_u *BookmarkUpdate) SetSeriesID(v uuid.UUID) *BookmarkUpdate {
 	_u.mutation.SetSeriesID(v)
@@ -90,7 +104,20 @@ func (_u *BookmarkUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *BookmarkUpdate) check() error {
+	if v, ok := _u.mutation.UserID(); ok {
+		if err := bookmark.UserIDValidator(v); err != nil {
+			return &ValidationError{Name: "user_id", err: fmt.Errorf(`ent: validator failed for field "Bookmark.user_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *BookmarkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(bookmark.Table, bookmark.Columns, sqlgraph.NewFieldSpec(bookmark.FieldID, field.TypeUUID))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -98,6 +125,9 @@ func (_u *BookmarkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.UserID(); ok {
+		_spec.SetField(bookmark.FieldUserID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SeriesID(); ok {
 		_spec.SetField(bookmark.FieldSeriesID, field.TypeUUID, value)
@@ -123,6 +153,20 @@ type BookmarkUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *BookmarkMutation
+}
+
+// SetUserID sets the "user_id" field.
+func (_u *BookmarkUpdateOne) SetUserID(v string) *BookmarkUpdateOne {
+	_u.mutation.SetUserID(v)
+	return _u
+}
+
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (_u *BookmarkUpdateOne) SetNillableUserID(v *string) *BookmarkUpdateOne {
+	if v != nil {
+		_u.SetUserID(*v)
+	}
+	return _u
 }
 
 // SetSeriesID sets the "series_id" field.
@@ -199,7 +243,20 @@ func (_u *BookmarkUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *BookmarkUpdateOne) check() error {
+	if v, ok := _u.mutation.UserID(); ok {
+		if err := bookmark.UserIDValidator(v); err != nil {
+			return &ValidationError{Name: "user_id", err: fmt.Errorf(`ent: validator failed for field "Bookmark.user_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *BookmarkUpdateOne) sqlSave(ctx context.Context) (_node *Bookmark, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(bookmark.Table, bookmark.Columns, sqlgraph.NewFieldSpec(bookmark.FieldID, field.TypeUUID))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -224,6 +281,9 @@ func (_u *BookmarkUpdateOne) sqlSave(ctx context.Context) (_node *Bookmark, err 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.UserID(); ok {
+		_spec.SetField(bookmark.FieldUserID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SeriesID(); ok {
 		_spec.SetField(bookmark.FieldSeriesID, field.TypeUUID, value)

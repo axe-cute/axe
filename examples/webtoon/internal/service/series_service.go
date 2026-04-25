@@ -87,3 +87,24 @@ func (s *SeriesService) ListSeriess(ctx context.Context, p domain.Pagination) ([
 	}
 	return s.repo.List(ctx, p)
 }
+
+// ListSeriesFiltered validates the filter values and delegates to the repo.
+// Genre/Status are checked against allowlists so arbitrary strings don't hit
+// the DB (prevents index bloat from invalid values).
+func (s *SeriesService) ListSeriesFiltered(ctx context.Context, f domain.SeriesFilter, p domain.Pagination) ([]*domain.Series, int, error) {
+	if err := p.Validate(); err != nil {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
+	}
+	if f.Genre != "" && !domain.ValidGenres[f.Genre] {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage(fmt.Sprintf("invalid genre %q", f.Genre))
+	}
+	if f.Status != "" && !domain.ValidSeriesStatuses[f.Status] {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage(fmt.Sprintf("invalid status %q", f.Status))
+	}
+	return s.repo.ListFiltered(ctx, f, p)
+}
+
+// ListTrending returns top-N series by trending_score.
+func (s *SeriesService) ListTrending(ctx context.Context, limit int) ([]*domain.Series, error) {
+	return s.repo.ListTrending(ctx, limit)
+}

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     episode_number    BIGINT    NOT NULL,
     thumbnail_url    VARCHAR(255)    NOT NULL,
     published    BOOLEAN    NOT NULL,
-    series_id UUID NOT NULL REFERENCES seriess(id),
+    series_id UUID NOT NULL REFERENCES series(id),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

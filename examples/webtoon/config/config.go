@@ -41,11 +41,28 @@ type Config struct {
 	OTELEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" env-default:""`
 	OTELServiceName string `env:"OTEL_SERVICE_NAME"           env-default:"app"`
 
-	// Storage
-	StorageBackend     string `env:"STORAGE_BACKEND"       env-default:"local"`
-	StorageMountPath   string `env:"STORAGE_MOUNT_PATH"    env-default:"./uploads"`
+	// Storage (S3-compatible: MinIO for dev, Backblaze B2 / Cloudflare R2 prod)
+	//
+	// Cost profile (2026, cheapest path):
+	//   - B2: $6/TB storage, $0.01/GB egress — FREE via Cloudflare Bandwidth Alliance
+	//   - R2: $15/TB storage, $0 egress (always)
+	//   - MinIO local: free (dev)
+	//
+	// Swap: change StorageEndpoint + creds. Code path is identical (pkg/storage).
+	StorageEndpoint   string `env:"STORAGE_ENDPOINT"    env-default:"localhost:9000"`
+	StorageRegion     string `env:"STORAGE_REGION"      env-default:"us-east-1"`
+	StorageBucket     string `env:"STORAGE_BUCKET"      env-default:"webtoon"`
+	StorageAccessKey  string `env:"STORAGE_ACCESS_KEY"  env-default:"minioadmin"`
+	StorageSecretKey  string `env:"STORAGE_SECRET_KEY"  env-default:"minioadmin"`
+	StorageUseSSL     bool   `env:"STORAGE_USE_SSL"     env-default:"false"`
+	// Public URL is what clients use to GET uploaded assets. For prod, set
+	// to your CDN origin (e.g. https://cdn.example.com). For local MinIO,
+	// keep as http://localhost:9000 and the bucket path is appended.
+	StoragePublicURL   string `env:"STORAGE_PUBLIC_URL"    env-default:"http://localhost:9000"`
 	StorageMaxFileSize int64  `env:"STORAGE_MAX_FILE_SIZE" env-default:"10485760"`
-	StorageURLPrefix   string `env:"STORAGE_URL_PREFIX"    env-default:"/upload"`
+
+	// CORS (comma-separated list of allowed origins; use "*" for dev only)
+	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" env-separator:"," env-default:"http://localhost:3000,http://localhost:8080"`
 
 	// axe:plugin:config
 }

@@ -2,8 +2,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -11,14 +14,26 @@ import (
 	"github.com/axe-cute/examples-webtoon/internal/domain"
 	"github.com/axe-cute/examples-webtoon/internal/handler/middleware"
 	"github.com/axe-cute/examples-webtoon/pkg/apperror"
+	"github.com/axe-cute/examples-webtoon/pkg/cache"
 	"github.com/axe-cute/examples-webtoon/pkg/jwtauth"
 )
+
+// seriesCacheTTL is how long GET /serieses/{id} responses live in Redis.
+// Shorter → more DB load but fresher; longer → staler reads after an edit.
+// 60s is a good default for a reader app.
+const seriesCacheTTL = 60 * time.Second
 
 // SeriesHandler handles HTTP requests for the Series domain.
 type SeriesHandler struct {
 	svc       domain.SeriesService
 	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
+	// cache is optional: if nil the handler falls back to raw DB reads.
+	cache *cache.Client
+	// audit is optional: when set, admin mutations on this handler are
+	// recorded into admin_actions. The middleware is a no-op for non-admin
+	// callers, so regular user actions are not inflated into the log.
+	audit *AuditLogger
 }
 
 // NewSeriesHandler creates a new SeriesHandler.
@@ -36,17 +51,39 @@ func (h *SeriesHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blocklis
 	return h
 }
 
+// WithAudit wires the admin audit logger. Pass nil to disable.
+func (h *SeriesHandler) WithAudit(a *AuditLogger) *SeriesHandler {
+	h.audit = a
+	return h
+}
+
+// WithCache attaches a Redis cache for hot-path reads (GET /{id}).
+// Pass nil to disable.
+func (h *SeriesHandler) WithCache(c *cache.Client) *SeriesHandler {
+	h.cache = c
+	return h
+}
+
 // Routes returns a Chi router with all series endpoints.
 // Register in main.go: r.Mount("/api/v1/serieses", seriesHandler.Routes())
 func (h *SeriesHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	// Authentication required for all series routes
-	r.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
-	r.Post("/", h.CreateSeries)
+	// Public: browse catalog. Literal routes (/trending) must be registered
+	// before parametric routes (/{id}) — chi dispatches literals first anyway
+	// but keeping them in this order documents intent.
+	r.Get("/trending", h.ListTrending)
 	r.Get("/", h.ListSeriess)
 	r.Get("/{id}", h.GetSeries)
-	r.Put("/{id}", h.UpdateSeries)
-	r.Delete("/{id}", h.DeleteSeries)
+	// Authenticated: mutations
+	r.Group(func(pr chi.Router) {
+		pr.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+		if h.audit != nil {
+			pr.Use(h.audit.Middleware())
+		}
+		pr.Post("/", h.CreateSeries)
+		pr.Put("/{id}", h.UpdateSeries)
+		pr.Delete("/{id}", h.DeleteSeries)
+	})
 	return r
 }
 
@@ -62,28 +99,30 @@ type createSeriesRequest struct {
 
 // seriesResponse is the API response shape.
 type seriesResponse struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Genre       string `json:"genre"`
-	Author      string `json:"author"`
-	CoverUrl    string `json:"cover_url"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID            string  `json:"id"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	Genre         string  `json:"genre"`
+	Author        string  `json:"author"`
+	CoverUrl      string  `json:"cover_url"`
+	Status        string  `json:"status"`
+	TrendingScore float64 `json:"trending_score,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
 }
 
 func toSeriesResponse(e *domain.Series) *seriesResponse {
 	return &seriesResponse{
-		ID:          e.ID.String(),
-		Title:       e.Title,
-		Description: e.Description,
-		Genre:       e.Genre,
-		Author:      e.Author,
-		CoverUrl:    e.CoverUrl,
-		Status:      e.Status,
-		CreatedAt:   e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:            e.ID.String(),
+		Title:         e.Title,
+		Description:   e.Description,
+		Genre:         e.Genre,
+		Author:        e.Author,
+		CoverUrl:      e.CoverUrl,
+		Status:        e.Status,
+		TrendingScore: e.TrendingScore,
+		CreatedAt:     e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -114,12 +153,42 @@ func (h *SeriesHandler) GetSeries(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid UUID"))
 		return
 	}
+
+	// Hot path: try cache first. This endpoint is hit every time a reader
+	// opens a series, so a 60s Redis cache removes the most frequent DB read
+	// on the platform.
+	cacheKey := "series:" + id.String()
+	if h.cache != nil {
+		if raw, err := h.cache.Get(r.Context(), cacheKey); err == nil {
+			w.Header().Set("X-Cache", "HIT")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(raw))
+			return
+		}
+	}
+
 	result, err := h.svc.GetSeries(r.Context(), id)
 	if err != nil {
 		middleware.WriteError(w, err)
 		return
 	}
-	middleware.WriteJSON(w, http.StatusOK, toSeriesResponse(result))
+
+	resp := toSeriesResponse(result)
+
+	// Populate cache in the background so the response isn't blocked by a
+	// slow Redis write (common cause of p99 spikes).
+	if h.cache != nil {
+		go func(resp *seriesResponse) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if payload, err := json.Marshal(resp); err == nil {
+				_ = h.cache.Set(bgCtx, cacheKey, payload, seriesCacheTTL)
+			}
+		}(resp)
+	}
+
+	w.Header().Set("X-Cache", "MISS")
+	middleware.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (h *SeriesHandler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +207,10 @@ func (h *SeriesHandler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, err)
 		return
 	}
+	// Invalidate cache so readers see the new fields immediately.
+	if h.cache != nil {
+		_ = h.cache.Del(r.Context(), "series:"+id.String())
+	}
 	middleware.WriteJSON(w, http.StatusOK, toSeriesResponse(result))
 }
 
@@ -151,11 +224,29 @@ func (h *SeriesHandler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, err)
 		return
 	}
+	if h.cache != nil {
+		_ = h.cache.Del(r.Context(), "series:"+id.String())
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListSeriess is the catalog endpoint. Accepts ?page, ?limit, ?genre, ?status.
+// Defaults to page 1, limit 24 (browse grid of 4×6). Max limit 100.
 func (h *SeriesHandler) ListSeriess(w http.ResponseWriter, r *http.Request) {
-	results, total, err := h.svc.ListSeriess(r.Context(), domain.DefaultPagination())
+	q := r.URL.Query()
+	page := parseIntDefault(q.Get("page"), 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := parseIntDefault(q.Get("limit"), 24)
+	if limit < 1 || limit > 100 {
+		limit = 24
+	}
+
+	pagination := domain.Pagination{Limit: limit, Offset: (page - 1) * limit}
+	filter := domain.SeriesFilter{Genre: q.Get("genre"), Status: q.Get("status")}
+
+	results, total, err := h.svc.ListSeriesFiltered(r.Context(), filter, pagination)
 	if err != nil {
 		middleware.WriteError(w, err)
 		return
@@ -164,5 +255,40 @@ func (h *SeriesHandler) ListSeriess(w http.ResponseWriter, r *http.Request) {
 	for i, e := range results {
 		data[i] = toSeriesResponse(e)
 	}
-	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": total})
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{
+		"data":  data,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// ListTrending returns top-N series ordered by trending_score DESC.
+// Accepts ?limit (default 10, max 50).
+func (h *SeriesHandler) ListTrending(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 10)
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	results, err := h.svc.ListTrending(r.Context(), limit)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	data := make([]*seriesResponse, len(results))
+	for i, e := range results {
+		data[i] = toSeriesResponse(e)
+	}
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": len(data)})
+}
+
+func parseIntDefault(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
 }

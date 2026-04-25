@@ -1,0 +1,48 @@
+# Webtoon Full-Stack Demo — Build Progress
+
+Goal: Production-ready demo of axe framework. Full stack = Go API + Next.js frontend +
+docker-compose all-in-one. UI inspired by Linear design language (dark, minimal, purple accent).
+
+## Decisions
+- Design: Linear-inspired (dark, #5E6AD2 purple, Inter font, tight spacing)
+- Deploy: local docker-compose only for now
+- Scope: Full 5-page Next.js app (Home, Browse, Series detail, Reader, Library, Auth)
+
+## Backend — done
+- [x] CORS middleware (internal/handler/middleware/cors.go)
+- [x] GET /serieses, /episodes made public
+- [x] auth/login + auth/register dev endpoints (any email/password ≥4)
+- [x] GET /episodes?series_id=X filter
+- [x] Ent-backed repositories (Series/Episode/Bookmark)
+- [x] user_id column + unique (user_id, series_id) index
+- [x] Bookmark ListByUser, FindByUserAndSeries, Toggle
+- [x] cmd/seed/main.go — 8 series × 3–5 eps (Picsum covers)
+- [x] make seed target
+- [x] All internal tests pass
+
+## Frontend (examples/webtoon/web/) — done
+- [x] Next.js 15 + Tailwind 3 + Linear-inspired dark tokens (tailwind.config.ts + globals.css)
+- [x] lib/api.ts (typed client, localStorage JWT, CORS-friendly rewrites)
+- [x] lib/types.ts + lib/genres.ts
+- [x] components: Navbar, SeriesCard, Hero, Row, BookmarkButton
+- [x] app/layout.tsx with Inter + JetBrains Mono
+- [x] app/page.tsx — Home (hero + Trending/Ongoing/Completed rows)
+- [x] app/browse/page.tsx — grid + genre/status chips + search
+- [x] app/series/[id]/page.tsx — cover, synopsis, episode list, bookmark
+- [x] app/series/[id]/episode/[num]/page.tsx — vertical reader with prev/next
+- [x] app/library/page.tsx — bookmarks (auth-gated)
+- [x] app/auth/login/page.tsx + register
+
+## Docker — done
+- [x] web/Dockerfile (Node 20, Next standalone output)
+- [x] docker-compose: api + web services added alongside postgres/redis
+
+## Docs — done
+- [x] README updated with docker + local dev quick start
+- [x] .env.example adds CORS_ORIGINS
+
+## Deferred (pollen)
+- [ ] DESIGN.md (tokens already live in tailwind.config + globals.css)
+- [ ] web/.dockerignore (blocked by root .gitignore rule — small build-context penalty, OK)
+- [ ] Root axe README link to demo
+- [ ] Screenshots

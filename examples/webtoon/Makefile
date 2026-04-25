@@ -74,6 +74,10 @@ migrate-down: ## Rollback last migration
 migrate-status: ## Show migration status
 	$(GO) run ./cmd/axe/main.go migrate status
 
+.PHONY: seed
+seed: ## Seed demo data (8 series + episodes)
+	$(GO) run ./cmd/seed
+
 # ─── Code Generation ──────────────────────────────────────────────────────────
 .PHONY: generate
 generate: ## Run go generate

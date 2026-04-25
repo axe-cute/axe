@@ -26,10 +26,19 @@ func (m *mockBookmarkRepo) Delete(_ context.Context, _ uuid.UUID) error { return
 func (m *mockBookmarkRepo) List(_ context.Context, _ domain.Pagination) ([]*domain.Bookmark, int, error) {
 	return []*domain.Bookmark{}, 0, nil
 }
+func (m *mockBookmarkRepo) ListByUser(_ context.Context, _ string, _ domain.Pagination) ([]*domain.Bookmark, int, error) {
+	return []*domain.Bookmark{}, 0, nil
+}
+func (m *mockBookmarkRepo) FindByUserAndSeries(_ context.Context, _ string, _ uuid.UUID) (*domain.Bookmark, error) {
+	return nil, nil //nolint:nilnil // mock returns (nil, nil) to signal "not found"
+}
 
 func TestCreateBookmark_HappyPath(t *testing.T) {
 	svc := service.NewBookmarkService(&mockBookmarkRepo{})
-	result, err := svc.CreateBookmark(context.Background(), domain.CreateBookmarkInput{})
+	result, err := svc.CreateBookmark(context.Background(), domain.CreateBookmarkInput{
+		UserID:   "user-1",
+		SeriesID: uuid.New(),
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

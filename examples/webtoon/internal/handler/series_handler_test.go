@@ -29,6 +29,12 @@ func (m *mockSeriesSvc) DeleteSeries(_ context.Context, _ uuid.UUID) error { ret
 func (m *mockSeriesSvc) ListSeriess(_ context.Context, _ domain.Pagination) ([]*domain.Series, int, error) {
 	return []*domain.Series{}, 0, nil
 }
+func (m *mockSeriesSvc) ListSeriesFiltered(_ context.Context, _ domain.SeriesFilter, _ domain.Pagination) ([]*domain.Series, int, error) {
+	return []*domain.Series{}, 0, nil
+}
+func (m *mockSeriesSvc) ListTrending(_ context.Context, _ int) ([]*domain.Series, error) {
+	return []*domain.Series{}, nil
+}
 
 // setupSeriesRouter mounts the handler on a bare chi router — no JWT middleware.
 // Unit tests exercise handler logic in isolation; auth is tested separately.

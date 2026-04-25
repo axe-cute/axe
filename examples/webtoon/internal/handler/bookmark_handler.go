@@ -146,7 +146,16 @@ func (h *BookmarkHandler) DeleteBookmark(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *BookmarkHandler) ListBookmarks(w http.ResponseWriter, r *http.Request) {
-	results, total, err := h.svc.ListBookmarks(r.Context(), domain.DefaultPagination())
+	// User-scoped: only list the current authenticated user's bookmarks.
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+	if userID == "" {
+		middleware.WriteError(w, apperror.ErrUnauthorized)
+		return
+	}
+	results, total, err := h.svc.ListBookmarksByUser(r.Context(), userID, domain.DefaultPagination())
 	if err != nil {
 		middleware.WriteError(w, err)
 		return

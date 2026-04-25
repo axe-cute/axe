@@ -1,15 +1,32 @@
-# 📖 Webtoon API — axe Example
+# 📖 Webtoon — axe full-stack example
 
-A **production-grade webtoon/manhwa platform API** built with `axe new` + `axe generate resource`, then customized with real business logic.
+A **reader-first webtoon platform** — Go + Ent backend scaffolded with `axe`, Next.js 15 frontend with a Linear-inspired dark UI.
 
-## Quick Start
+## Quick Start — full stack via Docker
 
 ```bash
-docker-compose up -d          # PostgreSQL + Redis
 cp .env.example .env
-make migrate-up
-make run                      # API at :8080
+docker compose up -d --build         # postgres + redis + api + web
+make migrate-up                       # apply schema
+make seed                             # 8 series × 3–5 episodes
+open http://localhost:3000
 ```
+
+## Quick Start — local dev (two terminals)
+
+```bash
+# Terminal 1: infra + API
+docker compose up -d postgres redis
+cp .env.example .env
+make migrate-up && make seed
+make run                              # API at :8080
+
+# Terminal 2: web
+cd web && npm install && npm run dev  # UI at :3000
+```
+
+**Demo login** (any email works, ≥4-char password):
+`reader@axe.dev` / `demo1234`
 
 ## Domain Model
 

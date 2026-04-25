@@ -29,6 +29,9 @@ func (m *mockEpisodeSvc) DeleteEpisode(_ context.Context, _ uuid.UUID) error { r
 func (m *mockEpisodeSvc) ListEpisodes(_ context.Context, _ domain.Pagination) ([]*domain.Episode, int, error) {
 	return []*domain.Episode{}, 0, nil
 }
+func (m *mockEpisodeSvc) ListEpisodesBySeries(_ context.Context, _ uuid.UUID, _ domain.Pagination) ([]*domain.Episode, int, error) {
+	return []*domain.Episode{}, 0, nil
+}
 
 // setupEpisodeRouter mounts the handler on a bare chi router — no JWT middleware.
 // Unit tests exercise handler logic in isolation; auth is tested separately.

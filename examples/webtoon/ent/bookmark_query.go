@@ -263,12 +263,12 @@ func (_q *BookmarkQuery) Clone() *BookmarkQuery {
 // Example:
 //
 //	var v []struct {
-//		SeriesID uuid.UUID `json:"series_id,omitempty"`
+//		UserID string `json:"user_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Bookmark.Query().
-//		GroupBy(bookmark.FieldSeriesID).
+//		GroupBy(bookmark.FieldUserID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *BookmarkQuery) GroupBy(field string, fields ...string) *BookmarkGroupBy {
@@ -286,11 +286,11 @@ func (_q *BookmarkQuery) GroupBy(field string, fields ...string) *BookmarkGroupB
 // Example:
 //
 //	var v []struct {
-//		SeriesID uuid.UUID `json:"series_id,omitempty"`
+//		UserID string `json:"user_id,omitempty"`
 //	}
 //
 //	client.Bookmark.Query().
-//		Select(bookmark.FieldSeriesID).
+//		Select(bookmark.FieldUserID).
 //		Scan(ctx, &v)
 func (_q *BookmarkQuery) Select(fields ...string) *BookmarkSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

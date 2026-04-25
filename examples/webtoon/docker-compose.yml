@@ -29,6 +29,46 @@ services:
       timeout: 3s
       retries: 5
 
+  # MinIO: S3-compatible object storage for local dev.
+  #
+  # In production, drop this service and point STORAGE_* at Backblaze B2 or
+  # Cloudflare R2. API is identical (S3), only the endpoint/credentials
+  # change. Default credentials below are DEV ONLY.
+  minio:
+    image: minio/minio:latest
+    container_name: webtoon_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - webtoon_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # One-shot init: creates the bucket + makes it public-read so the CDN
+  # (or browser for dev) can fetch transformed images directly.
+  minio-init:
+    image: minio/mc:latest
+    container_name: webtoon_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb -p local/webtoon || true &&
+      mc anonymous set download local/webtoon &&
+      echo 'MinIO bucket webtoon ready (public read)'
+      "
+
   asynqmon:
     image: hibiken/asynqmon:latest
     platform: linux/amd64
@@ -42,5 +82,60 @@ services:
       redis:
         condition: service_healthy
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webtoon_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://webtoon:webtoon@postgres:5432/webtoon_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      SERVER_PORT: "8080"
+      LOG_LEVEL: debug
+      ENVIRONMENT: development
+      JWT_SECRET: dev-insecure-change-me
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://web:3000
+      # Storage (MinIO, in-cluster DNS). PUBLIC_URL is what clients receive
+      # back in image URLs, so it must be reachable from the user's browser.
+      STORAGE_ENDPOINT: minio:9000
+      STORAGE_BUCKET: webtoon
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_USE_SSL: "false"
+      STORAGE_PUBLIC_URL: http://localhost:9000
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the Next.js rewrite manifest at build time. Must point at
+        # the API service via Docker DNS so the Next server (running inside
+        # this container) can reach it.
+        NEXT_INTERNAL_API_URL: http://api:8080
+    container_name: webtoon_web
+    restart: unless-stopped
+    environment:
+      # Used by Next.js rewrite (server-side) to proxy /api/* to the API
+      # service. Inside Docker we must use the in-cluster DNS name "api".
+      NEXT_PUBLIC_API_URL: http://api:8080
+      # Used by RSC/server-side fetch inside the container (same DNS).
+      NEXT_INTERNAL_API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
 volumes:
   webtoon_postgres_data:
+  webtoon_minio_data:

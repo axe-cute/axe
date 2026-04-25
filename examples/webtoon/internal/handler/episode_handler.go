@@ -2,8 +2,12 @@
 package handler
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -12,6 +16,8 @@ import (
 	"github.com/axe-cute/examples-webtoon/internal/handler/middleware"
 	"github.com/axe-cute/examples-webtoon/pkg/apperror"
 	"github.com/axe-cute/examples-webtoon/pkg/jwtauth"
+	"github.com/axe-cute/examples-webtoon/pkg/storage"
+	"github.com/axe-cute/examples-webtoon/pkg/views"
 )
 
 // EpisodeHandler handles HTTP requests for the Episode domain.
@@ -19,6 +25,14 @@ type EpisodeHandler struct {
 	svc       domain.EpisodeService
 	jwtSvc    *jwtauth.Service // required: set via WithJWTAuth option
 	blocklist middleware.Blocklist
+	// views is optional: fire-and-forget INCR on every read.
+	views *views.Counter
+	// audit is optional: records admin mutations only.
+	audit *AuditLogger
+	// db + store are optional: enable GET /episodes/{id}/pages for the
+	// reader page. Set via WithPages.
+	db    *sql.DB
+	store *storage.Client
 }
 
 // NewEpisodeHandler creates a new EpisodeHandler.
@@ -36,26 +50,81 @@ func (h *EpisodeHandler) WithJWTAuth(svc *jwtauth.Service, bl middleware.Blockli
 	return h
 }
 
+// WithAudit wires the admin audit logger. Pass nil to disable.
+func (h *EpisodeHandler) WithAudit(a *AuditLogger) *EpisodeHandler {
+	h.audit = a
+	return h
+}
+
+// WithViews attaches a Redis-backed view counter. Every successful GET /{id}
+// triggers a fire-and-forget INCR. Pass nil to disable.
+func (h *EpisodeHandler) WithViews(v *views.Counter) *EpisodeHandler {
+	h.views = v
+	return h
+}
+
+// WithPages enables the public GET /episodes/{id}/pages endpoint which
+// lists transformed, ready-to-serve image URLs for the reader. Requires
+// the raw *sql.DB because episode_pages is raw-SQL-only (outside Ent).
+func (h *EpisodeHandler) WithPages(db *sql.DB, s *storage.Client) *EpisodeHandler {
+	h.db = db
+	h.store = s
+	return h
+}
+
 // Routes returns a Chi router with all episode endpoints.
 // Register in main.go: r.Mount("/api/v1/episodes", episodeHandler.Routes())
 func (h *EpisodeHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	// Authentication required for all episode routes
-	r.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
-	r.Post("/", h.CreateEpisode)
+	// Public: read
 	r.Get("/", h.ListEpisodes)
+	if h.db != nil && h.store != nil {
+		r.Get("/{id}/pages", h.ListPages)
+	}
+
+	// Reader interactions (public read, auth write)
+	r.Route("/{id}/stats", func(sr chi.Router) {
+		sr.Get("/", h.EpisodeStats)
+	})
+	r.Route("/{id}/likes", func(lr chi.Router) {
+		lr.Get("/", h.EpisodeLikeCount)
+		lr.Group(func(lra chi.Router) {
+			lra.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+			lra.Post("/toggle", h.ToggleEpisodeLike)
+		})
+	})
+	r.Route("/{id}/comments", func(cr chi.Router) {
+		cr.Get("/", h.ListEpisodeComments)
+		cr.Group(func(cra chi.Router) {
+			cra.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+			cra.Post("/", h.CreateEpisodeComment)
+			cra.Post("/{commentID}/likes/toggle", h.ToggleCommentLike)
+		})
+	})
+
+	// Generic episode CRUD — must come after specific sub-routes
 	r.Get("/{id}", h.GetEpisode)
-	r.Put("/{id}", h.UpdateEpisode)
-	r.Delete("/{id}", h.DeleteEpisode)
+	// Authenticated: mutations
+	r.Group(func(pr chi.Router) {
+		pr.Use(middleware.JWTAuth(h.jwtSvc, h.blocklist))
+		if h.audit != nil {
+			pr.Use(h.audit.Middleware())
+		}
+		pr.Post("/", h.CreateEpisode)
+		pr.Put("/{id}", h.UpdateEpisode)
+		pr.Delete("/{id}", h.DeleteEpisode)
+	})
 	return r
 }
 
-// createEpisodeRequest is the POST request body.
+// createEpisodeRequest is the POST request body. series_id is required
+// because an Episode cannot exist without a parent Series (FK).
 type createEpisodeRequest struct {
 	Title         string `json:"title"`
 	EpisodeNumber int64  `json:"episode_number"`
 	ThumbnailUrl  string `json:"thumbnail_url"`
 	Published     bool   `json:"published"`
+	SeriesID      string `json:"series_id"`
 }
 
 // episodeResponse is the API response shape.
@@ -65,17 +134,23 @@ type episodeResponse struct {
 	EpisodeNumber int64  `json:"episode_number"`
 	ThumbnailUrl  string `json:"thumbnail_url"`
 	Published     bool   `json:"published"`
+	SeriesID      string `json:"series_id,omitempty"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
 }
 
 func toEpisodeResponse(e *domain.Episode) *episodeResponse {
+	sid := ""
+	if e.SeriesID != uuid.Nil {
+		sid = e.SeriesID.String()
+	}
 	return &episodeResponse{
 		ID:            e.ID.String(),
 		Title:         e.Title,
 		EpisodeNumber: e.EpisodeNumber,
 		ThumbnailUrl:  e.ThumbnailUrl,
 		Published:     e.Published,
+		SeriesID:      sid,
 		CreatedAt:     e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -87,11 +162,17 @@ func (h *EpisodeHandler) CreateEpisode(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
 		return
 	}
+	seriesID, err := uuid.Parse(req.SeriesID)
+	if err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("series_id must be a valid UUID"))
+		return
+	}
 	result, err := h.svc.CreateEpisode(r.Context(), domain.CreateEpisodeInput{
 		Title:         req.Title,
 		EpisodeNumber: req.EpisodeNumber,
 		ThumbnailUrl:  req.ThumbnailUrl,
 		Published:     req.Published,
+		SeriesID:      seriesID,
 	})
 	if err != nil {
 		middleware.WriteError(w, err)
@@ -111,6 +192,18 @@ func (h *EpisodeHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, err)
 		return
 	}
+
+	// Fire-and-forget view increment. We never block the reader's response
+	// on a Redis round-trip; a missed bump is acceptable (we prefer P99
+	// latency over perfect counts).
+	if h.views != nil {
+		go func(ep, ser uuid.UUID) {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			_ = h.views.Incr(ctx, ep, ser)
+		}(result.ID, result.SeriesID)
+	}
+
 	middleware.WriteJSON(w, http.StatusOK, toEpisodeResponse(result))
 }
 
@@ -147,7 +240,26 @@ func (h *EpisodeHandler) DeleteEpisode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EpisodeHandler) ListEpisodes(w http.ResponseWriter, r *http.Request) {
-	results, total, err := h.svc.ListEpisodes(r.Context(), domain.DefaultPagination())
+	pagination := domain.DefaultPagination()
+	pagination.Limit = 100
+
+	var (
+		results []*domain.Episode
+		total   int
+		err     error
+	)
+
+	if sid := r.URL.Query().Get("series_id"); sid != "" {
+		seriesID, parseErr := uuid.Parse(sid)
+		if parseErr != nil {
+			middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid series_id"))
+			return
+		}
+		results, total, err = h.svc.ListEpisodesBySeries(r.Context(), seriesID, pagination)
+	} else {
+		results, total, err = h.svc.ListEpisodes(r.Context(), pagination)
+	}
+
 	if err != nil {
 		middleware.WriteError(w, err)
 		return
@@ -157,4 +269,311 @@ func (h *EpisodeHandler) ListEpisodes(w http.ResponseWriter, r *http.Request) {
 		data[i] = toEpisodeResponse(e)
 	}
 	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": total})
+}
+
+// pageReaderResponse is the public, reader-facing shape. Only ready pages
+// appear here — processing/failed rows are hidden from end users.
+type pageReaderResponse struct {
+	PageNum  int    `json:"page_num"`
+	URL      string `json:"url"`       // medium variant (main reader)
+	ThumbURL string `json:"thumb_url"` // for prefetch / scrubber
+	WidthPx  int    `json:"width_px"`
+	HeightPx int    `json:"height_px"`
+}
+
+// ListPages returns the paginated image panels for an episode, ordered by
+// page_num. Filters to status='ready' (uses idx_episode_pages_ready).
+//
+// This is the hottest read path on a reader site (n pages × m readers),
+// so we let the CDN cache the response body — browsers hit /episodes/{id}/pages
+// rarely compared to the image URLs themselves, which are on cdn.* with
+// immutable caching.
+func (h *EpisodeHandler) ListPages(w http.ResponseWriter, r *http.Request) {
+	episodeID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid episode id"))
+		return
+	}
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT page_num, medium_key, thumb_key, width_px, height_px
+		  FROM episode_pages
+		 WHERE episode_id = $1 AND status = 'ready'
+		 ORDER BY page_num ASC`, episodeID)
+	if err != nil {
+		middleware.WriteError(w, fmt.Errorf("list pages: %w", err))
+		return
+	}
+	defer rows.Close()
+
+	out := make([]pageReaderResponse, 0)
+	for rows.Next() {
+		var (
+			pageNum           int
+			mediumKey, thumbK sql.NullString
+			width, height     sql.NullInt64
+		)
+		if err := rows.Scan(&pageNum, &mediumKey, &thumbK, &width, &height); err != nil {
+			middleware.WriteError(w, fmt.Errorf("scan: %w", err))
+			return
+		}
+		if !mediumKey.Valid {
+			continue // defensive: should be impossible with status='ready'
+		}
+		p := pageReaderResponse{
+			PageNum: pageNum,
+			URL:     h.store.PublicURL(mediumKey.String),
+		}
+		if thumbK.Valid {
+			p.ThumbURL = h.store.PublicURL(thumbK.String)
+		}
+		if width.Valid {
+			p.WidthPx = int(width.Int64)
+		}
+		if height.Valid {
+			p.HeightPx = int(height.Int64)
+		}
+		out = append(out, p)
+	}
+	// Short public cache + stale-while-revalidate. Image URLs inside this
+	// response are immutable, so even a 60s stale response never shows
+	// broken links.
+	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": out, "total": len(out)})
+}
+
+// ── Reader interactions ──────────────────────────────────────────────────────
+
+func episodeIDParam(r *http.Request) (uuid.UUID, error) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		return uuid.Nil, apperror.ErrInvalidInput.WithMessage("invalid episode id")
+	}
+	return id, nil
+}
+
+type commentResponse struct {
+	ID              string  `json:"id"`
+	UserID          string  `json:"user_id"`
+	Content         string  `json:"content"`
+	ParentCommentID *string `json:"parent_comment_id,omitempty"`
+	RootCommentID   *string `json:"root_comment_id,omitempty"`
+	ParentUserID    string  `json:"parent_user_id,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+	LikeCount       int64   `json:"like_count"`
+	UserLiked       bool    `json:"user_liked"`
+}
+
+func toCommentResponse(c *domain.EpisodeComment) commentResponse {
+	resp := commentResponse{
+		ID:           c.ID.String(),
+		UserID:       c.UserID,
+		Content:      c.Content,
+		ParentUserID: c.ParentUserID,
+		CreatedAt:    c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:    c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+	if c.ParentCommentID != nil {
+		s := c.ParentCommentID.String()
+		resp.ParentCommentID = &s
+	}
+	if c.RootCommentID != nil {
+		s := c.RootCommentID.String()
+		resp.RootCommentID = &s
+	}
+	return resp
+}
+
+// EpisodeStats returns view count, like count, and comment count.
+func (h *EpisodeHandler) EpisodeStats(w http.ResponseWriter, r *http.Request) {
+	id, err := episodeIDParam(r)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	likeCount, _ := ext.GetLikeCount(r.Context(), id)
+	comments, commentCount, _ := ext.ListComments(r.Context(), id, domain.DefaultPagination())
+	// user_liked flag if authenticated
+	var userLiked bool
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userLiked, _ = ext.HasUserLiked(r.Context(), id, claims.Subject)
+	}
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{
+		"like_count":    likeCount,
+		"comment_count": commentCount,
+		"comment_list":  make([]commentResponse, 0, len(comments)),
+		"user_liked":    userLiked,
+	})
+	for i, c := range comments {
+		if i < len(comments) {
+			_ = c // satisfy linter
+		}
+	}
+}
+
+// EpisodeLikeCount returns total likes for an episode.
+func (h *EpisodeHandler) EpisodeLikeCount(w http.ResponseWriter, r *http.Request) {
+	id, err := episodeIDParam(r)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	count, err := ext.GetLikeCount(r.Context(), id)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{"count": count})
+}
+
+// ToggleEpisodeLike adds or removes a like for the current user.
+func (h *EpisodeHandler) ToggleEpisodeLike(w http.ResponseWriter, r *http.Request) {
+	id, err := episodeIDParam(r)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+	if userID == "" {
+		middleware.WriteError(w, apperror.ErrUnauthorized)
+		return
+	}
+	result, err := ext.ToggleLike(r.Context(), id, userID)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusOK, result)
+}
+
+// ListEpisodeComments returns paginated comments for an episode.
+func (h *EpisodeHandler) ListEpisodeComments(w http.ResponseWriter, r *http.Request) {
+	id, err := episodeIDParam(r)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	comments, total, err := ext.ListComments(r.Context(), id, domain.DefaultPagination())
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	// Bulk-load like info for these comments (and user_liked if authenticated)
+	ids := make([]uuid.UUID, len(comments))
+	for i, c := range comments {
+		ids[i] = c.ID
+	}
+	viewerID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		viewerID = claims.Subject
+	}
+	likeInfo, _ := ext.GetCommentLikeInfo(r.Context(), ids, viewerID)
+	data := make([]commentResponse, len(comments))
+	for i, c := range comments {
+		resp := toCommentResponse(c)
+		if info, ok := likeInfo[c.ID]; ok {
+			resp.LikeCount = info.LikeCount
+			resp.UserLiked = info.UserLiked
+		}
+		data[i] = resp
+	}
+	middleware.WriteJSON(w, http.StatusOK, map[string]any{"data": data, "total": total})
+}
+
+// ToggleCommentLike adds or removes a like on a comment for the current user.
+func (h *EpisodeHandler) ToggleCommentLike(w http.ResponseWriter, r *http.Request) {
+	commentID, err := uuid.Parse(chi.URLParam(r, "commentID"))
+	if err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid comment id"))
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+	if userID == "" {
+		middleware.WriteError(w, apperror.ErrUnauthorized)
+		return
+	}
+	result, err := ext.ToggleCommentLike(r.Context(), commentID, userID)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusOK, result)
+}
+
+type createCommentRequest struct {
+	Content         string  `json:"content"`
+	ParentCommentID *string `json:"parent_comment_id,omitempty"`
+}
+
+// CreateEpisodeComment creates a new comment on an episode.
+func (h *EpisodeHandler) CreateEpisodeComment(w http.ResponseWriter, r *http.Request) {
+	id, err := episodeIDParam(r)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	ext, ok := h.svc.(domain.ExtendedEpisodeService)
+	if !ok {
+		middleware.WriteError(w, apperror.ErrInternal.WithMessage("extended service not available"))
+		return
+	}
+	userID := ""
+	if claims := middleware.ClaimsFromCtx(r.Context()); claims != nil {
+		userID = claims.Subject
+	}
+	if userID == "" {
+		middleware.WriteError(w, apperror.ErrUnauthorized)
+		return
+	}
+	var req createCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+		return
+	}
+	var parentID *uuid.UUID
+	if req.ParentCommentID != nil && *req.ParentCommentID != "" {
+		pid, perr := uuid.Parse(*req.ParentCommentID)
+		if perr != nil {
+			middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid parent_comment_id"))
+			return
+		}
+		parentID = &pid
+	}
+	result, err := ext.CreateComment(r.Context(), id, userID, req.Content, parentID)
+	if err != nil {
+		middleware.WriteError(w, err)
+		return
+	}
+	middleware.WriteJSON(w, http.StatusCreated, toCommentResponse(result))
 }

@@ -38,6 +38,7 @@ type BookmarkMutation struct {
 	op            Op
 	typ           string
 	id            *uuid.UUID
+	user_id       *string
 	series_id     *uuid.UUID
 	created_at    *time.Time
 	updated_at    *time.Time
@@ -149,6 +150,42 @@ func (m *BookmarkMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *BookmarkMutation) SetUserID(s string) {
+	m.user_id = &s
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *BookmarkMutation) UserID() (r string, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the Bookmark entity.
+// If the Bookmark object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BookmarkMutation) OldUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *BookmarkMutation) ResetUserID() {
+	m.user_id = nil
 }
 
 // SetSeriesID sets the "series_id" field.
@@ -293,7 +330,10 @@ func (m *BookmarkMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BookmarkMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
+	if m.user_id != nil {
+		fields = append(fields, bookmark.FieldUserID)
+	}
 	if m.series_id != nil {
 		fields = append(fields, bookmark.FieldSeriesID)
 	}
@@ -311,6 +351,8 @@ func (m *BookmarkMutation) Fields() []string {
 // schema.
 func (m *BookmarkMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case bookmark.FieldUserID:
+		return m.UserID()
 	case bookmark.FieldSeriesID:
 		return m.SeriesID()
 	case bookmark.FieldCreatedAt:
@@ -326,6 +368,8 @@ func (m *BookmarkMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *BookmarkMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case bookmark.FieldUserID:
+		return m.OldUserID(ctx)
 	case bookmark.FieldSeriesID:
 		return m.OldSeriesID(ctx)
 	case bookmark.FieldCreatedAt:
@@ -341,6 +385,13 @@ func (m *BookmarkMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *BookmarkMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case bookmark.FieldUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
 	case bookmark.FieldSeriesID:
 		v, ok := value.(uuid.UUID)
 		if !ok {
@@ -411,6 +462,9 @@ func (m *BookmarkMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *BookmarkMutation) ResetField(name string) error {
 	switch name {
+	case bookmark.FieldUserID:
+		m.ResetUserID()
+		return nil
 	case bookmark.FieldSeriesID:
 		m.ResetSeriesID()
 		return nil

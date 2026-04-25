@@ -21,6 +21,12 @@ type BookmarkCreate struct {
 	hooks    []Hook
 }
 
+// SetUserID sets the "user_id" field.
+func (_c *BookmarkCreate) SetUserID(v string) *BookmarkCreate {
+	_c.mutation.SetUserID(v)
+	return _c
+}
+
 // SetSeriesID sets the "series_id" field.
 func (_c *BookmarkCreate) SetSeriesID(v uuid.UUID) *BookmarkCreate {
 	_c.mutation.SetSeriesID(v)
@@ -120,6 +126,14 @@ func (_c *BookmarkCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *BookmarkCreate) check() error {
+	if _, ok := _c.mutation.UserID(); !ok {
+		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "Bookmark.user_id"`)}
+	}
+	if v, ok := _c.mutation.UserID(); ok {
+		if err := bookmark.UserIDValidator(v); err != nil {
+			return &ValidationError{Name: "user_id", err: fmt.Errorf(`ent: validator failed for field "Bookmark.user_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.SeriesID(); !ok {
 		return &ValidationError{Name: "series_id", err: errors.New(`ent: missing required field "Bookmark.series_id"`)}
 	}
@@ -163,6 +177,10 @@ func (_c *BookmarkCreate) createSpec() (*Bookmark, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
+	}
+	if value, ok := _c.mutation.UserID(); ok {
+		_spec.SetField(bookmark.FieldUserID, field.TypeString, value)
+		_node.UserID = value
 	}
 	if value, ok := _c.mutation.SeriesID(); ok {
 		_spec.SetField(bookmark.FieldSeriesID, field.TypeUUID, value)

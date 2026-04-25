@@ -67,9 +67,11 @@ func (s *EpisodeService) GetEpisode(ctx context.Context, id uuid.UUID) (*domain.
 		return nil, err
 	}
 
-	// Track view count (fire-and-forget — non-blocking).
-	episode.ViewCount++
-	logger.FromCtx(ctx).Info("episode viewed", "id", id, "views", episode.ViewCount)
+	// Persist view count via extended repository.
+	if ext, ok := s.repo.(domain.ExtendedEpisodeRepository); ok {
+		_ = ext.IncrementViewCount(ctx, id) // fire-and-forget
+	}
+	logger.FromCtx(ctx).Info("episode viewed", "id", id)
 
 	return episode, nil
 }
@@ -103,4 +105,98 @@ func (s *EpisodeService) ListEpisodes(ctx context.Context, p domain.Pagination) 
 		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
 	}
 	return s.repo.List(ctx, p)
+}
+
+func (s *EpisodeService) ListEpisodesBySeries(ctx context.Context, seriesID uuid.UUID, p domain.Pagination) ([]*domain.Episode, int, error) {
+	if err := p.Validate(); err != nil {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
+	}
+	if seriesID == uuid.Nil {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage("series_id is required")
+	}
+	return s.repo.ListBySeries(ctx, seriesID, p)
+}
+
+// ── Extended service methods ────────────────────────────────────────────────
+
+func extRepo(s *EpisodeService) domain.ExtendedEpisodeRepository {
+	ext, ok := s.repo.(domain.ExtendedEpisodeRepository)
+	if !ok {
+		return nil
+	}
+	return ext
+}
+
+func (s *EpisodeService) IncrementViewCount(ctx context.Context, id uuid.UUID) error {
+	if r := extRepo(s); r != nil {
+		return r.IncrementViewCount(ctx, id)
+	}
+	return nil
+}
+
+func (s *EpisodeService) GetLikeCount(ctx context.Context, episodeID uuid.UUID) (int64, error) {
+	if r := extRepo(s); r != nil {
+		return r.GetLikeCount(ctx, episodeID)
+	}
+	return 0, nil
+}
+
+func (s *EpisodeService) HasUserLiked(ctx context.Context, episodeID uuid.UUID, userID string) (bool, error) {
+	if r := extRepo(s); r != nil {
+		return r.HasUserLiked(ctx, episodeID, userID)
+	}
+	return false, nil
+}
+
+func (s *EpisodeService) ToggleLike(ctx context.Context, episodeID uuid.UUID, userID string) (*domain.LikeResult, error) {
+	r := extRepo(s)
+	if r == nil {
+		return nil, apperror.ErrInternal.WithMessage("repository not extended")
+	}
+	liked, count, err := r.ToggleLike(ctx, episodeID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.LikeResult{Liked: liked, EpisodeID: episodeID, LikeCount: count}, nil
+}
+
+func (s *EpisodeService) ListComments(ctx context.Context, episodeID uuid.UUID, p domain.Pagination) ([]*domain.EpisodeComment, int, error) {
+	if r := extRepo(s); r != nil {
+		return r.ListComments(ctx, episodeID, p)
+	}
+	return nil, 0, nil
+}
+
+func (s *EpisodeService) ToggleCommentLike(ctx context.Context, commentID uuid.UUID, userID string) (*domain.CommentLikeResult, error) {
+	r := extRepo(s)
+	if r == nil {
+		return nil, apperror.ErrInternal.WithMessage("repository not extended")
+	}
+	if userID == "" {
+		return nil, apperror.ErrUnauthorized
+	}
+	liked, count, err := r.ToggleCommentLike(ctx, commentID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.CommentLikeResult{Liked: liked, CommentID: commentID, LikeCount: count}, nil
+}
+
+func (s *EpisodeService) GetCommentLikeInfo(ctx context.Context, commentIDs []uuid.UUID, userID string) (map[uuid.UUID]domain.CommentLikeInfo, error) {
+	r := extRepo(s)
+	if r == nil {
+		return map[uuid.UUID]domain.CommentLikeInfo{}, nil
+	}
+	return r.GetCommentLikeInfo(ctx, commentIDs, userID)
+}
+
+func (s *EpisodeService) CreateComment(ctx context.Context, episodeID uuid.UUID, userID string, content string, parentID *uuid.UUID) (*domain.EpisodeComment, error) {
+	r := extRepo(s)
+	if r == nil {
+		return nil, apperror.ErrInternal.WithMessage("repository not extended")
+	}
+	if content == "" {
+		return nil, apperror.ErrInvalidInput.WithMessage("comment content is required")
+	}
+	return r.CreateComment(ctx, episodeID, userID, content, parentID)
 }

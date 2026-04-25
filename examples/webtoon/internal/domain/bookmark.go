@@ -25,6 +25,8 @@ type BookmarkRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Bookmark, error)
 	List(ctx context.Context, pagination Pagination) ([]*Bookmark, int, error)
+	ListByUser(ctx context.Context, userID string, pagination Pagination) ([]*Bookmark, int, error)
+	FindByUserAndSeries(ctx context.Context, userID string, seriesID uuid.UUID) (*Bookmark, error)
 }
 
 // BookmarkService defines business operations for Bookmark.
@@ -35,6 +37,7 @@ type BookmarkService interface {
 	UpdateBookmark(ctx context.Context, id uuid.UUID, input UpdateBookmarkInput) (*Bookmark, error)
 	DeleteBookmark(ctx context.Context, id uuid.UUID) error
 	ListBookmarks(ctx context.Context, pagination Pagination) ([]*Bookmark, int, error)
+	ListBookmarksByUser(ctx context.Context, userID string, pagination Pagination) ([]*Bookmark, int, error)
 
 	// ToggleBookmark adds or removes a bookmark. Returns the bookmark state.
 	ToggleBookmark(ctx context.Context, userID string, seriesID uuid.UUID) (*ToggleResult, error)

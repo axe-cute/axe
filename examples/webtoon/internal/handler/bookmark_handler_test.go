@@ -29,6 +29,12 @@ func (m *mockBookmarkSvc) DeleteBookmark(_ context.Context, _ uuid.UUID) error {
 func (m *mockBookmarkSvc) ListBookmarks(_ context.Context, _ domain.Pagination) ([]*domain.Bookmark, int, error) {
 	return []*domain.Bookmark{}, 0, nil
 }
+func (m *mockBookmarkSvc) ListBookmarksByUser(_ context.Context, _ string, _ domain.Pagination) ([]*domain.Bookmark, int, error) {
+	return []*domain.Bookmark{}, 0, nil
+}
+func (m *mockBookmarkSvc) ToggleBookmark(_ context.Context, _ string, seriesID uuid.UUID) (*domain.ToggleResult, error) {
+	return &domain.ToggleResult{Bookmarked: true, SeriesID: seriesID}, nil
+}
 
 // setupBookmarkRouter mounts the handler on a bare chi router — no JWT middleware.
 // Unit tests exercise handler logic in isolation; auth is tested separately.
@@ -62,11 +68,13 @@ func TestBookmark_Delete_204(t *testing.T) {
 	}
 }
 
-func TestBookmark_List_200(t *testing.T) {
+// ListBookmarks now requires authentication (claims.Subject). When no claims
+// are present in context, the handler rejects with 401.
+func TestBookmark_List_RequiresAuth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/bookmarks", nil)
 	rec := httptest.NewRecorder()
 	setupBookmarkRouter().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }

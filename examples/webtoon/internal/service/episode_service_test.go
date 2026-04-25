@@ -26,10 +26,17 @@ func (m *mockEpisodeRepo) Delete(_ context.Context, _ uuid.UUID) error { return 
 func (m *mockEpisodeRepo) List(_ context.Context, _ domain.Pagination) ([]*domain.Episode, int, error) {
 	return []*domain.Episode{}, 0, nil
 }
+func (m *mockEpisodeRepo) ListBySeries(_ context.Context, _ uuid.UUID, _ domain.Pagination) ([]*domain.Episode, int, error) {
+	return []*domain.Episode{}, 0, nil
+}
 
 func TestCreateEpisode_HappyPath(t *testing.T) {
 	svc := service.NewEpisodeService(&mockEpisodeRepo{})
-	result, err := svc.CreateEpisode(context.Background(), domain.CreateEpisodeInput{})
+	result, err := svc.CreateEpisode(context.Background(), domain.CreateEpisodeInput{
+		Title:         "Chapter 1",
+		EpisodeNumber: 1,
+		SeriesID:      uuid.New(),
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

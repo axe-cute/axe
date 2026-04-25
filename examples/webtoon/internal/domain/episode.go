@@ -29,6 +29,7 @@ type EpisodeRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Episode, error)
 	List(ctx context.Context, pagination Pagination) ([]*Episode, int, error)
+	ListBySeries(ctx context.Context, seriesID uuid.UUID, pagination Pagination) ([]*Episode, int, error)
 }
 
 // EpisodeService defines business operations for Episode.
@@ -39,6 +40,7 @@ type EpisodeService interface {
 	UpdateEpisode(ctx context.Context, id uuid.UUID, input UpdateEpisodeInput) (*Episode, error)
 	DeleteEpisode(ctx context.Context, id uuid.UUID) error
 	ListEpisodes(ctx context.Context, pagination Pagination) ([]*Episode, int, error)
+	ListEpisodesBySeries(ctx context.Context, seriesID uuid.UUID, pagination Pagination) ([]*Episode, int, error)
 }
 
 // CreateEpisodeInput holds fields required to create a Episode.
@@ -56,4 +58,75 @@ type UpdateEpisodeInput struct {
 	EpisodeNumber *int64  `json:"episode_number,omitempty"`
 	ThumbnailUrl  *string `json:"thumbnail_url,omitempty"`
 	Published     *bool   `json:"published,omitempty"`
+}
+
+// EpisodeComment represents a user comment on an episode.
+//
+//   - ParentCommentID is the comment the user actually replied to (may itself
+//     be a reply). Used to display "@user" mentions.
+//   - RootCommentID is the top-level ancestor of this comment's thread. Used
+//     to group replies into a flat 1-level visual tree.
+//   - ParentUserID is denormalized from ParentCommentID for convenience —
+//     populated by ListComments via JOIN. Empty for top-level comments.
+//
+// Top-level comments have ParentCommentID == nil and RootCommentID == nil.
+type EpisodeComment struct {
+	ID              uuid.UUID
+	EpisodeID       uuid.UUID
+	UserID          string
+	Content         string
+	ParentCommentID *uuid.UUID
+	RootCommentID   *uuid.UUID
+	ParentUserID    string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// LikeResult indicates whether a like was added or removed.
+type LikeResult struct {
+	Liked      bool      `json:"liked"`
+	EpisodeID  uuid.UUID `json:"episode_id"`
+	LikeCount  int64     `json:"like_count"`
+}
+
+// CommentLikeInfo summarizes the like state of a comment for a viewer.
+type CommentLikeInfo struct {
+	CommentID uuid.UUID `json:"comment_id"`
+	LikeCount int64     `json:"like_count"`
+	UserLiked bool      `json:"user_liked"`
+}
+
+// CommentLikeResult is returned by ToggleCommentLike.
+type CommentLikeResult struct {
+	Liked     bool      `json:"liked"`
+	CommentID uuid.UUID `json:"comment_id"`
+	LikeCount int64     `json:"like_count"`
+}
+
+// ExtendedEpisodeRepository adds reader-interaction methods.
+type ExtendedEpisodeRepository interface {
+	IncrementViewCount(ctx context.Context, id uuid.UUID) error
+	GetLikeCount(ctx context.Context, episodeID uuid.UUID) (int64, error)
+	ToggleLike(ctx context.Context, episodeID uuid.UUID, userID string) (bool, int64, error)
+	HasUserLiked(ctx context.Context, episodeID uuid.UUID, userID string) (bool, error)
+	ListComments(ctx context.Context, episodeID uuid.UUID, p Pagination) ([]*EpisodeComment, int, error)
+	CreateComment(ctx context.Context, episodeID uuid.UUID, userID string, content string, parentID *uuid.UUID) (*EpisodeComment, error)
+
+	// Comment likes
+	ToggleCommentLike(ctx context.Context, commentID uuid.UUID, userID string) (bool, int64, error)
+	GetCommentLikeInfo(ctx context.Context, commentIDs []uuid.UUID, userID string) (map[uuid.UUID]CommentLikeInfo, error)
+}
+
+// ExtendedEpisodeService adds reader-interaction methods.
+type ExtendedEpisodeService interface {
+	IncrementViewCount(ctx context.Context, id uuid.UUID) error
+	GetLikeCount(ctx context.Context, episodeID uuid.UUID) (int64, error)
+	ToggleLike(ctx context.Context, episodeID uuid.UUID, userID string) (*LikeResult, error)
+	HasUserLiked(ctx context.Context, episodeID uuid.UUID, userID string) (bool, error)
+	ListComments(ctx context.Context, episodeID uuid.UUID, p Pagination) ([]*EpisodeComment, int, error)
+	CreateComment(ctx context.Context, episodeID uuid.UUID, userID string, content string, parentID *uuid.UUID) (*EpisodeComment, error)
+
+	// Comment likes
+	ToggleCommentLike(ctx context.Context, commentID uuid.UUID, userID string) (*CommentLikeResult, error)
+	GetCommentLikeInfo(ctx context.Context, commentIDs []uuid.UUID, userID string) (map[uuid.UUID]CommentLikeInfo, error)
 }

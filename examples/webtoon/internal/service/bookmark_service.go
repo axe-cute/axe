@@ -71,6 +71,16 @@ func (s *BookmarkService) ListBookmarks(ctx context.Context, p domain.Pagination
 	return s.repo.List(ctx, p)
 }
 
+func (s *BookmarkService) ListBookmarksByUser(ctx context.Context, userID string, p domain.Pagination) ([]*domain.Bookmark, int, error) {
+	if err := p.Validate(); err != nil {
+		return nil, 0, apperror.ErrInvalidInput.WithMessage(err.Error())
+	}
+	if userID == "" {
+		return nil, 0, apperror.ErrUnauthorized.WithMessage("authentication required")
+	}
+	return s.repo.ListByUser(ctx, userID, p)
+}
+
 // ── ToggleBookmark — the hero feature ────────────────────────────────────────
 
 // ToggleBookmark adds a bookmark if it doesn't exist, or removes it if it does.
@@ -86,25 +96,17 @@ func (s *BookmarkService) ToggleBookmark(ctx context.Context, userID string, ser
 		return nil, apperror.ErrInvalidInput.WithMessage("series_id is required")
 	}
 
-	// Check if bookmark already exists by scanning the user's bookmarks.
-	// In production, this would be a dedicated repo method: FindByUserAndSeries.
-	bookmarks, _, err := s.repo.List(ctx, domain.Pagination{Limit: 100, Offset: 0})
-	if err != nil {
-		return nil, fmt.Errorf("BookmarkService.ToggleBookmark: list: %w", err)
-	}
-
-	for _, b := range bookmarks {
-		if b.UserID == userID && b.SeriesID == seriesID {
-			// Already bookmarked → remove it.
-			if err := s.repo.Delete(ctx, b.ID); err != nil {
-				return nil, fmt.Errorf("BookmarkService.ToggleBookmark: delete: %w", err)
-			}
-			logger.FromCtx(ctx).Info("bookmark removed",
-				"user_id", userID,
-				"series_id", seriesID,
-			)
-			return &domain.ToggleResult{Bookmarked: false, SeriesID: seriesID}, nil
+	// Efficient lookup via dedicated repo method.
+	existing, err := s.repo.FindByUserAndSeries(ctx, userID, seriesID)
+	if err == nil && existing != nil {
+		// Already bookmarked → remove it.
+		if delErr := s.repo.Delete(ctx, existing.ID); delErr != nil {
+			return nil, fmt.Errorf("BookmarkService.ToggleBookmark: delete: %w", delErr)
 		}
+		logger.FromCtx(ctx).Info("bookmark removed",
+			"user_id", userID, "series_id", seriesID,
+		)
+		return &domain.ToggleResult{Bookmarked: false, SeriesID: seriesID}, nil
 	}
 
 	// Not bookmarked → add it.

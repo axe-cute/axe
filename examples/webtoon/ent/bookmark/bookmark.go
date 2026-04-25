@@ -14,6 +14,8 @@ const (
 	Label = "bookmark"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldUserID holds the string denoting the user_id field in the database.
+	FieldUserID = "user_id"
 	// FieldSeriesID holds the string denoting the series_id field in the database.
 	FieldSeriesID = "series_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -27,6 +29,7 @@ const (
 // Columns holds all SQL columns for bookmark fields.
 var Columns = []string{
 	FieldID,
+	FieldUserID,
 	FieldSeriesID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -43,6 +46,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	UserIDValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -59,6 +64,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByUserID orders the results by the user_id field.
+func ByUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUserID, opts...).ToFunc()
 }
 
 // BySeriesID orders the results by the series_id field.

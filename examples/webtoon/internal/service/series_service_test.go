@@ -26,10 +26,21 @@ func (m *mockSeriesRepo) Delete(_ context.Context, _ uuid.UUID) error { return n
 func (m *mockSeriesRepo) List(_ context.Context, _ domain.Pagination) ([]*domain.Series, int, error) {
 	return []*domain.Series{}, 0, nil
 }
+func (m *mockSeriesRepo) ListFiltered(_ context.Context, _ domain.SeriesFilter, _ domain.Pagination) ([]*domain.Series, int, error) {
+	return []*domain.Series{}, 0, nil
+}
+func (m *mockSeriesRepo) ListTrending(_ context.Context, _ int) ([]*domain.Series, error) {
+	return []*domain.Series{}, nil
+}
 
 func TestCreateSeries_HappyPath(t *testing.T) {
 	svc := service.NewSeriesService(&mockSeriesRepo{})
-	result, err := svc.CreateSeries(context.Background(), domain.CreateSeriesInput{})
+	result, err := svc.CreateSeries(context.Background(), domain.CreateSeriesInput{
+		Title:  "Test",
+		Author: "Tester",
+		Genre:  "action",
+		Status: "ongoing",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

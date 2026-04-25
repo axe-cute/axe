@@ -18,6 +18,8 @@ type Bookmark struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID uuid.UUID `json:"id,omitempty"`
+	// UserID holds the value of the "user_id" field.
+	UserID string `json:"user_id,omitempty"`
 	// SeriesID holds the value of the "series_id" field.
 	SeriesID uuid.UUID `json:"series_id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -32,6 +34,8 @@ func (*Bookmark) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case bookmark.FieldUserID:
+			values[i] = new(sql.NullString)
 		case bookmark.FieldCreatedAt, bookmark.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		case bookmark.FieldID, bookmark.FieldSeriesID:
@@ -56,6 +60,12 @@ func (_m *Bookmark) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value != nil {
 				_m.ID = *value
+			}
+		case bookmark.FieldUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field user_id", values[i])
+			} else if value.Valid {
+				_m.UserID = value.String
 			}
 		case bookmark.FieldSeriesID:
 			if value, ok := values[i].(*uuid.UUID); !ok {
@@ -111,6 +121,9 @@ func (_m *Bookmark) String() string {
 	var builder strings.Builder
 	builder.WriteString("Bookmark(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("user_id=")
+	builder.WriteString(_m.UserID)
+	builder.WriteString(", ")
 	builder.WriteString("series_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SeriesID))
 	builder.WriteString(", ")

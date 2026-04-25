@@ -19,6 +19,7 @@ type Bookmark struct {
 func (Bookmark) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New).Immutable(),
+		field.String("user_id").NotEmpty(),
 		field.UUID("series_id", uuid.UUID{}),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
