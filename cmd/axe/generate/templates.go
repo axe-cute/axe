@@ -137,6 +137,10 @@ type create{{.Name}}Request struct {
 {{- range .Fields}}
 	{{title .Name}} {{.Type}} {{bt}}json:"{{.NameSnake}}"{{bt}}
 {{- end}}
+{{- if .BelongsTo}}
+	// {{.BelongsTo}}ID is the parent entity FK. Required on create.
+	{{.BelongsTo}}ID string {{bt}}json:"{{snake .BelongsTo}}_id"{{bt}}
+{{- end}}
 }
 
 // {{.NameLower}}Response is the API response shape.
@@ -144,6 +148,9 @@ type {{.NameLower}}Response struct {
 	ID        string {{bt}}json:"id"{{bt}}
 {{- range .Fields}}
 	{{title .Name}} {{.Type}} {{bt}}json:"{{.NameSnake}}"{{bt}}
+{{- end}}
+{{- if .BelongsTo}}
+	{{.BelongsTo}}ID string {{bt}}json:"{{snake .BelongsTo}}_id"{{bt}}
 {{- end}}
 	CreatedAt string {{bt}}json:"created_at"{{bt}}
 	UpdatedAt string {{bt}}json:"updated_at"{{bt}}
@@ -155,6 +162,9 @@ func to{{.Name}}Response(e *domain.{{.Name}}) *{{.NameLower}}Response {
 {{- range .Fields}}
 		{{title .Name}}: e.{{title .Name}},
 {{- end}}
+{{- if .BelongsTo}}
+		{{.BelongsTo}}ID: e.{{.BelongsTo}}ID.String(),
+{{- end}}
 		CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: e.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
@@ -162,13 +172,28 @@ func to{{.Name}}Response(e *domain.{{.Name}}) *{{.NameLower}}Response {
 
 func (h *{{.Name}}Handler) Create{{.Name}}(w http.ResponseWriter, r *http.Request) {
 	var req create{{.Name}}Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+	// DisallowUnknownFields catches client/server schema drift early —
+	// unknown keys become a 400 instead of silently being dropped.
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage(err.Error()))
 		return
 	}
+{{- if .BelongsTo}}
+	// Parse the FK once; empty or malformed UUID → 400 with a clear message.
+	parentID, err := uuid.Parse(req.{{.BelongsTo}}ID)
+	if err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("{{snake .BelongsTo}}_id must be a valid UUID"))
+		return
+	}
+{{- end}}
 	result, err := h.svc.Create{{.Name}}(r.Context(), domain.Create{{.Name}}Input{
 {{- range .Fields}}
 		{{title .Name}}: req.{{title .Name}},
+{{- end}}
+{{- if .BelongsTo}}
+		{{.BelongsTo}}ID: parentID,
 {{- end}}
 	})
 	if err != nil {
@@ -199,8 +224,10 @@ func (h *{{.Name}}Handler) Update{{.Name}}(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req domain.Update{{.Name}}Input
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage("invalid JSON body"))
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		middleware.WriteError(w, apperror.ErrInvalidInput.WithMessage(err.Error()))
 		return
 	}
 	result, err := h.svc.Update{{.Name}}(r.Context(), id, req)

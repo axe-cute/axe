@@ -485,3 +485,62 @@ func TestNewResourceData_WithBelongsTo(t *testing.T) {
 	assert.Equal(t, "Post", data.BelongsTo)
 	assert.Contains(t, strings.ToLower(data.Name), "comment")
 }
+
+// Regression: the generated handler must thread the parent FK all the way
+// from HTTP body → domain input, and reject unknown fields on decode.
+//
+// Historically the handler template forgot to include BelongsTo in the
+// request DTO, so POST /comments/ with {"post_id":"..."} silently dropped
+// the FK and the service threw "post_id is required". This test locks
+// that behaviour in place.
+func TestGenerateResource_HandlerPropagatesBelongsTo(t *testing.T) {
+	dir := t.TempDir()
+	orig, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(orig) //nolint:errcheck
+	require.NoError(t, os.Chdir(dir))
+
+	// generateResource writes into these subtrees — create them upfront.
+	for _, d := range []string{
+		"internal/domain",
+		"internal/handler",
+		"internal/service",
+		"internal/repository",
+		"ent/schema",
+		"db/queries",
+		"db/migrations",
+	} {
+		require.NoError(t, os.MkdirAll(d, 0o755))
+	}
+
+	data := ResourceData{
+		Name:       "Comment",
+		NameLower:  "comment",
+		NamePlural: "comments",
+		NameSnake:  "comment",
+		BelongsTo:  "Post",
+		Module:     "github.com/test/app",
+		Date:       "2026-01-01",
+	}
+	_ = generateResource(data) // build steps will fail in temp dir; files still land
+
+	content, err := os.ReadFile("internal/handler/comment_handler.go")
+	require.NoError(t, err)
+	got := string(content)
+
+	// 1. Request DTO carries the FK as a string (JSON-friendly UUID).
+	assert.Contains(t, got, `PostID string `, "createCommentRequest must expose PostID")
+	assert.Contains(t, got, `json:"post_id"`, "FK JSON tag must be snake_case post_id")
+
+	// 2. Create handler parses the FK into a uuid.UUID and forwards it.
+	assert.Contains(t, got, "uuid.Parse(req.PostID)", "Create must parse the FK")
+	assert.Contains(t, got, "PostID: parentID", "Create must forward parsed FK into domain input")
+
+	// 3. Decoder rejects unknown fields on Create + Update — catches
+	// client/server schema drift at the boundary instead of silently
+	// dropping data.
+	assert.Contains(t, got, "DisallowUnknownFields()", "decoder must reject unknown fields")
+
+	// 4. Response exposes the FK so clients can display the relation.
+	assert.Contains(t, got, `PostID: e.PostID.String()`, "response must serialise FK as string")
+}
