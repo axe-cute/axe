@@ -22,8 +22,50 @@ func Command() *cobra.Command {
 		Use:   "migrate",
 		Short: "Database migration commands",
 	}
-	cmd.AddCommand(createCmd(), upCmd(), downCmd(), statusCmd())
+	cmd.AddCommand(createCmd(), upCmd(), downCmd(), forgetCmd(), statusCmd())
 	return cmd
+}
+
+// forgetCmd removes a SPECIFIC migration record from schema_migrations,
+// regardless of order. Useful when a migration applied partially (created
+// the table, then errored on an index) and the bookkeeping row is stuck
+// out of sync with reality.
+//
+// SQL is NOT reversed — fix the file by hand or write a follow-up migration,
+// then re-run `axe migrate up`.
+func forgetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "forget <filename>",
+		Short: "Remove a specific migration record (does not reverse SQL)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			conn, err := openDB(ctx)
+			if err != nil {
+				return err
+			}
+			defer conn.Close(ctx)
+
+			if err := ensureMigrationsTable(ctx, conn); err != nil {
+				return err
+			}
+
+			tag, err := conn.Exec(ctx,
+				`DELETE FROM schema_migrations WHERE filename = $1`, args[0],
+			)
+			if err != nil {
+				return fmt.Errorf("remove migration record: %w", err)
+			}
+			if tag.RowsAffected() == 0 {
+				fmt.Printf("⚠️  No record found for %s\n", args[0])
+				return nil
+			}
+			fmt.Printf("↩️  Removed migration record: %s\n", args[0])
+			fmt.Println("   SQL was NOT reversed. Fix the file and re-run `axe migrate up`.")
+			return nil
+		},
+	}
 }
 
 // createCmd creates a new timestamped migration file.
@@ -293,13 +335,29 @@ func pendingMigrations(ctx context.Context, conn *pgx.Conn) ([]string, error) {
 	return pending, nil
 }
 
-// applyMigration reads a SQL file and executes it inside a transaction.
-// On success it records the filename in schema_migrations.
+// applyMigration reads a SQL file and executes its Up section inside a
+// transaction. On success it records the filename in schema_migrations.
+//
+// If the file contains `-- +migrate Up` / `-- +migrate Down` markers, only
+// the Up section is executed. If neither marker is present, the entire
+// file is executed (backward-compat with legacy migrations that pre-date
+// the marker convention).
+//
+// Down sections are NEVER executed by `up` even if present in the file —
+// this is what prevents a stray Down block from silently dropping the
+// column it just added.
 func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error {
 	path := filepath.Join(migrationsDir, filename)
-	sql, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read migration %s: %w", filename, err)
+	}
+
+	upSQL, _ := splitUpDown(string(raw))
+	if strings.TrimSpace(upSQL) == "" {
+		return fmt.Errorf("migration %s has no Up SQL "+
+			"(use `-- +migrate Up` marker, or remove markers entirely to run the whole file)",
+			filename)
 	}
 
 	fmt.Printf("→ Applying %s ... ", filename)
@@ -310,7 +368,7 @@ func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error 
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+	if _, err := tx.Exec(ctx, upSQL); err != nil {
 		return fmt.Errorf("\n  ❌ migration %s failed: %w", filename, err)
 	}
 
@@ -326,4 +384,62 @@ func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error 
 
 	fmt.Println("✅")
 	return nil
+}
+
+// splitUpDown splits SQL on `-- +migrate Up` / `-- +migrate Down` markers.
+//
+// Returns:
+//   - up   = SQL between the Up marker and the next marker (or EOF).
+//   - down = SQL between the Down marker and the next marker (or EOF).
+//
+// If neither marker is present, the entire input is returned as `up` and
+// `down` is empty — this preserves backward-compat with migrations written
+// before the marker convention existed.
+//
+// Lines before the first marker (header comments such as `-- Migration: foo`)
+// are discarded only when at least one marker is present.
+//
+// Marker matching is whitespace-tolerant and case-insensitive on the
+// direction word ("Up" / "up" / "UP" all work).
+func splitUpDown(sql string) (up, down string) {
+	var upBuf, downBuf strings.Builder
+	section := ""
+	sawMarker := false
+	for _, line := range strings.Split(sql, "\n") {
+		switch {
+		case isMigrationMarker(line, "Up"):
+			section = "up"
+			sawMarker = true
+		case isMigrationMarker(line, "Down"):
+			section = "down"
+			sawMarker = true
+		case section == "up":
+			upBuf.WriteString(line)
+			upBuf.WriteByte('\n')
+		case section == "down":
+			downBuf.WriteString(line)
+			downBuf.WriteByte('\n')
+		}
+		// Lines with section == "" (before any marker) are dropped.
+	}
+	if !sawMarker {
+		return sql, ""
+	}
+	return strings.TrimSpace(upBuf.String()), strings.TrimSpace(downBuf.String())
+}
+
+// isMigrationMarker reports whether line is `-- +migrate <dir>`,
+// tolerating leading/trailing whitespace around each token and any
+// number of spaces between them.
+func isMigrationMarker(line, dir string) bool {
+	s := strings.TrimSpace(line)
+	if !strings.HasPrefix(s, "--") {
+		return false
+	}
+	s = strings.TrimSpace(strings.TrimPrefix(s, "--"))
+	if !strings.HasPrefix(s, "+migrate") {
+		return false
+	}
+	s = strings.TrimSpace(strings.TrimPrefix(s, "+migrate"))
+	return strings.EqualFold(s, dir)
 }

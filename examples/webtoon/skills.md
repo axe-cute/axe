@@ -166,36 +166,49 @@ revert.
 
 ## 1. Database & Migrations
 
-### 1.1 The migrate runner does NOT understand `+axe Up` / `+axe Down`
-`cmd/axe/main.go:applyMigration` reads the **entire file** and `Exec`s it as
-one transaction. There is no parser for goose-style `-- +up` / `-- +down`
-markers. If you put a `Down` block in a migration file, **it will run** —
-typically dropping the column you just added.
+### 1.1 The migrate runner is marker-aware (axe v0.5.2+)
 
-**Rule:** migration files contain *only forward statements*. To write rollback
-SQL, put it in a separate `*_down.sql` you run by hand, or stash it in a code
-comment.
+The runner parses `-- +migrate Up` / `-- +migrate Down` markers and
+**only executes the Up section**. Files with no markers are run as a
+single Up block (legacy compat).
+
+This **was not** true in v0.5.1 — the runner exec'd the whole file in
+one transaction, so Down blocks dropped what Up just created. We lost a
+column to that bug; the parser exists because of it. See
+`cmd/axe/migrate/migrate_test.go:TestSplitUpDown_BothSections_DownIsIsolated`
+for the regression guard.
 
 ```sql
--- ❌ WRONG: both blocks execute
--- +axe Up
-ALTER TABLE foo ADD COLUMN bar INT;
--- +axe Down
-ALTER TABLE foo DROP COLUMN bar;
-
--- ✅ RIGHT: forward-only
+-- ✅ With markers: only Up runs.
+-- +migrate Up
 ALTER TABLE foo ADD COLUMN IF NOT EXISTS bar INT;
 CREATE INDEX IF NOT EXISTS idx_foo_bar ON foo (bar);
+-- +migrate Down
+ALTER TABLE foo DROP COLUMN bar;
+
+-- ✅ No markers: whole file runs as Up.
+ALTER TABLE foo ADD COLUMN IF NOT EXISTS bar INT;
 ```
 
+Idempotent statements (`IF NOT EXISTS`) are still recommended so a
+half-applied migration can be safely re-run after `axe migrate forget`.
+
 ### 1.2 Re-running a failed migration
+
 If a migration applied partially (e.g. created column then errored), the
-`schema_migrations` table may or may not have the row. To force re-apply:
+`schema_migrations` table may or may not have the row. Use the explicit
+forget command:
+
+```bash
+axe migrate forget 20260424180000_scale_indexes.sql
+make migrate-up
+```
+
+If you don't have the binary in PATH, the equivalent raw SQL is:
 
 ```bash
 docker exec webtoon_postgres psql -U webtoon -d webtoon_dev \
   -c "DELETE FROM schema_migrations WHERE filename = 'XXX.sql';"
-make migrate-up
 ```
 
 ### 1.3 Recursive CTEs

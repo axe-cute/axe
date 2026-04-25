@@ -1596,13 +1596,18 @@ func pendingMigrations(ctx context.Context, conn *pgx.Conn) ([]string, error) {
 
 func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error {
 	path := filepath.Join(migrationsDir, filename)
-	sql, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil { return fmt.Errorf("read migration %s: %w", filename, err) }
+	upSQL, _ := splitUpDown(string(raw))
+	if strings.TrimSpace(upSQL) == "" {
+		return fmt.Errorf("migration %s has no Up SQL "+
+			"(use `-- +migrate Up` marker, or remove markers entirely to run the whole file)", filename)
+	}
 	fmt.Printf("→ Applying %s ... ", filename)
 	tx, err := conn.Begin(ctx)
 	if err != nil { return fmt.Errorf("begin transaction: %w", err) }
 	defer tx.Rollback(ctx) //nolint:errcheck
-	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+	if _, err := tx.Exec(ctx, upSQL); err != nil {
 		return fmt.Errorf("\n  ❌ migration %s failed: %w", filename, err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (filename) VALUES ($1)`, filename); err != nil {
@@ -1611,4 +1616,37 @@ func applyMigration(ctx context.Context, conn *pgx.Conn, filename string) error 
 	if err := tx.Commit(ctx); err != nil { return fmt.Errorf("commit migration %s: %w", filename, err) }
 	fmt.Println("✅")
 	return nil
+}
+
+// splitUpDown splits a migration SQL file on `-- +migrate Up` /
+// `-- +migrate Down` markers. If neither marker is present, the whole
+// input is returned as `up` (backward-compat). The Down section is NEVER
+// executed by `up`, even if present.
+func splitUpDown(sql string) (up, down string) {
+	var upBuf, downBuf strings.Builder
+	section := ""
+	sawMarker := false
+	for _, line := range strings.Split(sql, "\n") {
+		switch {
+		case isMigrationMarker(line, "Up"):
+			section = "up"; sawMarker = true
+		case isMigrationMarker(line, "Down"):
+			section = "down"; sawMarker = true
+		case section == "up":
+			upBuf.WriteString(line); upBuf.WriteByte('\n')
+		case section == "down":
+			downBuf.WriteString(line); downBuf.WriteByte('\n')
+		}
+	}
+	if !sawMarker { return sql, "" }
+	return strings.TrimSpace(upBuf.String()), strings.TrimSpace(downBuf.String())
+}
+
+func isMigrationMarker(line, dir string) bool {
+	s := strings.TrimSpace(line)
+	if !strings.HasPrefix(s, "--") { return false }
+	s = strings.TrimSpace(strings.TrimPrefix(s, "--"))
+	if !strings.HasPrefix(s, "+migrate") { return false }
+	s = strings.TrimSpace(strings.TrimPrefix(s, "+migrate"))
+	return strings.EqualFold(s, dir)
 }

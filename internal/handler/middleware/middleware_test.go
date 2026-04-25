@@ -1,8 +1,10 @@
 package middleware_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -269,3 +271,117 @@ func TestLoggerMiddleware_NoExplicitStatus_Defaults200(t *testing.T) {
 	}
 }
 
+// ── E11 — server errors ALWAYS log, dev ?debug=1 surfaces cause ────────────
+//
+// Regression target: a 500 must never reach the client without a server
+// log line. We lost ~30 min per occurrence in the webtoon build because
+// a raw error returned from a service was silently dropped to ErrInternal
+// with no logging. See _internal/roadmap-evidence.md row E11.
+
+// captureSlog swaps slog.Default for a buffer-backed JSON handler and
+// returns the buffer plus a restore func.
+func captureSlog(t *testing.T) (*bytes.Buffer, func()) {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	return &buf, func() { slog.SetDefault(prev) }
+}
+
+func TestWriteError_5xx_AlwaysLogsServerSide(t *testing.T) {
+	buf, restore := captureSlog(t)
+	defer restore()
+
+	rec := httptest.NewRecorder()
+	middleware.WriteError(rec, errors.New("db connection refused"))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	logs := buf.String()
+	if !strings.Contains(logs, "server error response") {
+		t.Errorf("expected 'server error response' log, got: %s", logs)
+	}
+	if !strings.Contains(logs, "db connection refused") {
+		t.Errorf("expected cause to be logged, got: %s", logs)
+	}
+}
+
+func TestWriteError_4xx_DoesNotLog(t *testing.T) {
+	// 4xx is client error — flooding logs with these creates noise.
+	buf, restore := captureSlog(t)
+	defer restore()
+
+	rec := httptest.NewRecorder()
+	middleware.WriteError(rec, apperror.ErrNotFound.WithMessage("user 42 not found"))
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rec.Code)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("4xx must not log, got: %s", buf.String())
+	}
+}
+
+func TestWriteErrorCtx_DebugQuery_GatedByAppEnv(t *testing.T) {
+	cause := errors.New("the underlying cause")
+
+	cases := []struct {
+		name      string
+		appEnv    string
+		debugQS   bool
+		wantDebug bool
+	}{
+		{"prod_no_debug_qs", "prod", false, false},
+		{"prod_with_debug_qs_still_blocked", "prod", true, false},
+		{"dev_no_debug_qs", "dev", false, false},
+		{"dev_with_debug_qs_exposes_cause", "dev", true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("APP_ENV", tc.appEnv)
+
+			url := "/x"
+			if tc.debugQS {
+				url += "?debug=1"
+			}
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+
+			middleware.WriteErrorCtx(rec, req, apperror.ErrInternal.WithCause(cause))
+
+			var body map[string]string
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			gotDebug, ok := body["debug"]
+			if tc.wantDebug {
+				if !ok || gotDebug != cause.Error() {
+					t.Errorf("debug = %q (present=%v); want %q", gotDebug, ok, cause.Error())
+				}
+			} else if ok {
+				t.Errorf("debug must NOT leak in %s, got %q", tc.name, gotDebug)
+			}
+		})
+	}
+}
+
+func TestWriteErrorCtx_RequestTaggedLog(t *testing.T) {
+	buf, restore := captureSlog(t)
+	defer restore()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/orders/123", nil)
+	rec := httptest.NewRecorder()
+	middleware.WriteErrorCtx(rec, req, errors.New("planet exploded"))
+
+	logs := buf.String()
+	if !strings.Contains(logs, `"method":"POST"`) {
+		t.Errorf("expected method in log, got: %s", logs)
+	}
+	if !strings.Contains(logs, `"path":"/v1/orders/123"`) {
+		t.Errorf("expected path in log, got: %s", logs)
+	}
+	if !strings.Contains(logs, "planet exploded") {
+		t.Errorf("expected cause in log, got: %s", logs)
+	}
+}

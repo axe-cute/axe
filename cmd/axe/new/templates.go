@@ -1751,6 +1751,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"time"
 
@@ -1815,31 +1816,102 @@ func Recoverer(next http.Handler) http.Handler {
 					slog.Any("panic", rec),
 					slog.String("stack", string(debug.Stack())),
 				)
-				writeError(w, apperror.ErrInternal)
+				WriteErrorCtx(w, r, apperror.ErrInternal.WithCause(
+					errors.New(formatPanic(rec)),
+				))
 			}
 		}()
 		next.ServeHTTP(w, r)
 	})
 }
 
+func formatPanic(rec any) string {
+	switch v := rec.(type) {
+	case error:
+		return v.Error()
+	case string:
+		return v
+	default:
+		return "panic: see server logs for details"
+	}
+}
+
+// errorResponse — the JSON envelope. Debug is filled only when the
+// process runs in dev mode (APP_ENV=dev) AND the request carries
+// ?debug=1, so prod builds cannot accidentally leak internals.
 type errorResponse struct {
 	Code    string ` + "`" + `json:"code"` + "`" + `
 	Message string ` + "`" + `json:"message"` + "`" + `
+	Debug   string ` + "`" + `json:"debug,omitempty"` + "`" + `
 }
 
+// WriteError writes an error JSON. 5xx ALWAYS produces a server log line
+// (slog.Default fallback when no request is in scope) so a 500 never
+// reaches the client silently. For request_id-tagged logs and the
+// ?debug=1 dev affordance, prefer WriteErrorCtx.
 func WriteError(w http.ResponseWriter, err error) {
-	var appErr *apperror.AppError
-	if errors.As(err, &appErr) {
-		writeError(w, appErr)
-		return
-	}
-	writeError(w, apperror.ErrInternal)
+	writeErrorImpl(w, nil, err)
 }
 
-func writeError(w http.ResponseWriter, appErr *apperror.AppError) {
+// WriteErrorCtx is WriteError but uses the request's context-bound
+// logger and supports ?debug=1 (dev-only) inline cause exposure.
+func WriteErrorCtx(w http.ResponseWriter, r *http.Request, err error) {
+	writeErrorImpl(w, r, err)
+}
+
+func writeErrorImpl(w http.ResponseWriter, r *http.Request, err error) {
+	var appErr *apperror.AppError
+	if !errors.As(err, &appErr) {
+		appErr = apperror.ErrInternal.WithCause(err)
+	}
+	if appErr.HTTPStatus >= http.StatusInternalServerError {
+		logServerError(r, appErr)
+	}
+	writeError(w, appErr, isDebugRequest(r))
+}
+
+func logServerError(r *http.Request, appErr *apperror.AppError) {
+	var log *slog.Logger
+	if r != nil {
+		log = logger.FromCtx(r.Context())
+	} else {
+		log = slog.Default()
+	}
+	attrs := []any{
+		slog.String("code", appErr.Code),
+		slog.Int("status", appErr.HTTPStatus),
+		slog.String("message", appErr.Message),
+	}
+	if appErr.Cause != nil {
+		attrs = append(attrs, slog.String("cause", appErr.Cause.Error()))
+	}
+	if r != nil {
+		attrs = append(attrs,
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+		)
+	}
+	log.Error("server error response", attrs...)
+}
+
+func isDebugRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if os.Getenv("APP_ENV") != "dev" {
+		return false
+	}
+	return r.URL.Query().Get("debug") == "1"
+}
+
+func writeError(w http.ResponseWriter, appErr *apperror.AppError, debug bool) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.HTTPStatus)
-	_ = json.NewEncoder(w).Encode(errorResponse{Code: appErr.Code, Message: appErr.Message})
+	resp := errorResponse{Code: appErr.Code, Message: appErr.Message}
+	if debug && appErr.Cause != nil {
+		resp.Debug = appErr.Cause.Error()
+	}
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) {
