@@ -197,4 +197,90 @@ credit card), use a distributed lock or a deduplication table.
 
 ---
 
-*Last updated: 2026-04-16*
+## 5. Escape Hatches — When You Need Raw Control
+
+The transaction manager covers 90% of use cases. For the remaining 10%,
+you can drop down to the raw `database/sql` driver without leaving axe.
+
+### Savepoints (nested transactions)
+
+`WithTx` wraps the entire closure in a single transaction. If you need
+a partial rollback (e.g., "try to reserve inventory, but continue even if
+it fails"), use a savepoint inside the closure:
+
+```go
+func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) error {
+    return s.tx.WithTx(ctx, func(tx *sql.Tx) error {
+        // Primary write — must succeed.
+        order, err := s.orderRepo.CreateWithTx(ctx, tx, input)
+        if err != nil {
+            return err // entire tx rolls back
+        }
+
+        // Optional write — try but don't fail the order if inventory
+        // reservation fails (e.g., warehouse API is down).
+        _, spErr := tx.ExecContext(ctx, "SAVEPOINT reserve_inventory")
+        if spErr != nil {
+            return spErr
+        }
+        if err := s.inventoryRepo.ReserveWithTx(ctx, tx, order.Items); err != nil {
+            // Roll back only the reservation, not the order.
+            tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT reserve_inventory")
+            logger.FromCtx(ctx).Warn("inventory reservation failed, order continues",
+                "order_id", order.ID, "error", err)
+        } else {
+            tx.ExecContext(ctx, "RELEASE SAVEPOINT reserve_inventory")
+        }
+
+        return s.outboxRepo.AppendWithTx(ctx, tx, OrderPlacedEvent{OrderID: order.ID})
+    })
+}
+```
+
+### Raw `*sql.DB` access
+
+Every axe project has a `*sql.DB` in `cmd/api/main.go`. You can pass it
+directly to any code that needs raw driver access:
+
+```go
+// In main.go — sqlDB is already open:
+sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
+
+// Pass to anything that needs raw access:
+myCustomRepo := NewCustomRepo(sqlDB)
+```
+
+### Raw pgx features (PostgreSQL only)
+
+If you need pgx-specific features (COPY, LISTEN/NOTIFY, large objects),
+unwrap the `*sql.DB` to get the underlying pgx connection:
+
+```go
+import "github.com/jackc/pgx/v5/stdlib"
+
+conn, err := stdlib.AcquireConn(sqlDB)
+if err != nil { return err }
+defer stdlib.ReleaseConn(sqlDB, conn)
+
+// Now you have *pgx.Conn — full pgx API available.
+_, err = conn.CopyFrom(ctx, pgx.Identifier{"posts"}, columns, source)
+```
+
+### When to escape vs. when to stay
+
+| Situation                                  | Recommendation                |
+|--------------------------------------------|-------------------------------|
+| Simple CRUD, single write                  | No transaction needed         |
+| Multi-write (order + outbox)               | `WithTx` — standard pattern   |
+| Partial rollback needed                    | Savepoint inside `WithTx`     |
+| Bulk insert (COPY)                         | Raw pgx via `stdlib.AcquireConn` |
+| LISTEN/NOTIFY                              | Raw pgx connection            |
+| Complex JOIN query                         | sqlc (alternative to Ent)     |
+
+**Rule of thumb:** If `WithTx` + Ent can express it, use them. Escape
+only when the abstraction gets in the way — and document *why* in a
+comment so the next developer doesn't "fix" it back.
+
+---
+
+*Last updated: 2026-04-26*
