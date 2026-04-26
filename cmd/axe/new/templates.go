@@ -805,11 +805,7 @@ func main() {
 	_ = sqlDB // used by ent client (injected by axe generate resource)
 
 	// ── JWT service ───────────────────────────────────────────────────────────
-	jwtSvc, jwtErr := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
-	if jwtErr != nil {
-		log.Error("jwt init failed", "error", jwtErr)
-		os.Exit(1)
-	}
+	jwtSvc := jwtauth.New(cfg.JWTSecret, cfg.AccessTokenTTL(), cfg.RefreshTokenTTL())
 	_ = jwtSvc
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────
@@ -934,7 +930,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	_ = enc.Encode(v)
 }
-`, imports, data.Name, cacheInit, workerInit, storageInit, sqlDriverName, storageRoute, workerStart, workerStop)
+`, imports, cacheInit, workerInit, storageInit, sqlDriverName, storageRoute, workerStart, workerStop)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
