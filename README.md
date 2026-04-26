@@ -195,6 +195,8 @@ Clean Architecture enforced by Go's import system — **the compiler catches lay
 
 **Rules**: `domain/` has zero infra imports · `handler/` never touches DB · `service/` owns business rules · `repository/` owns data access
 
+> 📖 **[Trace a request through every layer →](docs/guides/request-lifecycle.md)** — from HTTP to database and back in 4 file hops.
+
 <br/>
 
 ---

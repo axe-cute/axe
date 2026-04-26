@@ -181,10 +181,11 @@ docker run -p 8080:8080 \
 
 ## Next Steps
 
+- **[Request Lifecycle](request-lifecycle.md)** — Trace a request through every layer (debug guide)
 - **[Architecture Contract](../architecture_contract.md)** — The full rules document
+- **[Data Consistency](../data_consistency.md)** — Transaction patterns and outbox
 - **[Plugin Guide](../plugin-guide.md)** — Deep dive into the plugin system
 - **[WebSocket Semantics](websocket-semantics.md)** — Message ordering and delivery guarantees
-- **[Data Consistency](../data_consistency.md)** — Transaction patterns and outbox
 - **[Plugin Maturity](../plugin-maturity.md)** — Which plugins are production-ready
 
 ---
