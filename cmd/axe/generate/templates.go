@@ -358,6 +358,14 @@ import (
 )
 
 // {{.Name}}Service implements domain.{{.Name}}Service.
+//
+// Architecture guide (axe Clean Architecture):
+//   - Validation and business rules live HERE, not in the handler.
+//   - Handler is a thin HTTP adapter: parse request → call service → write response.
+//   - Authorization (ownership checks, role gates) belongs HERE, not in the handler.
+//   - When you have >1 write operation, wrap them in a transaction (see Create below).
+//   - Side effects after a write (email, event, notification) use the Outbox pattern
+//     inside the same transaction — see docs/data_consistency.md.
 type {{.Name}}Service struct {
 	repo domain.{{.Name}}Repository
 }
@@ -368,6 +376,26 @@ func New{{.Name}}Service(repo domain.{{.Name}}Repository) domain.{{.Name}}Servic
 }
 
 func (s *{{.Name}}Service) Create{{.Name}}(ctx context.Context, input domain.Create{{.Name}}Input) (*domain.{{.Name}}, error) {
+	// ── Validation ────────────────────────────────────────────────────────
+	// Add domain validation here. Keep it in the service, not the handler.
+	// Example:
+	//   if input.Title == "" {
+	//       return nil, apperror.ErrInvalidInput.WithMessage("title is required")
+	//   }
+
+	// ── Transaction boundary ──────────────────────────────────────────────
+	// This initial CRUD has a single write, so no transaction is needed yet.
+	// When you add a second write (outbox event, audit log, related entity),
+	// wrap them together so both succeed or both roll back:
+	//
+	//   return s.tx.WithTx(ctx, func(tx *sql.Tx) error {
+	//       result, err = s.repo.Create(ctx, input)
+	//       if err != nil { return err }
+	//       return s.outboxRepo.Append(ctx, event)  // same tx — atomic
+	//   })
+	//
+	// See docs/data_consistency.md for the full pattern.
+
 	result, err := s.repo.Create(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("{{.Name}}Service.Create: %w", err)
@@ -381,6 +409,18 @@ func (s *{{.Name}}Service) Get{{.Name}}(ctx context.Context, id uuid.UUID) (*dom
 }
 
 func (s *{{.Name}}Service) Update{{.Name}}(ctx context.Context, id uuid.UUID, input domain.Update{{.Name}}Input) (*domain.{{.Name}}, error) {
+{{- if .WithAuth}}
+	// ── Authorization ─────────────────────────────────────────────────────
+	// Ownership check: uncomment and adapt to restrict updates to the owner.
+	// claims := jwtauth.ClaimsFromCtx(ctx)
+	// if claims == nil {
+	//     return nil, apperror.ErrUnauthorized.WithMessage("authentication required")
+	// }
+	// existing, _ := s.repo.GetByID(ctx, id)
+	// if existing != nil && existing.OwnerID.String() != claims.UserID {
+	//     return nil, apperror.ErrForbidden.WithMessage("not the resource owner")
+	// }
+{{- end}}
 	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		return nil, err
 	}
@@ -392,6 +432,18 @@ func (s *{{.Name}}Service) Update{{.Name}}(ctx context.Context, id uuid.UUID, in
 }
 
 func (s *{{.Name}}Service) Delete{{.Name}}(ctx context.Context, id uuid.UUID) error {
+{{- if .WithAuth}}
+	// ── Authorization ─────────────────────────────────────────────────────
+	// Ownership check: uncomment and adapt to restrict deletion to the owner.
+	// claims := jwtauth.ClaimsFromCtx(ctx)
+	// if claims == nil {
+	//     return apperror.ErrUnauthorized.WithMessage("authentication required")
+	// }
+	// existing, _ := s.repo.GetByID(ctx, id)
+	// if existing != nil && existing.OwnerID.String() != claims.UserID {
+	//     return apperror.ErrForbidden.WithMessage("not the resource owner")
+	// }
+{{- end}}
 	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		return err
 	}
