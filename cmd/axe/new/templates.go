@@ -996,6 +996,17 @@ lint: ## Run golangci-lint
 vet: ## Run go vet
 	$(GO) vet ./...
 
+.PHONY: check-arch
+check-arch: ## Verify domain/ has no infrastructure imports
+	@echo "Checking domain layer purity..."
+	@if grep -rn '".*internal/handler\|".*internal/repository\|".*internal/infra\|".*internal/setup\|".*pkg/' internal/domain/ 2>/dev/null; then \
+		echo ""; \
+		echo "❌ domain/ must not import handler, repository, infra, or pkg packages."; \
+		echo "   Move the offending code to the service or handler layer."; \
+		exit 1; \
+	fi
+	@echo "✅ domain/ layer is clean — no infrastructure imports."
+
 .PHONY: fmt
 fmt: ## Format code
 	$(GO) fmt ./...
