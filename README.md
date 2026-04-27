@@ -2,9 +2,9 @@
 
 # 🪓 axe
 
-### Ship production Go APIs in minutes, not months.
+### Your architecture enforces itself. The compiler catches layer violations.
 
-Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · File Storage
+Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · Plugin Ecosystem
 
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
@@ -16,7 +16,13 @@ Clean Architecture · Zero Runtime Magic · Multi-DB · Real-time WebSocket · F
 
 <br/>
 
-## ⚡ 60 Seconds to Your First API
+## 🛡️ Why axe?
+
+Most Go projects start clean, then drift. Domain logic leaks into handlers. Transaction boundaries become inconsistent. New developers copy the wrong pattern. PR reviews become the only defense.
+
+**axe makes the compiler your architecture guardian.** Interfaces in `domain/` enforce layer boundaries at build time — not in docs nobody reads. Generated code teaches the right pattern. Every project has the same structure, so `make check-arch` catches violations before code review.
+
+Oh, and it takes 60 seconds:
 
 ```bash
 go install github.com/axe-cute/axe/cmd/axe@latest
