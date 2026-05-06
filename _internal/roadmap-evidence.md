@@ -102,7 +102,18 @@ E11, E12.
   with **comments** at every cross-service URL explaining "this must use
   the service name, not localhost." Plus a one-page `docs/docker.md`.
   No code, just template polish. ~1 hour.
-- **Decision:** **P1**.
+- **Decision:** ~~**P1**~~. **✅ Shipped.** Compose template
+  (`cmd/axe/new/templates.go:tmplDockerCompose`) now carries a header
+  + per-service comments at every host:container port mapping and at
+  asynqmon's `REDIS_ADDR`. New `tmplDockerDocs` ships as
+  `docs/docker.md` in every scaffolded project. `.env.example` has a
+  matching boundary block near `DATABASE_URL`/`REDIS_URL`. Verified
+  with `docker compose config` against postgres, mysql, sqlite
+  variants. Regression guards:
+  `TestTmplDockerCompose_PostgresE6Comments`,
+  `…MysqlE6Comments`, `…SqliteMinimal_NoHeaderNoise`,
+  `TestTmplEnvExample_DocumentsHostVsServiceName`,
+  `TestTmplDockerDocs_CoversE6AndE12`.
 
 ### E7 — Go version drift between `go.mod` and Dockerfile
 
@@ -141,7 +152,10 @@ E11, E12.
 - **Cheapest axe response:** N/A unless axe ships a "Next.js companion"
   template (which §5 *rejects*). Document the trick (build-arg + ENV)
   in `docs/docker.md`.
-- **Decision:** **Defer** — pure docs item, ride along with E6.
+- **Decision:** ~~**Defer**~~. **✅ Shipped (docs only)** as the
+  "Build-time vs runtime config" section of `tmplDockerDocs` —
+  emitted as `docs/docker.md` in every scaffolded project. Locked by
+  `TestTmplDockerDocs_CoversE6AndE12`.
 
 ---
 
@@ -169,14 +183,15 @@ E11, E12.
 
 3. **`axe doctor` (v1)**: Go/Node/Docker version drift checks —
    addresses E7. Estimated 0.5 day.
-4. **Scaffold polish**: better-commented `docker-compose.yml` + one-page
-   `docs/docker.md` — addresses E6. Estimated 0.5 day.
+4. ~~**Scaffold polish**~~ **✅ Shipped.** Compose template +
+   `.env.example` annotated; new `docs/docker.md` ships in every
+   scaffolded project. Addresses E6 (and E12 docs ride-along).
 5. **`make db-shell` in scaffold** — addresses E4. Estimated 1 hour.
 
 ### Defer
 
-6. Document the `NEXT_PUBLIC_*` rebuild trick (E12) inside the doc
-   landing from item 4. No standalone work.
+6. ~~Document the `NEXT_PUBLIC_*` rebuild trick (E12)~~ — landed with
+   item 4 above as the "Build-time vs runtime config" section.
 
 ### Out of scope (recorded, not roadmapped)
 
