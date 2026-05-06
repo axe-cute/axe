@@ -3286,6 +3286,13 @@ var (
 
 // ── Leader Templates ──────────────────────────────────────────────────────────
 
+// RenderSetupPlugin renders the canonical internal/setup/plugin.go contents
+// for a project with the given Go module path. Exposed so other commands
+// (e.g. `axe doctor`) can regenerate the file when migrating legacy projects.
+func RenderSetupPlugin(module string) string {
+	return tmplSetupPlugin(TemplateData{Module: module})
+}
+
 // tmplSetupPlugin generates internal/setup/plugin.go for the scaffolded project.
 func tmplSetupPlugin(data TemplateData) string {
 	// NOTE: Storage is wired directly in cmd/api/main.go via storage.NewHandler(),

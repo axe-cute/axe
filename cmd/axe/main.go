@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/axe-cute/axe/cmd/axe/doctor"
 	"github.com/axe-cute/axe/cmd/axe/generate"
 	"github.com/axe-cute/axe/cmd/axe/migrate"
 	axenew "github.com/axe-cute/axe/cmd/axe/new"
@@ -40,6 +41,7 @@ ship a full CRUD resource in under 10 minutes.`,
 	root.AddCommand(generate.Command())
 	root.AddCommand(migrate.Command())
 	root.AddCommand(plugin.Command())
+	root.AddCommand(doctor.Command())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
