@@ -194,7 +194,7 @@ func buildFileList(data TemplateData, dbc dbConfig) []fileEntry {
 		{".gitignore", tmplGitignore},
 		{".air.toml", tmplAirToml},
 		{".dockerignore", tmplDockerignore},
-		{"Makefile", tmplMakefile},
+		{"Makefile", tmplMakefile(data, dbc)},
 		{"Dockerfile", tmplDockerfile},
 		{"README.md", tmplReadme},
 

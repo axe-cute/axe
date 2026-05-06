@@ -126,6 +126,60 @@ func TestTmplDockerDocs_CoversE6AndE12(t *testing.T) {
 	}
 }
 
+// E4 — `make db-shell` lets a fresh dev open an interactive DB session
+// without learning psql/mysql flags or installing clients on macOS first.
+// The target must be driver-aware: postgres/mysql go through compose exec
+// so no host client is needed; sqlite needs `sqlite3` locally and shells
+// into the dev DB file directly.
+
+func TestTmplMakefile_DBShell_Postgres(t *testing.T) {
+	out := tmplMakefile(TemplateData{Name: "demo"}, dbConfigs["postgres"])
+	for _, s := range []string{
+		"db-shell: ## Open interactive psql shell",
+		"docker compose exec postgres psql -U demo -d demo_dev",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("postgres Makefile missing %q\n--- output ---\n%s", s, out)
+		}
+	}
+}
+
+func TestTmplMakefile_DBShell_Mysql(t *testing.T) {
+	out := tmplMakefile(TemplateData{Name: "demo"}, dbConfigs["mysql"])
+	for _, s := range []string{
+		"db-shell: ## Open interactive mysql shell",
+		"docker compose exec mysql mysql -udemo -pdemo_dev_password demo_dev",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("mysql Makefile missing %q\n--- output ---\n%s", s, out)
+		}
+	}
+}
+
+func TestTmplMakefile_DBShell_Sqlite(t *testing.T) {
+	out := tmplMakefile(TemplateData{Name: "demo"}, dbConfigs["sqlite"])
+	for _, s := range []string{
+		"db-shell: ## Open interactive sqlite3 shell",
+		"sqlite3 not installed",
+		"sqlite3 demo_dev.db",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("sqlite Makefile missing %q\n--- output ---\n%s", s, out)
+		}
+	}
+}
+
+// db-shell must show up in `make help` output — that means the target
+// line carries the `## ` doc comment recognized by the help grep.
+func TestTmplMakefile_DBShell_HasHelpComment(t *testing.T) {
+	for _, dbc := range []dbConfig{dbConfigs["postgres"], dbConfigs["mysql"], dbConfigs["sqlite"]} {
+		out := tmplMakefile(TemplateData{Name: "demo"}, dbc)
+		if !strings.Contains(out, "db-shell: ## ") {
+			t.Errorf("%s: db-shell missing help-grep `## ` doc comment", dbc.Driver)
+		}
+	}
+}
+
 func TestDockerServiceList(t *testing.T) {
 	cases := []struct {
 		name string

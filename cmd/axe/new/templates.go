@@ -937,7 +937,43 @@ func writeJSON(w http.ResponseWriter, v any) {
 // Static templates (identical for all projects)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const tmplMakefile = `SHELL := /bin/bash
+// tmplMakefile renders the project Makefile. Most targets are static, but
+// `db-shell` needs driver-specific commands (psql vs mysql vs sqlite3) and
+// the project name to compose the right user/db/file arguments.
+func tmplMakefile(data TemplateData, dbc dbConfig) string {
+	return makefileHeader + dbShellTarget(data, dbc) + makefileFooter
+}
+
+// dbShellTarget renders an interactive DB shell target appropriate for the
+// scaffolded driver. Postgres/MySQL go through `docker compose exec` so the
+// dev never has to install a client locally; SQLite shells into the file
+// directly since there is no compose service for it.
+func dbShellTarget(data TemplateData, dbc dbConfig) string {
+	switch dbc.Driver {
+	case "postgres":
+		return fmt.Sprintf(`.PHONY: db-shell
+db-shell: ## Open interactive psql shell against the dev database
+	docker compose exec postgres psql -U %s -d %s_dev
+
+`, data.Name, data.Name)
+	case "mysql":
+		return fmt.Sprintf(`.PHONY: db-shell
+db-shell: ## Open interactive mysql shell against the dev database
+	docker compose exec mysql mysql -u%s -p%s_dev_password %s_dev
+
+`, data.Name, data.Name, data.Name)
+	case "sqlite3":
+		return fmt.Sprintf(`.PHONY: db-shell
+db-shell: ## Open interactive sqlite3 shell against the dev database file
+	@command -v sqlite3 >/dev/null 2>&1 || { echo "sqlite3 not installed (brew install sqlite)"; exit 1; }
+	sqlite3 %s_dev.db
+
+`, data.Name)
+	}
+	return ""
+}
+
+const makefileHeader = `SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # ─── Variables ────────────────────────────────────────────────────────────────
@@ -1024,7 +1060,9 @@ migrate-down: ## Rollback last migration
 migrate-status: ## Show migration status
 	$(GO) run ./cmd/axe/main.go migrate status
 
-# ─── Code Generation ──────────────────────────────────────────────────────────
+`
+
+const makefileFooter = `# ─── Code Generation ──────────────────────────────────────────────────────────
 .PHONY: generate
 generate: ## Run go generate
 	$(GO) generate ./...
